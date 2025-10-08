@@ -325,8 +325,8 @@ When calculating times, use the current date and timezone shown above. For "toda
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-card">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex h-full min-h-[420px] flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-card">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
             <Sparkles className="h-5 w-5 text-primary-foreground" />
@@ -381,7 +381,7 @@ When calculating times, use the current date and timezone shown above. For "toda
       </div>
 
       {/* Model Selection */}
-      <div className="mb-4">
+      <div>
         <Select
           value={selectedModel?.id}
           onValueChange={(value) => {
@@ -408,50 +408,49 @@ When calculating times, use the current date and timezone shown above. For "toda
         </Select>
       </div>
 
-      {/* Chat History */}
-      {chatHistory.length > 0 && (
-        <div className="mb-4 max-h-96 space-y-3 overflow-y-auto rounded-lg bg-secondary p-4">
-          {chatHistory.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`rounded-lg p-3 ${
-                msg.role === 'user'
-                  ? 'bg-primary/10 ml-8'
-                  : 'bg-accent/10 mr-8'
-              }`}
-            >
-              <div className="text-xs font-semibold mb-1 text-muted-foreground">
-                {msg.role === 'user' ? 'You' : 'Assistant'}
+      {/* Conversation Area */}
+      <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+        {chatHistory.length > 0 ? (
+          <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-secondary p-4">
+            {chatHistory.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`rounded-lg p-3 ${
+                  msg.role === 'user'
+                    ? 'bg-primary/10 ml-8'
+                    : 'bg-accent/10 mr-8'
+                }`}
+              >
+                <div className="mb-1 text-xs font-semibold text-muted-foreground">
+                  {msg.role === 'user' ? 'You' : 'Assistant'}
+                </div>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {msg.content}
+                </p>
               </div>
-              <p className="text-sm text-foreground whitespace-pre-wrap">
-                {msg.content}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Initial Prompt */}
-      {chatHistory.length === 0 && (
-        <div className="mb-4 rounded-lg bg-secondary p-4">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-            <Wrench className="h-3 w-3" />
-            <span>Calendar Control Enabled</span>
+            ))}
           </div>
-          <p className="text-sm text-foreground">
-            Hi! I'm your AI calendar assistant with full calendar control. I can:
-          </p>
-          <ul className="mt-2 space-y-1 text-sm text-foreground">
-            <li>• Create new meetings and events</li>
-            <li>• Move or reschedule existing meetings</li>
-            <li>• Edit meeting details (title, description, priority)</li>
-            <li>• Delete or cancel meetings</li>
-          </ul>
-          <p className="mt-3 text-sm text-foreground">
-            I can see your current schedule for today and this week. Just tell me what you need!
-          </p>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-lg bg-secondary p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Wrench className="h-3 w-3" />
+              <span>Calendar Control Enabled</span>
+            </div>
+            <p className="text-sm text-foreground">
+              Hi! I'm your AI calendar assistant with full calendar control. I can:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-foreground">
+              <li>• Create new meetings and events</li>
+              <li>• Move or reschedule existing meetings</li>
+              <li>• Edit meeting details (title, description, priority)</li>
+              <li>• Delete or cancel meetings</li>
+            </ul>
+            <p className="mt-3 text-sm text-foreground">
+              I can see your current schedule for today and this week. Just tell me what you need!
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Input Area */}
       <div className="flex gap-2">

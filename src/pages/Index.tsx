@@ -74,6 +74,10 @@ const Index = () => {
     travelInfo: [],
   });
   const [isMemoryDialogOpen, setIsMemoryDialogOpen] = useState(false);
+  const refreshMemoryData = useCallback(() => {
+    const updatedMemory = StorageService.loadMemoryData();
+    setMemoryData(updatedMemory);
+  }, [setMemoryData]);
 
   // Load data from storage on mount
   useEffect(() => {
@@ -251,32 +255,39 @@ const Index = () => {
     );
   }, []);
 
-  const handleMoveEvent = (eventId: string, newStartTime: string, newEndTime: string) => {
+  const handleMoveEvent = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
     handleEventUpdate(eventId, newStartTime, newEndTime);
     toast({
       title: "Event Moved",
       description: "The event has been rescheduled",
     });
-  };
+  }, [handleEventUpdate, toast]);
 
-  const handleEventSave = (updatedEvent: CalendarEvent) => {
-    setEvents(events.map(event =>
+  const handleEventSave = useCallback((updatedEvent: CalendarEvent) => {
+    setEvents(prev => prev.map(event =>
       event.id === updatedEvent.id ? updatedEvent : event
     ));
     toast({
       title: "Event Updated",
       description: `"${updatedEvent.title}" has been updated`,
     });
-  };
+  }, [toast]);
 
-  const handleEventDelete = (eventId: string) => {
-    const deletedEvent = events.find(e => e.id === eventId);
-    setEvents(events.filter(event => event.id !== eventId));
+  const handleEventDelete = useCallback((eventId: string) => {
+    let deletedTitle: string | null = null;
+    setEvents(prev => {
+      const deletedEvent = prev.find(e => e.id === eventId);
+      if (deletedEvent) {
+        deletedTitle = deletedEvent.title;
+      }
+      return prev.filter(event => event.id !== eventId);
+    });
+
     toast({
       title: "Event Deleted",
-      description: deletedEvent ? `"${deletedEvent.title}" has been removed` : "Event removed",
+      description: deletedTitle ? `"${deletedTitle}" has been removed` : "Event removed",
     });
-  };
+  }, [toast]);
 
   const handleAutoOptimize = () => {
     toast({
@@ -463,10 +474,7 @@ const Index = () => {
               todayEvents={todaysEvents}
               weekEvents={weekEvents}
               familyMembers={familyMembers}
-              onMemoryUpdate={() => {
-                const updatedMemory = StorageService.loadMemoryData();
-                setMemoryData(updatedMemory);
-              }}
+              onMemoryUpdate={refreshMemoryData}
             />
           </aside>
 

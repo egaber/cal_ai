@@ -1,4 +1,4 @@
-import { Calendar, ChevronLeft, ChevronRight, Sparkles, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CalendarHeaderProps {
@@ -72,8 +72,8 @@ export const CalendarHeader = ({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-              <Calendar className="h-5 w-5" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15">
+              <img src="/logo.png" alt="Life OS" className="h-8 w-8 object-contain" />
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.4em] text-muted-foreground">Schedule</p>
