@@ -21,6 +21,8 @@ import {
 import { llmService, LLMModel, Message } from "@/services/llmService";
 import { CalendarService, CALENDAR_TOOLS } from "@/services/calendarService";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
+import { MemoryExtractionService } from "@/services/memoryExtractionService";
+import { StorageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
 
 interface AIAssistantProps {
@@ -29,6 +31,7 @@ interface AIAssistantProps {
   todayEvents: CalendarEvent[];
   weekEvents: CalendarEvent[];
   familyMembers: FamilyMember[];
+  onMemoryUpdate?: () => void;
 }
 
 export const AIAssistant = ({
@@ -37,6 +40,7 @@ export const AIAssistant = ({
   todayEvents,
   weekEvents,
   familyMembers,
+  onMemoryUpdate,
 }: AIAssistantProps) => {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -46,6 +50,54 @@ export const AIAssistant = ({
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
+
+  // Background memory extraction
+  const extractMemoriesInBackground = async (userMessage: string) => {
+    try {
+      const result = await MemoryExtractionService.extractMemories(
+        userMessage,
+        chatHistory,
+        familyMembers
+      );
+
+      if (result.hasMemory && result.memories.length > 0) {
+        // Save the memories
+        const saveResult = await MemoryExtractionService.saveExtractedMemories(
+          result.memories,
+          familyMembers
+        );
+
+        if (saveResult.saved > 0) {
+          // Notify user about saved memories
+          const memoryTypes = result.memories.map(m => {
+            switch (m.type) {
+              case 'user': return 'personal preference';
+              case 'family': return 'family memory';
+              case 'place': return 'location';
+              case 'travel': return 'travel info';
+            }
+          }).join(', ');
+
+          toast({
+            title: "💡 Memory Saved",
+            description: `I learned something new: ${memoryTypes}`,
+          });
+
+          // Notify parent component to refresh memory data
+          if (onMemoryUpdate) {
+            onMemoryUpdate();
+          }
+        }
+
+        if (saveResult.errors.length > 0) {
+          console.error('Memory save errors:', saveResult.errors);
+        }
+      }
+    } catch (error) {
+      // Silent fail - memory extraction is a background feature
+      console.error('Background memory extraction failed:', error);
+    }
+  };
 
   // Load API key and fetch models on mount
   useEffect(() => {
@@ -257,6 +309,10 @@ When calculating times, use the current date and timezone shown above. For "toda
 
         setChatHistory(prev => [...prev, assistantMessage]);
       }
+
+      // Run memory extraction in background (don't await)
+      extractMemoriesInBackground(userMessage.content);
+
     } catch (error) {
       toast({
         title: "Error",

@@ -1,3 +1,12 @@
+export interface RecurrenceRule {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval: number; // e.g., every 2 weeks
+  daysOfWeek?: number[]; // 0=Sunday, 1=Monday, etc. (for weekly)
+  dayOfMonth?: number; // for monthly
+  endDate?: string; // when to stop recurring
+  count?: number; // or after N occurrences
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -8,6 +17,8 @@ export interface CalendarEvent {
   memberId: string;
   description?: string;
   type?: string;
+  recurrence?: RecurrenceRule;
+  recurringEventId?: string; // links to parent recurring event
 }
 
 export interface FamilyMember {

@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { CalendarHeader } from "@/components/CalendarHeader";
 import { CalendarGrid } from "@/components/CalendarGrid";
-import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CapacityIndicator } from "@/components/CapacityIndicator";
 import { AIAssistant } from "@/components/AIAssistant";
@@ -9,10 +8,15 @@ import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
 import { InlineEventCreator } from "@/components/InlineEventCreator";
-import { TodayOverview } from "@/components/TodayOverview";
+import { MemoryManager } from "@/components/MemoryManager";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
+import { MemoryData } from "@/types/memory";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarService, CalendarOperations } from "@/services/calendarService";
+import { StorageService } from "@/services/storageService";
+import { Brain } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const Index = () => {
   const { toast } = useToast();
@@ -62,39 +66,79 @@ const Index = () => {
   ]);
 
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [memoryData, setMemoryData] = useState<MemoryData>({
+    userMemories: [],
+    familyMemories: [],
+    places: [],
+    travelInfo: [],
+  });
+  const [isMemoryDialogOpen, setIsMemoryDialogOpen] = useState(false);
 
-  // Mock events data
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    {
-      id: '1',
-      title: 'Hip Hop Class (Hili)',
-      startTime: new Date(2025, 9, 8, 10, 30).toISOString(),
-      endTime: new Date(2025, 9, 8, 13, 45).toISOString(),
-      category: 'health',
-      priority: 'high',
-      memberId: '3',
-      description: 'Weekly hip hop class',
-    },
-    {
-      id: '2',
-      title: 'Team Meeting',
-      startTime: new Date(2025, 9, 8, 14, 0).toISOString(),
-      endTime: new Date(2025, 9, 8, 15, 0).toISOString(),
-      category: 'work',
-      priority: 'medium',
-      memberId: '1',
-      description: 'Weekly team sync',
-    },
-    {
-      id: '3',
-      title: 'Grocery Shopping',
-      startTime: new Date(2025, 9, 9, 16, 0).toISOString(),
-      endTime: new Date(2025, 9, 9, 17, 0).toISOString(),
-      category: 'personal',
-      priority: 'medium',
-      memberId: '1',
-    },
-  ]);
+  // Load data from storage on mount
+  useEffect(() => {
+    const loadedEvents = StorageService.loadEvents();
+    const loadedSettings = StorageService.loadSettings();
+    const loadedMemory = StorageService.loadMemoryData();
+
+    if (loadedEvents.length > 0) {
+      setEvents(loadedEvents);
+    } else {
+      // Initialize with default events if none exist
+      const defaultEvents: CalendarEvent[] = [
+        {
+          id: '1',
+          title: 'Hip Hop Class (Hili)',
+          startTime: new Date(2025, 9, 8, 10, 30).toISOString(),
+          endTime: new Date(2025, 9, 8, 13, 45).toISOString(),
+          category: 'health',
+          priority: 'high',
+          memberId: '3',
+          description: 'Weekly hip hop class',
+        },
+        {
+          id: '2',
+          title: 'Team Meeting',
+          startTime: new Date(2025, 9, 8, 14, 0).toISOString(),
+          endTime: new Date(2025, 9, 8, 15, 0).toISOString(),
+          category: 'work',
+          priority: 'medium',
+          memberId: '1',
+          description: 'Weekly team sync',
+        },
+        {
+          id: '3',
+          title: 'Grocery Shopping',
+          startTime: new Date(2025, 9, 9, 16, 0).toISOString(),
+          endTime: new Date(2025, 9, 9, 17, 0).toISOString(),
+          category: 'personal',
+          priority: 'medium',
+          memberId: '1',
+        },
+      ];
+      setEvents(defaultEvents);
+      StorageService.saveEvents(defaultEvents);
+    }
+
+    if (loadedSettings) {
+      setSelectedMembers(loadedSettings.selectedMembers);
+      setViewMode(loadedSettings.viewMode);
+    }
+
+    setMemoryData(loadedMemory);
+  }, []);
+
+  // Save events whenever they change
+  useEffect(() => {
+    if (events.length > 0) {
+      StorageService.saveEvents(events);
+    }
+  }, [events]);
+
+  // Save settings whenever they change
+  useEffect(() => {
+    StorageService.saveSettings({ selectedMembers, viewMode });
+  }, [selectedMembers, viewMode]);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     const newDate = new Date(currentDate);
@@ -159,7 +203,7 @@ const Index = () => {
         memberId: selectedMembers[0] || '1',
       };
 
-      setEvents([...events, newEvent]);
+  setEvents(prev => [...prev, newEvent]);
       setIsInlineCreatorOpen(false);
       setInlineCreatorData(null);
       
@@ -175,33 +219,37 @@ const Index = () => {
     setInlineCreatorData(null);
   };
 
-  const handleCreateEvent = (eventData: Omit<CalendarEvent, 'id'>) => {
+  const handleCreateEvent = useCallback((eventData: Omit<CalendarEvent, 'id'>) => {
     const newEvent: CalendarEvent = {
       ...eventData,
       id: `event_${Date.now()}`,
     };
-    setEvents([...events, newEvent]);
+    setEvents(prev => [...prev, newEvent]);
     toast({
       title: "Event Created",
       description: `"${newEvent.title}" has been added to your calendar`,
     });
-  };
+  }, [toast]);
 
-  const handleEventUpdate = (eventId: string, newStartTime: string, newEndTime: string) => {
-    setEvents(events.map(event =>
-      event.id === eventId
-        ? { ...event, startTime: newStartTime, endTime: newEndTime }
-        : event
-    ));
-  };
+  const handleEventUpdate = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
+    setEvents(prev =>
+      prev.map(event =>
+        event.id === eventId
+          ? { ...event, startTime: newStartTime, endTime: newEndTime }
+          : event
+      )
+    );
+  }, []);
 
-  const handleEventUpdatePartial = (eventId: string, updates: Partial<CalendarEvent>) => {
-    setEvents(events.map(event =>
-      event.id === eventId
-        ? { ...event, ...updates }
-        : event
-    ));
-  };
+  const handleEventUpdatePartial = useCallback((eventId: string, updates: Partial<CalendarEvent>) => {
+    setEvents(prev =>
+      prev.map(event =>
+        event.id === eventId
+          ? { ...event, ...updates }
+          : event
+      )
+    );
+  }, []);
 
   const handleMoveEvent = (eventId: string, newStartTime: string, newEndTime: string) => {
     handleEventUpdate(eventId, newStartTime, newEndTime);
@@ -319,12 +367,15 @@ const Index = () => {
   }, [filteredEvents, currentDate]);
 
   // Create calendar service with operations
-  const calendarOperations: CalendarOperations = useMemo(() => ({
-    createEvent: handleCreateEvent,
-    updateEvent: handleEventUpdatePartial,
-    deleteEvent: handleEventDelete,
-    moveEvent: handleMoveEvent,
-  }), []);
+  const calendarOperations: CalendarOperations = useMemo(
+    () => ({
+      createEvent: handleCreateEvent,
+      updateEvent: handleEventUpdatePartial,
+      deleteEvent: handleEventDelete,
+      moveEvent: handleMoveEvent,
+    }),
+    [handleCreateEvent, handleEventUpdatePartial, handleEventDelete, handleMoveEvent]
+  );
 
   const calendarService = useMemo(
     () => new CalendarService(calendarOperations),
@@ -333,7 +384,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(101,84,192,0.16),_transparent_60%)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-4 px-6 pb-10 pt-6 md:px-12">
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-6 px-4 pb-10 pt-6 sm:px-8 xl:px-16">
         {/* Compact Top Bar - Date and Stats */}
         <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/80 px-6 py-3 shadow-lg backdrop-blur">
           <div className="flex items-center gap-6">
@@ -353,20 +404,9 @@ const Index = () => {
           )}
         </div>
 
-        {/* AI Assistant - Wide Bar on Top */}
-        <div className="w-full">
-          <AIAssistant 
-            calendarService={calendarService}
-            currentDate={currentDate}
-            todayEvents={todaysEvents}
-            weekEvents={weekEvents}
-            familyMembers={familyMembers}
-          />
-        </div>
-
-        <div className="flex flex-1 flex-col gap-4 lg:flex-row">
-          {/* Left Sidebar - Mini Calendar and Family Members */}
-          <aside className="w-full lg:w-64 space-y-4 flex-shrink-0">
+        <div className="flex flex-1 flex-col-reverse gap-6 lg:flex-row">
+          {/* Left Sidebar - Tools and Assistant */}
+          <aside className="flex w-full flex-col gap-4 lg:w-72 xl:w-80 lg:flex-shrink-0">
             <MiniCalendar
               currentDate={currentDate}
               onDateSelect={setCurrentDate}
@@ -396,6 +436,38 @@ const Index = () => {
             </div>
 
             <CapacityIndicator scheduled={4.5} total={8} />
+
+            {/* Memory Manager Button */}
+            <Dialog open={isMemoryDialogOpen} onOpenChange={setIsMemoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Brain className="h-4 w-4 mr-2" />
+                  Memory Manager
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh]">
+                <DialogHeader>
+                  <DialogTitle>Smart Memory System</DialogTitle>
+                </DialogHeader>
+                <MemoryManager
+                  familyMembers={familyMembers}
+                  memoryData={memoryData}
+                  onMemoryUpdate={setMemoryData}
+                />
+              </DialogContent>
+            </Dialog>
+
+            <AIAssistant 
+              calendarService={calendarService}
+              currentDate={currentDate}
+              todayEvents={todaysEvents}
+              weekEvents={weekEvents}
+              familyMembers={familyMembers}
+              onMemoryUpdate={() => {
+                const updatedMemory = StorageService.loadMemoryData();
+                setMemoryData(updatedMemory);
+              }}
+            />
           </aside>
 
           {/* Main Calendar View - Center, Most Important */}
