@@ -16,12 +16,14 @@ import { useToast } from "@/hooks/use-toast";
 import { CalendarService, CalendarOperations } from "@/services/calendarService";
 import { StorageService } from "@/services/storageService";
 import { generateRecurringEvents } from "@/utils/recurrenceUtils";
-import { Brain } from "lucide-react";
+import { Brain, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'workweek' | 'month'>('week');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -672,6 +674,15 @@ What would you like to know or do with this event?`;
             />
 
             {/* <CapacityIndicator scheduled={4.5} total={8} /> */}
+
+            {/* Task Planning Button */}
+            <Button 
+              onClick={() => navigate('/tasks')}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              <ListTodo className="h-4 w-4 mr-2" />
+              תכנון משימות שבועי
+            </Button>
 
             {/* Memory Manager Button */}
             <Dialog open={isMemoryDialogOpen} onOpenChange={setIsMemoryDialogOpen}>
