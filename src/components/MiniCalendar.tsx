@@ -55,15 +55,20 @@ export const MiniCalendar = ({ currentDate, onDateSelect }: MiniCalendarProps) =
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-card">
+    <div className="rounded-3xl border border-white/60 bg-white/70 p-5 shadow-lg backdrop-blur">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">{monthName}</h3>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            Mini view
+          </p>
+          <h3 className="text-base font-semibold text-foreground">{monthName}</h3>
+        </div>
         <div className="flex gap-1">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigateMonth('prev')}
-            className="h-7 w-7"
+            className="h-8 w-8 rounded-full border border-border/60 bg-white/70 hover:bg-secondary/40"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -71,19 +76,16 @@ export const MiniCalendar = ({ currentDate, onDateSelect }: MiniCalendarProps) =
             variant="ghost"
             size="icon"
             onClick={() => navigateMonth('next')}
-            className="h-7 w-7"
+            className="h-8 w-8 rounded-full border border-border/60 bg-white/70 hover:bg-secondary/40"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-2 text-center">
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
-          <div
-            key={idx}
-            className="flex h-8 items-center justify-center text-xs font-medium text-muted-foreground"
-          >
+          <div key={idx} className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             {day}
           </div>
         ))}
@@ -92,14 +94,14 @@ export const MiniCalendar = ({ currentDate, onDateSelect }: MiniCalendarProps) =
             key={idx}
             onClick={() => date && onDateSelect(date)}
             disabled={!date}
-            className={`flex h-8 items-center justify-center rounded-lg text-sm transition-colors ${
+            className={`flex h-9 items-center justify-center rounded-xl text-sm transition-all ${
               !date
-                ? 'cursor-default'
+                ? 'cursor-default text-transparent'
                 : isSelected(date)
-                ? 'bg-primary font-semibold text-primary-foreground'
+                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
                 : isToday(date)
-                ? 'bg-secondary font-semibold text-foreground ring-2 ring-primary'
-                : 'font-medium text-foreground hover:bg-secondary'
+                ? 'border border-primary/40 bg-primary/10 text-foreground'
+                : 'text-foreground hover:border hover:border-border/60 hover:bg-secondary/30'
             }`}
           >
             {date?.getDate()}

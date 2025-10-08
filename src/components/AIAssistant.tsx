@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, Settings, ChevronDown } from "lucide-react";
+import { Send, Sparkles, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,50 +34,45 @@ export const AIAssistant = () => {
   // Load API key and fetch models on mount
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
-    return (
-      <div className="rounded-3xl border border-white/60 bg-white/70 p-5 shadow-lg backdrop-blur">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary/70 to-accent text-primary-foreground shadow-lg shadow-primary/30">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  Assistant
-                </p>
-                <h3 className="text-base font-semibold text-foreground">AI scheduling co-pilot</h3>
-              </div>
-              <Button variant="ghost" size="sm" className="rounded-full border border-primary/20 bg-primary/10 text-primary hover:bg-primary/20">
-                Explore prompts
-              </Button>
-            </div>
+    if (savedKey) {
+      setGeminiApiKey(savedKey);
+      llmService.setGeminiKey(savedKey);
+    }
+    loadModels();
+  }, []);
 
-            <div className="mt-4 rounded-2xl border border-white/70 bg-gradient-to-br from-secondary/80 to-white/90 p-4 text-sm text-muted-foreground shadow-inner">
-              Hi! I can rearrange plans, block focus time, or even prep automations so the week runs smoother. Ask me anything and I'll draft the plan for you.
-            </div>
+  const loadModels = async () => {
+    const availableModels = await llmService.getAvailableModels();
+    setModels(availableModels);
+    
+    if (availableModels.length > 0 && !selectedModel) {
+      setSelectedModel(availableModels[0]);
+    }
+  };
 
-            <div className="mt-4 flex gap-2">
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ask for a smarter schedule..."
-                className="flex-1 rounded-full border-border/60 bg-white/80"
-              />
-              <Button
-                onClick={handleSend}
-                size="icon"
-                disabled={!message.trim()}
-                className="rounded-full bg-primary hover:bg-primary/90"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const handleSaveSettings = () => {
+    if (geminiApiKey) {
+      localStorage.setItem('gemini_api_key', geminiApiKey);
+      llmService.setGeminiKey(geminiApiKey);
+      toast({
+        title: "Settings saved",
+        description: "Gemini API key has been saved.",
+      });
+      loadModels(); // Reload models to include Gemini
+    }
+    setSettingsOpen(false);
+  };
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+
+    if (!selectedModel) {
+      toast({
+        title: "No model selected",
+        description: "Please select a model or configure your settings.",
+        variant: "destructive",
+      });
+      return;
     }
 
     const userMessage: Message = {

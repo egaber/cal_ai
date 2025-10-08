@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/CalendarHeader";
 import { CalendarGrid } from "@/components/CalendarGrid";
 import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
@@ -8,6 +8,7 @@ import { AIAssistant } from "@/components/AIAssistant";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
+import { TodayOverview } from "@/components/TodayOverview";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
 
@@ -182,60 +183,122 @@ const Index = () => {
     setIsEventDialogOpen(true);
   };
 
-  const filteredEvents = events.filter(event => 
-    selectedMembers.includes(event.memberId)
+  const filteredEvents = useMemo(
+    () => events.filter(event => selectedMembers.includes(event.memberId)),
+    [events, selectedMembers]
   );
 
+  const todaysEvents = useMemo(() => {
+    return filteredEvents.filter((event) => {
+      const eventDate = new Date(event.startTime);
+      return eventDate.toDateString() === currentDate.toDateString();
+    });
+  }, [filteredEvents, currentDate]);
+
+  const totalMinutesToday = useMemo(() => {
+    return todaysEvents.reduce((total, event) => {
+      const start = new Date(event.startTime);
+      const end = new Date(event.endTime);
+      return total + (end.getTime() - start.getTime()) / (1000 * 60);
+    }, 0);
+  }, [todaysEvents]);
+
+  const focusMinutesToday = useMemo(() => {
+    return todaysEvents
+      .filter((event) => event.category === 'work')
+      .reduce((total, event) => {
+        const start = new Date(event.startTime);
+        const end = new Date(event.endTime);
+        return total + (end.getTime() - start.getTime()) / (1000 * 60);
+      }, 0);
+  }, [todaysEvents]);
+
+  const upcomingEvent = useMemo(() => {
+    if (!todaysEvents.length) return null;
+
+    const sorted = [...todaysEvents].sort((a, b) =>
+      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+
+    const todayString = new Date().toDateString();
+    const isCurrentDay = currentDate.toDateString() === todayString;
+
+    if (isCurrentDay) {
+      const now = new Date();
+      return (
+        sorted.find((event) => new Date(event.startTime) >= now) ?? sorted[0]
+      );
+    }
+
+    const dayStart = new Date(currentDate);
+    dayStart.setHours(0, 0, 0, 0);
+    return (
+      sorted.find((event) => new Date(event.startTime) >= dayStart) ?? sorted[0]
+    );
+  }, [todaysEvents, currentDate]);
+
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <CalendarHeader
-        currentDate={currentDate}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onNavigate={handleNavigate}
-        onNewEvent={handleNewEvent}
-        onAutoOptimize={handleAutoOptimize}
-      />
-      
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main calendar area */}
-        <div className="flex-1 overflow-hidden border-r border-border">
-          <EventPopover
-            event={selectedEvent}
-            isOpen={isEventPopoverOpen}
-            onClose={() => setIsEventPopoverOpen(false)}
-            onEdit={handleEditFromPopover}
-            onDelete={handleEventDelete}
-          >
-            <div className="h-full">
-              <CalendarGrid
-                viewMode={viewMode}
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(101,84,192,0.16),_transparent_60%)]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-6 pb-10 pt-10 md:px-12">
+        <TodayOverview
+          currentDate={currentDate}
+          totalTasks={todaysEvents.length}
+          totalHours={totalMinutesToday / 60}
+          focusHours={focusMinutesToday / 60}
+          upcomingEvent={upcomingEvent}
+        />
+
+        <div className="flex flex-1 flex-col gap-6 lg:flex-row">
+          <section className="flex min-h-[0] flex-1 flex-col gap-6">
+            <div className="flex h-full flex-1 flex-col rounded-3xl border border-white/60 bg-white/80 p-6 shadow-2xl shadow-primary/5 backdrop-blur">
+              <CalendarHeader
                 currentDate={currentDate}
-                events={filteredEvents}
-                onEventClick={handleEventClick}
-                onEventUpdate={handleEventUpdate}
-                onTimeSlotClick={handleTimeSlotClick}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onNavigate={handleNavigate}
+                onNewEvent={handleNewEvent}
+                onAutoOptimize={handleAutoOptimize}
               />
+
+              <div className="mt-6 flex min-h-[600px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-white/90 shadow-inner">
+                <EventPopover
+                  event={selectedEvent}
+                  isOpen={isEventPopoverOpen}
+                  onClose={() => setIsEventPopoverOpen(false)}
+                  onEdit={handleEditFromPopover}
+                  onDelete={handleEventDelete}
+                >
+                  <div className="h-full w-full">
+                    <CalendarGrid
+                      viewMode={viewMode}
+                      currentDate={currentDate}
+                      events={filteredEvents}
+                      onEventClick={handleEventClick}
+                      onEventUpdate={handleEventUpdate}
+                      onTimeSlotClick={handleTimeSlotClick}
+                    />
+                  </div>
+                </EventPopover>
+              </div>
             </div>
-          </EventPopover>
-        </div>
+          </section>
 
-        {/* Right sidebar */}
-        <div className="w-80 space-y-4 overflow-y-auto bg-secondary/30 p-4">
-          <FamilyMembersSidebar
-            members={familyMembers}
-            selectedMembers={selectedMembers}
-            onToggleMember={handleToggleMember}
-          />
+          <aside className="w-full max-w-sm space-y-4">
+            <FamilyMembersSidebar
+              members={familyMembers}
+              selectedMembers={selectedMembers}
+              onToggleMember={handleToggleMember}
+            />
 
-          <CapacityIndicator scheduled={4.5} total={8} />
+            <CapacityIndicator scheduled={4.5} total={8} />
 
-          <MiniCalendar
-            currentDate={currentDate}
-            onDateSelect={setCurrentDate}
-          />
+            <MiniCalendar
+              currentDate={currentDate}
+              onDateSelect={setCurrentDate}
+            />
 
-          <AIAssistant />
+            <AIAssistant />
+          </aside>
         </div>
       </div>
 

@@ -49,6 +49,15 @@ export const CalendarGrid = ({
     return date.toDateString() === today.toDateString();
   };
 
+  const now = new Date();
+  const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+  const currentTimePosition = (minutesSinceMidnight / 60) * TIME_SLOT_HEIGHT;
+  const currentDayIndex = dates.findIndex((date) => date.toDateString() === now.toDateString());
+  const showCurrentTimeIndicator = currentDayIndex !== -1;
+  const dotLeftPercent = showCurrentTimeIndicator
+    ? ((currentDayIndex + 0.5) / dates.length) * 100
+    : 0;
+
   const formatTime = (hour: number) => {
     if (hour === 0) return '12 AM';
     if (hour === 12) return '12 PM';
@@ -71,27 +80,32 @@ export const CalendarGrid = ({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden select-none">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-secondary/40 select-none">
       {/* Day headers */}
-      <div className="flex border-b border-border bg-background sticky top-0 z-20">
-        <div className="w-20 flex-shrink-0 border-r border-border bg-background" />
+      <div className="sticky top-0 z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
+        <div className="w-20 flex-shrink-0 border-r border-border/60 bg-white/80" />
         {dates.map((date, idx) => (
           <div
             key={idx}
-            className="flex flex-1 flex-col items-center justify-center py-3 border-r border-border last:border-r-0"
+            className="flex flex-1 flex-col items-center justify-center border-r border-border/60 py-3 last:border-r-0"
           >
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {DAYS_OF_WEEK[date.getDay()]}
             </div>
-            <div
-              className={`mt-1 flex h-10 w-10 items-center justify-center rounded-full text-lg font-semibold transition-all ${
-                isToday(date)
-                  ? 'bg-primary text-primary-foreground scale-110'
-                  : 'text-foreground hover:bg-secondary'
-              }`}
-            >
-              {date.getDate()}
+            <div className="mt-1 flex items-center gap-2">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-lg font-semibold transition-all ${
+                  isToday(date)
+                    ? 'scale-110 bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                    : 'bg-white text-foreground shadow border border-border/60'
+                }`}
+              >
+                {date.getDate()}
+              </div>
             </div>
+            <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.25em] text-muted-foreground">
+              {date.toLocaleDateString('en-US', { month: 'short' })}
+            </p>
           </div>
         ))}
       </div>
@@ -99,18 +113,39 @@ export const CalendarGrid = ({
       {/* Time grid */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={gridRef} className="calendar-grid relative">
+          {showCurrentTimeIndicator && (
+            <div
+              className="pointer-events-none absolute z-30"
+              style={{
+                top: `${currentTimePosition}px`,
+                left: '5rem',
+                right: '0',
+              }}
+            >
+              <div className="relative">
+                <div className="h-px w-full bg-primary/50" />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-primary-foreground shadow-md"
+                  style={{ left: `${dotLeftPercent}%`, transform: 'translate(-50%, -50%)' }}
+                >
+                  Now
+                </div>
+              </div>
+            </div>
+          )}
+
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="flex border-b border-border"
+              className="flex border-b border-border/60"
               style={{ height: `${TIME_SLOT_HEIGHT}px` }}
             >
               {/* Time label */}
-              <div className="w-20 flex-shrink-0 border-r border-border bg-background sticky left-0 z-10">
-                <div className="px-3 py-1 text-right">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {formatTime(hour)}
-                  </span>
+              <div className="sticky left-0 z-10 w-20 flex-shrink-0 border-r border-border/60 bg-white/80 backdrop-blur">
+                <div className="px-2 py-2 text-right">
+                  <div className="flex flex-col items-end text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                    <span>{formatTime(hour)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -118,20 +153,24 @@ export const CalendarGrid = ({
               {dates.map((date, dateIdx) => (
                 <div
                   key={dateIdx}
-                  className="relative flex-1 border-r border-border last:border-r-0 transition-colors hover:bg-secondary/30 cursor-pointer group"
+                  className={`group relative flex-1 cursor-pointer border-r border-border/60 transition-colors last:border-r-0 ${
+                    isToday(date)
+                      ? 'bg-primary/5 hover:bg-primary/10'
+                      : 'bg-white/70 hover:bg-secondary/30'
+                  }`}
                   onClick={(e) => handleTimeSlotClick(date, hour, e)}
                 >
                   {/* 15-minute grid lines */}
                   <div className="absolute inset-0 flex flex-col">
-                    <div className="flex-1 border-b border-border/30" />
-                    <div className="flex-1 border-b border-border/30" />
-                    <div className="flex-1 border-b border-border/30" />
+                    <div className="flex-1 border-b border-border/40" />
+                    <div className="flex-1 border-b border-border/40" />
+                    <div className="flex-1 border-b border-border/40" />
                     <div className="flex-1" />
                   </div>
 
                   {/* Hover indicator */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute inset-x-1 top-1 h-0.5 bg-primary/40 rounded" />
+                    <div className="absolute inset-x-2 top-1 h-0.5 rounded bg-primary/40" />
                   </div>
 
                   {/* Events container for this time slot */}
