@@ -333,18 +333,73 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(101,84,192,0.16),_transparent_60%)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-6 pb-10 pt-10 md:px-12">
-        <TodayOverview
-          currentDate={currentDate}
-          totalTasks={todaysEvents.length}
-          totalHours={totalMinutesToday / 60}
-          focusHours={focusMinutesToday / 60}
-          events={todaysEvents}
-          upcomingEvent={upcomingEvent}
-        />
+      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-4 px-6 pb-10 pt-6 md:px-12">
+        {/* Compact Top Bar - Date and Stats */}
+        <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/80 px-6 py-3 shadow-lg backdrop-blur">
+          <div className="flex items-center gap-6">
+            <h2 className="text-lg font-semibold">
+              {currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </h2>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>{todaysEvents.length} tasks</span>
+              <span>•</span>
+              <span>{(totalMinutesToday / 60).toFixed(1)}h total</span>
+            </div>
+          </div>
+          {upcomingEvent && (
+            <div className="text-sm text-muted-foreground">
+              Next: <span className="font-medium text-foreground">{upcomingEvent.title}</span>
+            </div>
+          )}
+        </div>
 
-        <div className="flex flex-1 flex-col gap-6 lg:flex-row">
-          <section className="flex min-h-[0] flex-1 flex-col gap-6">
+        {/* AI Assistant - Wide Bar on Top */}
+        <div className="w-full">
+          <AIAssistant 
+            calendarService={calendarService}
+            currentDate={currentDate}
+            todayEvents={todaysEvents}
+            weekEvents={weekEvents}
+            familyMembers={familyMembers}
+          />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-4 lg:flex-row">
+          {/* Left Sidebar - Mini Calendar and Family Members */}
+          <aside className="w-full lg:w-64 space-y-4 flex-shrink-0">
+            <MiniCalendar
+              currentDate={currentDate}
+              onDateSelect={setCurrentDate}
+            />
+
+            <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-lg backdrop-blur">
+              <h3 className="mb-3 text-sm font-semibold text-foreground/70">Family Members</h3>
+              <div className="space-y-2">
+                {familyMembers.map((member) => (
+                  <button
+                    key={member.id}
+                    onClick={() => handleToggleMember(member.id)}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                      selectedMembers.includes(member.id)
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-muted/50 text-muted-foreground'
+                    }`}
+                  >
+                    <div className={`h-3 w-3 rounded-full ${member.color}`} />
+                    <span className="flex-1">{member.name}</span>
+                    {member.isYou && (
+                      <span className="text-xs text-muted-foreground">(You)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <CapacityIndicator scheduled={4.5} total={8} />
+          </aside>
+
+          {/* Main Calendar View - Center, Most Important */}
+          <section className="flex min-h-[0] flex-1 flex-col gap-4">
             <div className="flex h-full flex-1 flex-col rounded-3xl border border-white/60 bg-white/80 p-6 shadow-2xl shadow-primary/5 backdrop-blur">
               <CalendarHeader
                 currentDate={currentDate}
@@ -378,29 +433,6 @@ const Index = () => {
               </div>
             </div>
           </section>
-
-          <aside className="w-full max-w-sm space-y-4">
-            <FamilyMembersSidebar
-              members={familyMembers}
-              selectedMembers={selectedMembers}
-              onToggleMember={handleToggleMember}
-            />
-
-            <CapacityIndicator scheduled={4.5} total={8} />
-
-            <MiniCalendar
-              currentDate={currentDate}
-              onDateSelect={setCurrentDate}
-            />
-
-            <AIAssistant 
-              calendarService={calendarService}
-              currentDate={currentDate}
-              todayEvents={todaysEvents}
-              weekEvents={weekEvents}
-              familyMembers={familyMembers}
-            />
-          </aside>
         </div>
       </div>
 

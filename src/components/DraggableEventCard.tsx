@@ -114,9 +114,16 @@ export const DraggableEventCard = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDragging) {
-      // Pass click coordinates to parent
-      onClick(e);
+    if (!isDragging && cardRef.current) {
+      // Pass the actual card position instead of mouse position
+      const rect = cardRef.current.getBoundingClientRect();
+      // Create a synthetic event with the card's right edge and vertical center
+      const syntheticEvent = {
+        ...e,
+        clientX: rect.right,
+        clientY: rect.top + rect.height / 2,
+      } as React.MouseEvent;
+      onClick(syntheticEvent);
     }
   };
 
