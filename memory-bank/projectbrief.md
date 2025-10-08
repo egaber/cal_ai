@@ -7,6 +7,8 @@ Calendar AI is a family-focused calendar management application with integrated 
 1. **Calendar Management**: Visual calendar interface for viewing and managing events
 2. **AI Assistant Integration**: Chat interface connected to real LLM providers for intelligent scheduling assistance
 3. **Family Member Management**: Support for multiple family members with individual schedules
+   - **Parents**: Eyal, Ella
+   - **Children**: Hilly (11 years old), Yael (5.5 years old), Alon (3 years old)
 4. **Event Management**: Create, edit, and view events with detailed information
 5. **Today Overview**: Quick view of current day's events and tasks
 

@@ -1,70 +1,127 @@
-import { Check } from "lucide-react";
-import { FamilyMember } from "@/types/calendar";
+import { useState, useRef } from 'react';
+import { FamilyMember } from '@/types/calendar';
+import { User, Upload } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface FamilyMembersSidebarProps {
   members: FamilyMember[];
   selectedMembers: string[];
   onToggleMember: (memberId: string) => void;
+  onAvatarUpload: (memberId: string, avatarDataUrl: string) => void;
 }
 
 export const FamilyMembersSidebar = ({
   members,
   selectedMembers,
   onToggleMember,
+  onAvatarUpload,
 }: FamilyMembersSidebarProps) => {
-  return (
-    <div className="rounded-3xl border border-white/60 bg-white/70 p-5 shadow-lg backdrop-blur">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            People
-          </p>
-          <h3 className="text-base font-semibold text-foreground">Family members</h3>
-        </div>
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.25em] text-primary">
-          {selectedMembers.length}/{members.length}
-        </span>
-      </div>
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-      <div className="mt-4 space-y-3">
-        {members.map((member) => {
-          const isSelected = selectedMembers.includes(member.id);
-          return (
-            <button
-              key={member.id}
-              onClick={() => onToggleMember(member.id)}
-              className={`flex w-full items-center gap-3 rounded-2xl border p-3 transition-all ${
-                isSelected
-                  ? 'border-primary bg-primary/10 shadow-inner shadow-primary/20'
-                  : 'border-transparent bg-white/80 hover:border-border/60 hover:bg-secondary/40'
-              }`}
-            >
-              <div
-                className={`flex h-11 w-11 items-center justify-center rounded-full font-semibold text-white shadow ${member.color}`}
+  const handleFileSelect = (memberId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image size should be less than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      onAvatarUpload(memberId, dataUrl);
+      setUploadingFor(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const triggerFileInput = (memberId: string) => {
+    fileInputRefs.current[memberId]?.click();
+  };
+
+  const getMemberInitials = (name: string) => {
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-lg backdrop-blur">
+      <h3 className="mb-3 text-sm font-semibold text-foreground/70">Family Members</h3>
+      <div className="space-y-2">
+        {members.map((member) => (
+          <div
+            key={member.id}
+            className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+              selectedMembers.includes(member.id)
+                ? 'bg-primary/10'
+                : 'hover:bg-muted/50'
+            }`}
+          >
+            {/* Avatar with upload button */}
+            <div className="relative">
+              <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
+                {member.avatar ? (
+                  <AvatarImage src={member.avatar} alt={member.name} />
+                ) : (
+                  <AvatarFallback className={`text-xs ${member.color} text-white`}>
+                    {getMemberInitials(member.name)}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              
+              {/* Upload button - shows on hover */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerFileInput(member.id);
+                }}
+                className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:bg-primary/90"
+                title="Upload photo"
               >
-                {member.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 text-left">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">
-                    {member.name}
-                  </p>
-                  {member.isYou && (
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                      You
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">{member.role}</p>
-              </div>
-              {isSelected && (
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
-                  <Check className="h-3.5 w-3.5" />
-                </div>
+                <Upload className="h-2.5 w-2.5" />
+              </button>
+
+              {/* Hidden file input */}
+              <input
+                ref={(el) => (fileInputRefs.current[member.id] = el)}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFileSelect(member.id, e)}
+              />
+            </div>
+
+            {/* Member info - clickable to toggle */}
+            <button
+              onClick={() => onToggleMember(member.id)}
+              className="flex flex-1 items-center gap-2 text-left"
+            >
+              <div className={`h-2 w-2 rounded-full ${member.color}`} />
+              <span className={`flex-1 text-sm ${
+                selectedMembers.includes(member.id)
+                  ? 'font-medium text-primary'
+                  : 'text-muted-foreground'
+              }`}>
+                {member.name}
+              </span>
+              {member.isYou && (
+                <span className="text-xs text-muted-foreground">(You)</span>
               )}
             </button>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );

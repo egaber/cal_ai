@@ -9,6 +9,7 @@ import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
 import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { MemoryManager } from "@/components/MemoryManager";
+import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { MemoryData } from "@/types/memory";
 import { useToast } from "@/hooks/use-toast";
@@ -41,27 +42,41 @@ const Index = () => {
     minute?: number;
   }>({});
 
-  // Mock data for family members
-  const [familyMembers] = useState<FamilyMember[]>([
+  // Family members with persistence
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
     {
       id: '1',
-      name: 'Eyal Gaber',
+      name: 'Eyal',
       role: 'Parent',
       color: 'bg-event-blue',
       isYou: true,
     },
     {
       id: '2',
-      name: 'Sarah Gaber',
+      name: 'Ella',
       role: 'Parent',
       color: 'bg-event-purple',
       isYou: false,
     },
     {
       id: '3',
-      name: 'Alex Gaber',
+      name: 'Hilly (11)',
       role: 'Child',
       color: 'bg-event-green',
+      isYou: false,
+    },
+    {
+      id: '4',
+      name: 'Yael (5.5)',
+      role: 'Child',
+      color: 'bg-event-orange',
+      isYou: false,
+    },
+    {
+      id: '5',
+      name: 'Alon (3)',
+      role: 'Child',
+      color: 'bg-event-pink',
       isYou: false,
     },
   ]);
@@ -86,6 +101,12 @@ const Index = () => {
     const loadedEvents = StorageService.loadEvents();
     const loadedSettings = StorageService.loadSettings();
     const loadedMemory = StorageService.loadMemoryData();
+    const loadedFamilyMembers = StorageService.loadFamilyMembers();
+
+    // Load family members or use defaults
+    if (loadedFamilyMembers && loadedFamilyMembers.length > 0) {
+      setFamilyMembers(loadedFamilyMembers);
+    }
 
     if (loadedEvents.length > 0) {
       setEvents(loadedEvents);
@@ -94,13 +115,13 @@ const Index = () => {
       const defaultEvents: CalendarEvent[] = [
         {
           id: '1',
-          title: 'Hip Hop Class (Hili)',
+          title: 'Hip Hop Class',
           startTime: new Date(2025, 9, 8, 10, 30).toISOString(),
           endTime: new Date(2025, 9, 8, 13, 45).toISOString(),
           category: 'health',
           priority: 'high',
           memberId: '3',
-          description: 'Weekly hip hop class',
+          description: 'Weekly hip hop class for Hilly',
         },
         {
           id: '2',
@@ -141,10 +162,30 @@ const Index = () => {
     }
   }, [events]);
 
+  // Save family members whenever they change
+  useEffect(() => {
+    StorageService.saveFamilyMembers(familyMembers);
+  }, [familyMembers]);
+
   // Save settings whenever they change
   useEffect(() => {
     StorageService.saveSettings({ selectedMembers, viewMode });
   }, [selectedMembers, viewMode]);
+
+  // Handler to update family member avatar
+  const handleAvatarUpload = useCallback((memberId: string, avatarDataUrl: string) => {
+    setFamilyMembers(prev =>
+      prev.map(member =>
+        member.id === memberId
+          ? { ...member, avatar: avatarDataUrl }
+          : member
+      )
+    );
+    toast({
+      title: "Avatar Updated",
+      description: "Profile picture has been updated successfully",
+    });
+  }, [toast]);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     const newDate = new Date(currentDate);
@@ -191,7 +232,7 @@ const Index = () => {
     setIsInlineCreatorOpen(true);
   };
 
-  const handleInlineEventSave = (title: string) => {
+  const handleInlineEventSave = async (title: string) => {
     if (inlineCreatorData) {
       const { date, hour, minute } = inlineCreatorData;
       const startDate = new Date(date);
@@ -199,17 +240,50 @@ const Index = () => {
       const endDate = new Date(startDate);
       endDate.setHours(hour + 1, minute, 0, 0); // Default 1 hour duration
 
+      // Import llmService dynamically to avoid circular dependencies
+      const { llmService } = await import('@/services/llmService');
+      
+      // Generate emoji and category using AI
+      const metadata = await llmService.generateEventMetadata(title, '');
+
+      // Get surrounding events for context (2 hours before and after)
+      const twoHoursBefore = new Date(startDate.getTime() - 2 * 60 * 60 * 1000);
+      const twoHoursAfter = new Date(endDate.getTime() + 2 * 60 * 60 * 1000);
+      const surroundingEvents = filteredEvents
+        .filter(e => {
+          const eStart = new Date(e.startTime);
+          return eStart >= twoHoursBefore && eStart <= twoHoursAfter;
+        })
+        .map(e => ({
+          title: e.title,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          category: e.category
+        }));
+
+      // Generate AI tip
+      const aiTip = await llmService.generateEventTip(
+        title,
+        '',
+        metadata.category,
+        startDate.toISOString(),
+        endDate.toISOString(),
+        surroundingEvents
+      );
+
       const newEvent: CalendarEvent = {
         id: `event_${Date.now()}`,
         title,
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
-        category: 'personal',
+        category: metadata.category as CalendarEvent['category'],
         priority: 'medium',
         memberId: selectedMembers[0] || '1',
+        emoji: metadata.emoji,
+        aiTip: aiTip || undefined,
       };
 
-  setEvents(prev => [...prev, newEvent]);
+      setEvents(prev => [...prev, newEvent]);
       setIsInlineCreatorOpen(false);
       setInlineCreatorData(null);
       
@@ -586,30 +660,14 @@ What would you like to know or do with this event?`;
               onDateSelect={setCurrentDate}
             />
 
-            <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-lg backdrop-blur">
-              <h3 className="mb-3 text-sm font-semibold text-foreground/70">Family Members</h3>
-              <div className="space-y-2">
-                {familyMembers.map((member) => (
-                  <button
-                    key={member.id}
-                    onClick={() => handleToggleMember(member.id)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                      selectedMembers.includes(member.id)
-                        ? 'bg-primary/10 text-primary'
-                        : 'hover:bg-muted/50 text-muted-foreground'
-                    }`}
-                  >
-                    <div className={`h-3 w-3 rounded-full ${member.color}`} />
-                    <span className="flex-1">{member.name}</span>
-                    {member.isYou && (
-                      <span className="text-xs text-muted-foreground">(You)</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <FamilyMembersSidebar
+              members={familyMembers}
+              selectedMembers={selectedMembers}
+              onToggleMember={handleToggleMember}
+              onAvatarUpload={handleAvatarUpload}
+            />
 
-            <CapacityIndicator scheduled={4.5} total={8} />
+            {/* <CapacityIndicator scheduled={4.5} total={8} /> */}
 
             {/* Memory Manager Button */}
             <Dialog open={isMemoryDialogOpen} onOpenChange={setIsMemoryDialogOpen}>
@@ -664,13 +722,14 @@ What would you like to know or do with this event?`;
                   onClose={() => setIsEventPopoverOpen(false)}
                   onEdit={handleEditFromPopover}
                   onDelete={handleEventDelete}
-                  onTalkToChat={handleTalkToChatAboutEvent}
+                  familyMembers={familyMembers}
                 >
                   <div className="h-full w-full">
                     <CalendarGrid
                       viewMode={viewMode}
                       currentDate={currentDate}
                       events={filteredEvents}
+                      familyMembers={familyMembers}
                       onEventClick={handleEventClick}
                       onEventUpdate={handleEventUpdate}
                       onTimeSlotClick={handleTimeSlotClick}

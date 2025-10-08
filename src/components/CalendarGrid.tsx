@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
-import { CalendarEvent } from "@/types/calendar";
+import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 
 interface CalendarGridProps {
   viewMode: 'day' | 'week' | 'workweek' | 'month';
   currentDate: Date;
   events: CalendarEvent[];
+  familyMembers: FamilyMember[];
   onEventClick: (event: CalendarEvent, clickX: number, clickY: number) => void;
   onEventUpdate: (eventId: string, newStartTime: string, newEndTime: string) => void;
   onTimeSlotClick: (date: Date, hour: number, minute: number, clickX: number, clickY: number) => void;
@@ -24,6 +25,7 @@ export const CalendarGrid = ({
   viewMode,
   currentDate,
   events,
+  familyMembers,
   onEventClick,
   onEventUpdate,
   onTimeSlotClick,
@@ -210,19 +212,23 @@ export const CalendarGrid = ({
                     {/* Events container for this time slot */}
                     {hour === START_HOUR && (
                       <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
-                        {getEventsForDate(date).map((event) => (
-                          <DraggableEventCard
-                            key={event.id}
-                            event={event}
-                            onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
-                            onMove={onEventUpdate}
-                            gridHeight={GRID_HEIGHT}
-                            columnWidth={100}
-                            timeSlotHeight={TIME_SLOT_HEIGHT}
-                            columnIndex={dateIdx}
-                            dates={dates}
-                          />
-                        ))}
+                        {getEventsForDate(date).map((event) => {
+                          const member = familyMembers.find(m => m.id === event.memberId);
+                          return (
+                            <DraggableEventCard
+                              key={event.id}
+                              event={event}
+                              onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
+                              onMove={onEventUpdate}
+                              gridHeight={GRID_HEIGHT}
+                              columnWidth={100}
+                              timeSlotHeight={TIME_SLOT_HEIGHT}
+                              columnIndex={dateIdx}
+                              dates={dates}
+                              member={member}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </div>

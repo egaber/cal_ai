@@ -1,7 +1,38 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { CalendarEvent } from "@/types/calendar";
-import { GripVertical, RepeatIcon } from "lucide-react";
+import { CalendarEvent, FamilyMember } from "@/types/calendar";
+import { 
+  GripVertical, 
+  RepeatIcon,
+  Stethoscope,
+  Briefcase,
+  User,
+  Users,
+  GraduationCap,
+  PartyPopper,
+  DollarSign,
+  Home,
+  Plane,
+  Dumbbell,
+  UtensilsCrossed,
+  ShoppingBag,
+  Film,
+  Trophy,
+  Palette,
+  Heart,
+  Calendar,
+  Wrench,
+  Cake,
+  Users2,
+  Baby,
+  PawPrint,
+  Package,
+  Car,
+  FolderKanban,
+  Clock,
+  LucideIcon
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface DraggableEventCardProps {
   event: CalendarEvent;
@@ -12,33 +43,244 @@ interface DraggableEventCardProps {
   timeSlotHeight: number;
   columnIndex: number;
   dates: Date[];
+  member?: FamilyMember;
 }
 
 const CATEGORY_STYLES: Record<CalendarEvent["category"], {
   card: string;
   bar: string;
   badge: string;
+  icon: LucideIcon;
 }> = {
   health: {
     card: 'border-emerald-100/80 hover:border-emerald-200 shadow-emerald-100/70',
     bar: 'bg-emerald-500',
     badge: 'bg-emerald-100 text-emerald-700',
+    icon: Stethoscope,
   },
   work: {
     card: 'border-sky-100/80 hover:border-sky-200 shadow-sky-100/70',
     bar: 'bg-sky-500',
     badge: 'bg-sky-100 text-sky-700',
+    icon: Briefcase,
   },
   personal: {
     card: 'border-amber-100/80 hover:border-amber-200 shadow-amber-100/70',
     bar: 'bg-amber-500',
     badge: 'bg-amber-100 text-amber-700',
+    icon: User,
   },
   family: {
     card: 'border-fuchsia-100/80 hover:border-fuchsia-200 shadow-fuchsia-100/70',
     bar: 'bg-fuchsia-500',
     badge: 'bg-fuchsia-100 text-fuchsia-700',
+    icon: Users,
   },
+  education: {
+    card: 'border-indigo-100/80 hover:border-indigo-200 shadow-indigo-100/70',
+    bar: 'bg-indigo-500',
+    badge: 'bg-indigo-100 text-indigo-700',
+    icon: GraduationCap,
+  },
+  social: {
+    card: 'border-pink-100/80 hover:border-pink-200 shadow-pink-100/70',
+    bar: 'bg-pink-500',
+    badge: 'bg-pink-100 text-pink-700',
+    icon: PartyPopper,
+  },
+  finance: {
+    card: 'border-green-100/80 hover:border-green-200 shadow-green-100/70',
+    bar: 'bg-green-600',
+    badge: 'bg-green-100 text-green-700',
+    icon: DollarSign,
+  },
+  home: {
+    card: 'border-orange-100/80 hover:border-orange-200 shadow-orange-100/70',
+    bar: 'bg-orange-500',
+    badge: 'bg-orange-100 text-orange-700',
+    icon: Home,
+  },
+  travel: {
+    card: 'border-cyan-100/80 hover:border-cyan-200 shadow-cyan-100/70',
+    bar: 'bg-cyan-500',
+    badge: 'bg-cyan-100 text-cyan-700',
+    icon: Plane,
+  },
+  fitness: {
+    card: 'border-red-100/80 hover:border-red-200 shadow-red-100/70',
+    bar: 'bg-red-500',
+    badge: 'bg-red-100 text-red-700',
+    icon: Dumbbell,
+  },
+  food: {
+    card: 'border-yellow-100/80 hover:border-yellow-200 shadow-yellow-100/70',
+    bar: 'bg-yellow-500',
+    badge: 'bg-yellow-100 text-yellow-700',
+    icon: UtensilsCrossed,
+  },
+  shopping: {
+    card: 'border-purple-100/80 hover:border-purple-200 shadow-purple-100/70',
+    bar: 'bg-purple-500',
+    badge: 'bg-purple-100 text-purple-700',
+    icon: ShoppingBag,
+  },
+  entertainment: {
+    card: 'border-violet-100/80 hover:border-violet-200 shadow-violet-100/70',
+    bar: 'bg-violet-500',
+    badge: 'bg-violet-100 text-violet-700',
+    icon: Film,
+  },
+  sports: {
+    card: 'border-orange-100/80 hover:border-orange-200 shadow-orange-100/70',
+    bar: 'bg-orange-600',
+    badge: 'bg-orange-100 text-orange-700',
+    icon: Trophy,
+  },
+  hobby: {
+    card: 'border-teal-100/80 hover:border-teal-200 shadow-teal-100/70',
+    bar: 'bg-teal-500',
+    badge: 'bg-teal-100 text-teal-700',
+    icon: Palette,
+  },
+  volunteer: {
+    card: 'border-rose-100/80 hover:border-rose-200 shadow-rose-100/70',
+    bar: 'bg-rose-500',
+    badge: 'bg-rose-100 text-rose-700',
+    icon: Heart,
+  },
+  appointment: {
+    card: 'border-blue-100/80 hover:border-blue-200 shadow-blue-100/70',
+    bar: 'bg-blue-500',
+    badge: 'bg-blue-100 text-blue-700',
+    icon: Calendar,
+  },
+  maintenance: {
+    card: 'border-slate-100/80 hover:border-slate-200 shadow-slate-100/70',
+    bar: 'bg-slate-500',
+    badge: 'bg-slate-100 text-slate-700',
+    icon: Wrench,
+  },
+  celebration: {
+    card: 'border-pink-100/80 hover:border-pink-200 shadow-pink-100/70',
+    bar: 'bg-pink-600',
+    badge: 'bg-pink-100 text-pink-700',
+    icon: Cake,
+  },
+  meeting: {
+    card: 'border-indigo-100/80 hover:border-indigo-200 shadow-indigo-100/70',
+    bar: 'bg-indigo-600',
+    badge: 'bg-indigo-100 text-indigo-700',
+    icon: Users2,
+  },
+  childcare: {
+    card: 'border-cyan-100/80 hover:border-cyan-200 shadow-cyan-100/70',
+    bar: 'bg-cyan-600',
+    badge: 'bg-cyan-100 text-cyan-700',
+    icon: Baby,
+  },
+  pet: {
+    card: 'border-amber-100/80 hover:border-amber-200 shadow-amber-100/70',
+    bar: 'bg-amber-600',
+    badge: 'bg-amber-100 text-amber-700',
+    icon: PawPrint,
+  },
+  errand: {
+    card: 'border-lime-100/80 hover:border-lime-200 shadow-lime-100/70',
+    bar: 'bg-lime-500',
+    badge: 'bg-lime-100 text-lime-700',
+    icon: Package,
+  },
+  transport: {
+    card: 'border-gray-100/80 hover:border-gray-200 shadow-gray-100/70',
+    bar: 'bg-gray-500',
+    badge: 'bg-gray-100 text-gray-700',
+    icon: Car,
+  },
+  project: {
+    card: 'border-sky-100/80 hover:border-sky-200 shadow-sky-100/70',
+    bar: 'bg-sky-600',
+    badge: 'bg-sky-100 text-sky-700',
+    icon: FolderKanban,
+  },
+  deadline: {
+    card: 'border-red-100/80 hover:border-red-200 shadow-red-100/70',
+    bar: 'bg-red-600',
+    badge: 'bg-red-100 text-red-700',
+    icon: Clock,
+  },
+};
+
+// Smart icon matching based on event content
+const getEventIcon = (event: CalendarEvent): LucideIcon => {
+  const text = `${event.title} ${event.description || ''}`.toLowerCase();
+  
+  // Fitness keywords
+  if (text.match(/\b(gym|workout|exercise|run|jog|yoga|pilates|training|crossfit|swim|bike|cycling)\b/)) {
+    return Dumbbell;
+  }
+  
+  // Health keywords
+  if (text.match(/\b(doctor|dentist|appointment|medical|clinic|hospital|checkup|therapy|prescription|surgery)\b/)) {
+    return Stethoscope;
+  }
+  
+  // Food keywords
+  if (text.match(/\b(lunch|dinner|breakfast|brunch|meal|restaurant|cook|recipe|eat|food|cafe|coffee)\b/)) {
+    return UtensilsCrossed;
+  }
+  
+  // Shopping keywords
+  if (text.match(/\b(shop|shopping|buy|purchase|store|mall|grocery|groceries|market)\b/)) {
+    return ShoppingBag;
+  }
+  
+  // Travel keywords
+  if (text.match(/\b(flight|travel|trip|vacation|hotel|airport|booking|tour|destination)\b/)) {
+    return Plane;
+  }
+  
+  // Education keywords
+  if (text.match(/\b(class|course|lecture|study|exam|test|homework|assignment|school|college|university|learn|training)\b/)) {
+    return GraduationCap;
+  }
+  
+  // Social keywords
+  if (text.match(/\b(party|celebration|birthday|wedding|event|gathering|meetup|hangout|drinks|friends)\b/)) {
+    return PartyPopper;
+  }
+  
+  // Finance keywords
+  if (text.match(/\b(payment|bill|invoice|tax|budget|bank|financial|investment|money|salary|expense)\b/)) {
+    return DollarSign;
+  }
+  
+  // Home/household keywords
+  if (text.match(/\b(clean|cleaning|repair|maintenance|chore|laundry|organize|home improvement|garden|yard)\b/)) {
+    return Home;
+  }
+  
+  // Work keywords
+  if (text.match(/\b(meeting|work|office|project|deadline|presentation|conference|call|client|team)\b/)) {
+    return Briefcase;
+  }
+  
+  // Family keywords
+  if (text.match(/\b(family|kids|children|parents|relatives|mom|dad|son|daughter|sibling)\b/)) {
+    return Users;
+  }
+  
+  // Default to category icon
+  return CATEGORY_STYLES[event.category]?.icon || User;
+};
+
+const getMemberInitials = (name: string) => {
+  const parts = name.split(' ');
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  // Handle names with age in parentheses like "Hilly (11)"
+  const cleanName = name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  return cleanName.substring(0, 2).toUpperCase();
 };
 
 export const DraggableEventCard = ({
@@ -50,6 +292,7 @@ export const DraggableEventCard = ({
   timeSlotHeight,
   columnIndex,
   dates,
+  member,
 }: DraggableEventCardProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'top' | 'bottom' | null>(null);
@@ -69,6 +312,10 @@ export const DraggableEventCard = ({
   const height = (durationMinutes / 60) * timeSlotHeight;
 
   const styles = CATEGORY_STYLES[event.category] ?? CATEGORY_STYLES.work;
+  const EventIcon = useMemo(() => getEventIcon(event), [event]);
+  
+  // Use emoji if available, otherwise use icon
+  const displayEmoji = event.emoji;
 
   const now = new Date();
   const isHappening = now >= startDate && now <= endDate;
@@ -242,6 +489,11 @@ export const DraggableEventCard = ({
       <div className="flex h-full flex-col gap-0.5 pl-5 pr-4 py-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-1">
+            {displayEmoji ? (
+              <span className="text-base flex-shrink-0">{displayEmoji}</span>
+            ) : (
+              <EventIcon className="h-3.5 w-3.5 flex-shrink-0 text-foreground/70" />
+            )}
             {(event.recurrence || event.recurringEventId) && (
               <RepeatIcon className="h-3 w-3 flex-shrink-0 text-primary" />
             )}
@@ -264,6 +516,20 @@ export const DraggableEventCard = ({
 
         {height > 60 && (
           <div className="mt-auto flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+            {member && (
+              <div className="flex items-center gap-1">
+                <Avatar className="h-4 w-4 border border-white shadow-sm">
+                  {member.avatar ? (
+                    <AvatarImage src={member.avatar} alt={member.name} />
+                  ) : (
+                    <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
+                      {getMemberInitials(member.name)}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className={cn('h-1.5 w-1.5 rounded-full', member.color)} />
+              </div>
+            )}
             <span className="uppercase tracking-[0.25em]">{formatDuration(startDate, endDate)}</span>
             <span className={cn('rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em]', styles.badge)}>
               {event.category}

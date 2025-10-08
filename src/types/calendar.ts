@@ -12,11 +12,13 @@ export interface CalendarEvent {
   title: string;
   startTime: string;
   endTime: string;
-  category: 'health' | 'work' | 'personal' | 'family';
+  category: 'health' | 'work' | 'personal' | 'family' | 'education' | 'social' | 'finance' | 'home' | 'travel' | 'fitness' | 'food' | 'shopping' | 'entertainment' | 'sports' | 'hobby' | 'volunteer' | 'appointment' | 'maintenance' | 'celebration' | 'meeting' | 'childcare' | 'pet' | 'errand' | 'transport' | 'project' | 'deadline';
   priority: 'low' | 'medium' | 'high';
   memberId: string;
   description?: string;
   type?: string;
+  emoji?: string; // AI-generated emoji representing the event
+  aiTip?: string; // AI-generated scheduling tip or suggestion
   recurrence?: RecurrenceRule;
   recurringEventId?: string; // links to parent recurring event
 }
@@ -27,4 +29,5 @@ export interface FamilyMember {
   role: string;
   color: string;
   isYou: boolean;
+  avatar?: string; // Base64 encoded image or URL
 }

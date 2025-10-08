@@ -1,7 +1,19 @@
 # Active Context
 
 ## Current Work Focus
-Just completed LLM integration for the AI Assistant component. The chat interface now connects to real LLM providers and allows users to interact with AI for scheduling assistance.
+Updated family member information throughout the application. The calendar now properly reflects the actual family structure with correct names, roles, and ages.
+
+### Family Members Configuration
+- **Parents**: 
+  - Eyal (Primary user)
+  - Ella
+- **Children**: 
+  - Hilly (11 years old)
+  - Yael (5.5 years old)
+  - Alon (3 years old)
+
+## Previous Work
+Completed LLM integration for the AI Assistant component. The chat interface connects to real LLM providers and allows users to interact with AI for scheduling assistance.
 
 ## Recent Changes (Latest Session)
 

@@ -178,6 +178,32 @@ export const AIAssistant = ({
       // Create system prompt with calendar tools information
       const systemPrompt = `You are an AI calendar assistant with intelligent scheduling capabilities. You help users manage their calendar by creating, moving, editing, and deleting meetings while providing smart suggestions.
 
+IMPORTANT - When creating events, you MUST:
+1. Always include an appropriate "emoji" parameter (not "type") - choose an emoji that represents the event
+2. Always include an "aiTip" parameter with a helpful scheduling tip based on:
+   - The event's timing and duration
+   - Surrounding events in the schedule
+   - Potential preparation needs
+   - Time management considerations
+   - If the event title is in Hebrew, write the tip in Hebrew; otherwise in English
+3. Analyze the calendar context before suggesting tips
+4. Keep tips brief (1-2 sentences) and actionable
+
+Example good event creation:
+{
+  "tool": "create_meeting",
+  "parameters": {
+    "title": "Team Standup",
+    "startTime": "2025-10-09T09:00:00.000Z",
+    "endTime": "2025-10-09T09:30:00.000Z",
+    "memberId": "1",
+    "category": "work",
+    "priority": "medium",
+    "emoji": "💼",
+    "aiTip": "Schedule at the start of the day for maximum team alignment. Consider having coffee ready to energize the discussion."
+  }
+}
+
 CRITICAL: You MUST use exact parameter names as specified in the tool definitions below. Do NOT use snake_case or any other naming convention.
 
 INTELLIGENT FEATURES:
@@ -217,7 +243,7 @@ Available Tools:
    - startTime (string): ISO 8601 datetime (e.g., "2025-10-08T18:00:00.000+03:00")
    - endTime (string): ISO 8601 datetime
    - memberId (string): Family member ID from the context
-   - category (string): One of: health, work, personal, family (intelligently determined)
+   - category (string): One of: health, work, personal, family, education, social, finance, home, travel, fitness, food, shopping, entertainment, sports, hobby, volunteer, appointment, maintenance, celebration, meeting, childcare, pet, errand, transport, project, deadline (intelligently determined)
    - priority (string): One of: low, medium, high (based on importance)
    - type (string): Appropriate emoticon icon for the meeting
    Optional:
@@ -289,6 +315,17 @@ When calculating times, use the current date and timezone shown above. For "toda
         const toolResults: string[] = [];
         
         for (const toolCall of response.toolCalls) {
+          // If this is a create_meeting call, extract AI tip from the response
+          if (toolCall.tool === 'create_meeting' && response.content) {
+            // Try to extract any tips/suggestions from the AI's response
+            const tipMatch = response.content.match(/(?:I notice|Consider|Suggestion|Tip|Note|Would you like|You might want to|This meeting|Your schedule)[^.!?]*[.!?]/gi);
+            if (tipMatch && tipMatch.length > 0) {
+              // Add the first meaningful tip to the parameters
+              const aiTip = tipMatch[0].trim();
+              toolCall.parameters.aiTip = aiTip;
+            }
+          }
+          
           const result = calendarService.executeToolCall(toolCall);
           
           if (result.success) {

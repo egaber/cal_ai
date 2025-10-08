@@ -260,6 +260,251 @@ export class LLMService {
       return this.localHandler.chat(messages, model.id, systemPrompt, tools);
     }
   }
+
+  async generateEventEmoji(title: string, description: string = '', category: string = ''): Promise<string> {
+    try {
+      const systemPrompt = `You are an emoji expert. Given an event title, description, and category, suggest a SINGLE most appropriate emoji that best represents the event. 
+      
+Rules:
+- Return ONLY the emoji character, nothing else
+- Choose an emoji that clearly represents the main activity or purpose
+- Be creative but relevant
+- Consider the context and category`;
+
+      const userMessage = `Event: "${title}"${description ? `\nDescription: "${description}"` : ''}${category ? `\nCategory: ${category}` : ''}
+
+What is the single best emoji for this event?`;
+
+      const messages: Message[] = [
+        { role: 'user', content: userMessage }
+      ];
+
+      // Try to get available models
+      const models = await this.getAvailableModels();
+      
+      if (models.length === 0) {
+        // Fallback to default emoji based on category if no LLM available
+        return this.getDefaultEmojiForCategory(category);
+      }
+
+      const response = await this.chat({
+        messages,
+        model: models[0], // Use first available model
+        systemPrompt
+      });
+
+      if (response.error || !response.content) {
+        return this.getDefaultEmojiForCategory(category);
+      }
+
+      // Extract emoji from response (remove any extra text)
+      const emojiMatch = response.content.match(/[\p{Emoji}]/u);
+      if (emojiMatch) {
+        return emojiMatch[0];
+      }
+
+      // If no emoji found, return default
+      return this.getDefaultEmojiForCategory(category);
+    } catch (error) {
+      console.error('Error generating emoji:', error);
+      return this.getDefaultEmojiForCategory(category);
+    }
+  }
+
+  async generateEventMetadata(title: string, description: string = ''): Promise<{ emoji: string; category: string }> {
+    try {
+      const systemPrompt = `You are an intelligent event categorization assistant. Analyze event titles and descriptions to suggest the most appropriate category and emoji.
+
+Available categories:
+- health: Medical appointments, therapy, wellness
+- work: Business meetings, work tasks, professional calls
+- personal: Personal errands, self-care, individual tasks
+- family: Family time, kids activities, family events
+- education: Classes, courses, studying, learning
+- social: Social gatherings, parties, meetups
+- finance: Bills, payments, financial planning
+- home: Household chores, maintenance, home improvement
+- travel: Trips, flights, vacations
+- fitness: Exercise, gym, sports activities
+- food: Meals, cooking, restaurants
+- shopping: Shopping trips, errands, purchases
+- entertainment: Movies, shows, games, leisure
+- sports: Sports games, athletic activities
+- hobby: Hobbies, crafts, creative activities
+- volunteer: Volunteering, community service
+- appointment: General appointments, scheduled visits
+- maintenance: Car maintenance, repairs, service
+- celebration: Birthdays, anniversaries, special occasions
+- meeting: Formal meetings, conferences
+- childcare: Childcare, babysitting, kid-related
+- pet: Pet care, vet visits, pet activities
+- errand: Quick errands, tasks to complete
+- transport: Transportation, commute, driving
+- project: Project work, planning, tasks
+- deadline: Important deadlines, time-sensitive tasks
+
+Return ONLY a JSON object with this exact format:
+{"emoji": "🎯", "category": "work"}
+
+Choose the single most relevant category and a matching emoji.`;
+
+      const userMessage = `Event: "${title}"${description ? `\nDescription: "${description}"` : ''}
+
+Analyze this event and return the category and emoji.`;
+
+      const messages: Message[] = [
+        { role: 'user', content: userMessage }
+      ];
+
+      // Try to get available models
+      const models = await this.getAvailableModels();
+      
+      if (models.length === 0) {
+        // Fallback to defaults
+        return { emoji: '📅', category: 'personal' };
+      }
+
+      const response = await this.chat({
+        messages,
+        model: models[0],
+        systemPrompt
+      });
+
+      if (response.error || !response.content) {
+        return { emoji: '📅', category: 'personal' };
+      }
+
+      // Try to extract JSON from response
+      const jsonMatch = response.content.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.emoji && parsed.category) {
+            // Validate category is in our list
+            const validCategories = [
+              'health', 'work', 'personal', 'family', 'education', 'social', 
+              'finance', 'home', 'travel', 'fitness', 'food', 'shopping',
+              'entertainment', 'sports', 'hobby', 'volunteer', 'appointment',
+              'maintenance', 'celebration', 'meeting', 'childcare', 'pet',
+              'errand', 'transport', 'project', 'deadline'
+            ];
+            
+            if (validCategories.includes(parsed.category)) {
+              return { emoji: parsed.emoji, category: parsed.category };
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse AI response:', e);
+        }
+      }
+
+      // If parsing failed, return defaults
+      return { emoji: '📅', category: 'personal' };
+    } catch (error) {
+      console.error('Error generating event metadata:', error);
+      return { emoji: '📅', category: 'personal' };
+    }
+  }
+
+  async generateEventTip(
+    eventTitle: string,
+    eventDescription: string,
+    eventCategory: string,
+    startTime: string,
+    endTime: string,
+    surroundingEvents: Array<{ title: string; startTime: string; endTime: string; category: string }>
+  ): Promise<string> {
+    try {
+      // Detect if title is in Hebrew (contains Hebrew characters)
+      const hasHebrew = /[\u0590-\u05FF]/.test(eventTitle);
+      
+      const systemPrompt = `You are a smart scheduling assistant. Analyze an event and its surrounding schedule to provide a helpful, concise tip or suggestion.
+
+Your tips should be:
+- Practical and actionable
+- Context-aware (consider time of day, surrounding events, transitions)
+- Brief (1-2 sentences max)
+- Helpful for planning or preparation
+${hasHebrew ? '- IMPORTANT: Respond in Hebrew since the event title is in Hebrew' : '- Respond in English'}
+
+Focus on:
+- Time management (buffer time, transitions)
+- Preparation needed
+- Potential conflicts or considerations
+- Timing optimization
+- Energy levels and breaks`;
+
+      // Format surrounding events for context
+      const scheduleContext = surroundingEvents.length > 0
+        ? surroundingEvents.map(e => {
+            const start = new Date(e.startTime);
+            const end = new Date(e.endTime);
+            return `- ${e.title} (${e.category}) ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+          }).join('\n')
+        : 'No other events scheduled nearby';
+
+      const eventStart = new Date(startTime);
+      const eventEnd = new Date(endTime);
+      const duration = (eventEnd.getTime() - eventStart.getTime()) / (1000 * 60);
+
+      const userMessage = `Event to analyze:
+Title: ${eventTitle}
+Category: ${eventCategory}
+Start: ${eventStart.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}
+End: ${eventEnd.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}
+Duration: ${duration} minutes
+${eventDescription ? `Description: ${eventDescription}` : ''}
+
+Surrounding events:
+${scheduleContext}
+
+Provide a brief, helpful scheduling tip or suggestion for this event.`;
+
+      const messages: Message[] = [
+        { role: 'user', content: userMessage }
+      ];
+
+      const models = await this.getAvailableModels();
+      
+      if (models.length === 0) {
+        return ''; // No tip if no LLM available
+      }
+
+      const response = await this.chat({
+        messages,
+        model: models[0],
+        systemPrompt
+      });
+
+      if (response.error || !response.content) {
+        return '';
+      }
+
+      // Clean up the response - remove quotes and trim
+      return response.content.trim().replace(/^["']|["']$/g, '');
+    } catch (error) {
+      console.error('Error generating event tip:', error);
+      return '';
+    }
+  }
+
+  private getDefaultEmojiForCategory(category: string): string {
+    const categoryEmojiMap: Record<string, string> = {
+      health: '🏥',
+      work: '💼',
+      personal: '👤',
+      family: '👨‍👩‍👧‍👦',
+      education: '📚',
+      social: '🎉',
+      finance: '💰',
+      home: '🏠',
+      travel: '✈️',
+      fitness: '💪',
+      food: '🍽️',
+      shopping: '🛍️'
+    };
+    return categoryEmojiMap[category] || '📅';
+  }
 }
 
 // Singleton instance

@@ -1,7 +1,11 @@
-import { CalendarEvent } from "@/types/calendar";
+import { CalendarEvent, RecurrenceRule, FamilyMember } from "@/types/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -9,10 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, Calendar, Clock, Tag, MessageSquare, Trash2, RepeatIcon, Edit2, Check } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import { X, GripVertical, Trash2, RepeatIcon, Sparkles, User, Lightbulb, Tag, AlertCircle, Clock, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { describeRecurrence } from "@/utils/recurrenceUtils";
+import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
+import { cn } from "@/lib/utils";
 
 interface EventPopoverProps {
   event: CalendarEvent | null;
@@ -20,22 +32,55 @@ interface EventPopoverProps {
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
   onDelete: (eventId: string) => void;
-  onTalkToChat?: (event: CalendarEvent) => void;
   position: { x: number; y: number };
   children: React.ReactNode;
+  familyMembers?: FamilyMember[];
 }
 
-const CATEGORY_COLORS = {
-  health: { icon: '🏃', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
-  work: { icon: '💼', bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-700' },
-  personal: { icon: '🏠', bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700' },
-  family: { icon: '👨‍👩‍👧‍👦', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200', text: 'text-fuchsia-700' },
+// Category color mapping
+const CATEGORY_COLORS: Record<CalendarEvent["category"], { bg: string; border: string; text: string; lightBg: string }> = {
+  health: { bg: 'bg-emerald-500', border: 'border-emerald-200', text: 'text-emerald-700', lightBg: 'bg-emerald-50' },
+  work: { bg: 'bg-sky-500', border: 'border-sky-200', text: 'text-sky-700', lightBg: 'bg-sky-50' },
+  personal: { bg: 'bg-amber-500', border: 'border-amber-200', text: 'text-amber-700', lightBg: 'bg-amber-50' },
+  family: { bg: 'bg-fuchsia-500', border: 'border-fuchsia-200', text: 'text-fuchsia-700', lightBg: 'bg-fuchsia-50' },
+  education: { bg: 'bg-indigo-500', border: 'border-indigo-200', text: 'text-indigo-700', lightBg: 'bg-indigo-50' },
+  social: { bg: 'bg-pink-500', border: 'border-pink-200', text: 'text-pink-700', lightBg: 'bg-pink-50' },
+  finance: { bg: 'bg-green-600', border: 'border-green-200', text: 'text-green-700', lightBg: 'bg-green-50' },
+  home: { bg: 'bg-orange-500', border: 'border-orange-200', text: 'text-orange-700', lightBg: 'bg-orange-50' },
+  travel: { bg: 'bg-cyan-500', border: 'border-cyan-200', text: 'text-cyan-700', lightBg: 'bg-cyan-50' },
+  fitness: { bg: 'bg-red-500', border: 'border-red-200', text: 'text-red-700', lightBg: 'bg-red-50' },
+  food: { bg: 'bg-yellow-500', border: 'border-yellow-200', text: 'text-yellow-700', lightBg: 'bg-yellow-50' },
+  shopping: { bg: 'bg-purple-500', border: 'border-purple-200', text: 'text-purple-700', lightBg: 'bg-purple-50' },
+  entertainment: { bg: 'bg-violet-500', border: 'border-violet-200', text: 'text-violet-700', lightBg: 'bg-violet-50' },
+  sports: { bg: 'bg-orange-600', border: 'border-orange-200', text: 'text-orange-700', lightBg: 'bg-orange-50' },
+  hobby: { bg: 'bg-teal-500', border: 'border-teal-200', text: 'text-teal-700', lightBg: 'bg-teal-50' },
+  volunteer: { bg: 'bg-rose-500', border: 'border-rose-200', text: 'text-rose-700', lightBg: 'bg-rose-50' },
+  appointment: { bg: 'bg-blue-500', border: 'border-blue-200', text: 'text-blue-700', lightBg: 'bg-blue-50' },
+  maintenance: { bg: 'bg-slate-500', border: 'border-slate-200', text: 'text-slate-700', lightBg: 'bg-slate-50' },
+  celebration: { bg: 'bg-pink-600', border: 'border-pink-200', text: 'text-pink-700', lightBg: 'bg-pink-50' },
+  meeting: { bg: 'bg-indigo-600', border: 'border-indigo-200', text: 'text-indigo-700', lightBg: 'bg-indigo-50' },
+  childcare: { bg: 'bg-cyan-600', border: 'border-cyan-200', text: 'text-cyan-700', lightBg: 'bg-cyan-50' },
+  pet: { bg: 'bg-amber-600', border: 'border-amber-200', text: 'text-amber-700', lightBg: 'bg-amber-50' },
+  errand: { bg: 'bg-lime-500', border: 'border-lime-200', text: 'text-lime-700', lightBg: 'bg-lime-50' },
+  transport: { bg: 'bg-gray-500', border: 'border-gray-200', text: 'text-gray-700', lightBg: 'bg-gray-50' },
+  project: { bg: 'bg-sky-600', border: 'border-sky-200', text: 'text-sky-700', lightBg: 'bg-sky-50' },
+  deadline: { bg: 'bg-red-600', border: 'border-red-200', text: 'text-red-700', lightBg: 'bg-red-50' },
 };
 
-const PRIORITY_LABELS = {
-  low: 'Low Priority',
-  medium: 'Medium Priority',
-  high: 'High Priority',
+// Priority color mapping
+const PRIORITY_COLORS: Record<CalendarEvent["priority"], { bg: string; text: string; label: string }> = {
+  low: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Low' },
+  medium: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Medium' },
+  high: { bg: 'bg-red-100', text: 'text-red-700', label: 'High' },
+};
+
+const getMemberInitials = (name: string) => {
+  const parts = name.split(' ');
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  const cleanName = name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  return cleanName.substring(0, 2).toUpperCase();
 };
 
 export const EventPopover = ({
@@ -44,35 +89,92 @@ export const EventPopover = ({
   onClose,
   onEdit,
   onDelete,
-  onTalkToChat,
   position,
   children,
+  familyMembers = [],
 }: EventPopoverProps) => {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState("");
-  const [editedDescription, setEditedDescription] = useState("");
-  const [editedCategory, setEditedCategory] = useState<CalendarEvent['category']>("personal");
-  const [editedPriority, setEditedPriority] = useState<CalendarEvent['priority']>("medium");
+  const dragHandleRef = useRef<HTMLDivElement>(null);
+  const [editedEvent, setEditedEvent] = useState<CalendarEvent | null>(null);
+  const [showRecurrenceEditor, setShowRecurrenceEditor] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [popoverPosition, setPopoverPosition] = useState(position);
+  const [isGeneratingTip, setIsGeneratingTip] = useState(false);
 
-  // Reset editing state when event changes
+  // Initialize editing state when event changes
   useEffect(() => {
     if (event) {
-      setEditedTitle(event.title);
-      setEditedDescription(event.description || "");
-      setEditedCategory(event.category);
-      setEditedPriority(event.priority);
-      setIsEditing(false);
+      setEditedEvent({ ...event });
+      setIsRecurring(!!(event.recurrence || event.recurringEventId));
+      setShowRecurrenceEditor(false);
     }
   }, [event]);
 
+  // Smart positioning - ensure popover is fully visible and doesn't block the event
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+    if (!isOpen || !popoverRef.current) return;
+
+    const popoverWidth = 500;
+    const popoverHeight = 650;
+    const padding = 20;
+    const eventOffset = 100; // Offset from clicked event
+    
+    let left = position.x + eventOffset;
+    let top = position.y;
+    
+    // Ensure popover doesn't go off right edge
+    if (left + popoverWidth > window.innerWidth - padding) {
+      left = position.x - popoverWidth - eventOffset;
+    }
+    
+    // Ensure popover doesn't go off left edge
+    if (left < padding) {
+      left = padding;
+    }
+    
+    // Center vertically around click position, but keep fully visible
+    top = position.y - popoverHeight / 2;
+    
+    // Ensure popover doesn't go off top
+    if (top < padding) {
+      top = padding;
+    }
+    
+    // Ensure popover doesn't go off bottom
+    if (top + popoverHeight > window.innerHeight - padding) {
+      top = window.innerHeight - popoverHeight - padding;
+    }
+    
+    setPopoverPosition({ x: left, y: top });
+  }, [isOpen, position]);
+
+  // Handle dragging
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      setPopoverPosition({
+        x: e.clientX - dragOffset.x,
+        y: e.clientY - dragOffset.y,
+      });
     };
 
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
+  useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
@@ -80,290 +182,516 @@ export const EventPopover = ({
     };
 
     if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("keydown", handleEscape);
       return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
         document.removeEventListener("keydown", handleEscape);
       };
     }
   }, [isOpen, onClose]);
 
-  if (!event) return <>{children}</>;
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  if (!event || !editedEvent) return <>{children}</>;
 
   const formatDuration = (start: string, end: string) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
     const minutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
-    if (minutes < 60) return `${minutes} minutes`;
+    if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
     const remainder = minutes % 60;
-    if (remainder === 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+    if (remainder === 0) return `${hours}h`;
     return `${hours}h ${remainder}m`;
   };
 
-  const categoryStyle = CATEGORY_COLORS[event.category] ?? CATEGORY_COLORS.work;
+  const handleSave = () => {
+    if (!editedEvent.title.trim()) return;
+    
+    // Handle recurrence
+    if (isRecurring && editedEvent.recurrence) {
+      const error = validateRecurrenceRule(editedEvent.recurrence);
+      if (error) {
+        alert(error);
+        return;
+      }
+    } else if (!isRecurring) {
+      // Remove recurrence if unchecked
+      editedEvent.recurrence = undefined;
+    }
+    
+    onEdit(editedEvent);
+    onClose();
+  };
 
-  // Calculate position - default to right of click, but flip if too close to edge
-  const popoverWidth = 380;
-  const viewportWidth = window.innerWidth;
-  const padding = 20;
-  
-  let left = position.x + padding;
-  let top = position.y;
-  
-  // If popover would go off right edge, position it to the left
-  if (left + popoverWidth > viewportWidth - padding) {
-    left = position.x - popoverWidth - padding;
-  }
-  
-  // Ensure popover doesn't go off top or bottom
-  const popoverHeight = 400; // approximate
-  if (top + popoverHeight / 2 > window.innerHeight - padding) {
-    top = window.innerHeight - popoverHeight - padding;
-  } else if (top < padding + popoverHeight / 2) {
-    top = padding;
-  } else {
-    top = top - popoverHeight / 2;
-  }
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (!dragHandleRef.current?.contains(e.target as Node)) return;
+    
+    setIsDragging(true);
+    const rect = popoverRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    }
+  };
+
+  const handleRecurringToggle = (checked: boolean) => {
+    setIsRecurring(checked);
+    if (checked && !editedEvent.recurrence) {
+      // Initialize with default weekly recurrence
+      setEditedEvent({
+        ...editedEvent,
+        recurrence: {
+          frequency: 'weekly',
+          interval: 1,
+          daysOfWeek: [new Date(editedEvent.startTime).getDay()],
+        }
+      });
+      setShowRecurrenceEditor(true);
+    }
+  };
+
+  const currentMember = familyMembers.find(m => m.id === editedEvent.memberId);
+  const categoryColor = CATEGORY_COLORS[editedEvent.category];
+  const priorityColor = PRIORITY_COLORS[editedEvent.priority];
 
   const popoverContent = isOpen ? (
-    <div
-      ref={popoverRef}
-      className="fixed z-[9999] w-[380px] animate-in fade-in zoom-in-95 duration-200"
-      style={{
-        top: `${top}px`,
-        left: `${left}px`,
-      }}
-    >
-      <div className="relative rounded-2xl border-2 border-border bg-white shadow-2xl shadow-black/10 overflow-hidden">
-        {/* Color accent bar */}
-        <div className={`h-2 ${categoryStyle.bg} ${categoryStyle.border} border-b-2`} />
-        
-        {/* Header */}
-        <div className="p-5 pb-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <span className="text-3xl flex-shrink-0 leading-none">{categoryStyle.icon}</span>
-              <div className="flex-1 min-w-0">
-                {isEditing ? (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          ref={popoverRef}
+          className="fixed z-[9999] w-[500px] animate-in fade-in-0 zoom-in-95 duration-200"
+          style={{
+            left: `${popoverPosition.x}px`,
+            top: `${popoverPosition.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="relative rounded-xl border-2 bg-white shadow-2xl shadow-black/20 overflow-hidden">
+            {/* Draggable Header with Category Color */}
+            <div
+              ref={dragHandleRef}
+              onMouseDown={handleDragStart}
+              className={cn('h-3 cursor-move', categoryColor.bg, isDragging && 'cursor-grabbing')}
+            />
+            
+            {/* Header */}
+            <div className="px-5 pt-4 pb-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="text-4xl leading-none">{editedEvent.emoji || '📅'}</div>
+                </div>
+                <div className="flex-1 min-w-0 space-y-2">
                   <Input
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="font-bold text-lg"
+                    value={editedEvent.title}
+                    onChange={(e) => setEditedEvent({ ...editedEvent, title: e.target.value })}
+                    className="font-bold text-lg border-0 px-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
                     placeholder="Event title"
-                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
                   />
-                ) : (
-                  <h3 className="font-bold text-lg leading-tight text-foreground pr-2">{event.title}</h3>
-                )}
+                  
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Family Member Selector */}
+                    <Select
+                      value={editedEvent.memberId}
+                      onValueChange={(value) => setEditedEvent({ ...editedEvent, memberId: value })}
+                    >
+                      <SelectTrigger 
+                        className="h-7 w-auto border-0 px-2 gap-2 focus:ring-0 hover:bg-muted/50 rounded-md"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-5 w-5 border border-white shadow-sm">
+                            {currentMember?.avatar ? (
+                              <AvatarImage src={currentMember.avatar} alt={currentMember.name} />
+                            ) : (
+                              <AvatarFallback className={cn('text-[8px]', currentMember?.color, 'text-white')}>
+                                {currentMember ? getMemberInitials(currentMember.name) : '??'}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <span className="text-xs font-medium">{currentMember?.name || 'Unknown'}</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="z-[10000]" onClick={(e) => e.stopPropagation()}>
+                        {familyMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5">
+                                {member.avatar ? (
+                                  <AvatarImage src={member.avatar} alt={member.name} />
+                                ) : (
+                                  <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
+                                    {getMemberInitials(member.name)}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              {member.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* Category Badge Selector */}
+                    <Select
+                      value={editedEvent.category}
+                      onValueChange={(value: CalendarEvent['category']) => 
+                        setEditedEvent({ ...editedEvent, category: value })
+                      }
+                    >
+                      <SelectTrigger 
+                        className="h-7 w-auto border-0 px-0 gap-1 focus:ring-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Badge className={cn(categoryColor.lightBg, categoryColor.text, 'text-xs font-semibold capitalize border', categoryColor.border)}>
+                          {editedEvent.category}
+                        </Badge>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60 z-[10000]" onClick={(e) => e.stopPropagation()}>
+                        {Object.keys(CATEGORY_COLORS).map((cat) => {
+                          const colors = CATEGORY_COLORS[cat as CalendarEvent['category']];
+                          return (
+                            <SelectItem key={cat} value={cat}>
+                              <div className="flex items-center gap-2">
+                                <div className={cn('w-3 h-3 rounded-full', colors.bg)} />
+                                <span className="capitalize">{cat}</span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Priority Badge Selector */}
+                    <Select
+                      value={editedEvent.priority}
+                      onValueChange={(value: CalendarEvent['priority']) => 
+                        setEditedEvent({ ...editedEvent, priority: value })
+                      }
+                    >
+                      <SelectTrigger 
+                        className="h-7 w-auto border-0 px-0 gap-1 focus:ring-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Badge className={cn(priorityColor.bg, priorityColor.text, 'text-xs font-semibold')}>
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          {priorityColor.label}
+                        </Badge>
+                      </SelectTrigger>
+                      <SelectContent className="z-[10000]" onClick={(e) => e.stopPropagation()}>
+                        {Object.entries(PRIORITY_COLORS).map(([priority, colors]) => (
+                          <SelectItem key={priority} value={priority}>
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className={cn('h-3 w-3', colors.text)} />
+                              <span>{colors.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* Duration Display */}
+                    <Badge variant="outline" className="text-xs">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {formatDuration(editedEvent.startTime, editedEvent.endTime)}
+                    </Badge>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
+                  onClick={onClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-            <div className="flex gap-1">
-              {!isEditing ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
-                  onClick={() => setIsEditing(true)}
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
-                  onClick={() => {
-                    onEdit({
-                      ...event,
-                      title: editedTitle,
-                      description: editedDescription,
-                      category: editedCategory,
-                      priority: editedPriority,
-                    });
-                    setIsEditing(false);
-                    onClose();
-                  }}
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-              )}
+
+            {/* Body */}
+            <div className="px-5 pb-4 space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto">
+              {/* Time & Date */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Date</Label>
+                  <Input
+                    type="date"
+                    value={new Date(editedEvent.startTime).toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const newDate = new Date(e.target.value);
+                      const currentStart = new Date(editedEvent.startTime);
+                      const currentEnd = new Date(editedEvent.endTime);
+                      
+                      newDate.setHours(currentStart.getHours(), currentStart.getMinutes());
+                      const duration = currentEnd.getTime() - currentStart.getTime();
+                      const newEnd = new Date(newDate.getTime() + duration);
+                      
+                      setEditedEvent({
+                        ...editedEvent,
+                        startTime: newDate.toISOString(),
+                        endTime: newEnd.toISOString()
+                      });
+                    }}
+                    className="h-8 text-xs"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Time</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="time"
+                      value={new Date(editedEvent.startTime).toTimeString().slice(0, 5)}
+                      onChange={(e) => {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newStart = new Date(editedEvent.startTime);
+                        newStart.setHours(parseInt(hours), parseInt(minutes));
+                        const duration = new Date(editedEvent.endTime).getTime() - new Date(editedEvent.startTime).getTime();
+                        const newEnd = new Date(newStart.getTime() + duration);
+                        setEditedEvent({
+                          ...editedEvent,
+                          startTime: newStart.toISOString(),
+                          endTime: newEnd.toISOString()
+                        });
+                      }}
+                      className="h-8 text-xs flex-1"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Input
+                      type="time"
+                      value={new Date(editedEvent.endTime).toTimeString().slice(0, 5)}
+                      onChange={(e) => {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newEnd = new Date(editedEvent.endTime);
+                        newEnd.setHours(parseInt(hours), parseInt(minutes));
+                        setEditedEvent({
+                          ...editedEvent,
+                          endTime: newEnd.toISOString()
+                        });
+                      }}
+                      className="h-8 text-xs flex-1"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recurring Event Section */}
+              <div className="pt-2 border-t space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="recurring"
+                    checked={isRecurring}
+                    onCheckedChange={handleRecurringToggle}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <Label htmlFor="recurring" className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                    <RepeatIcon className="h-4 w-4" />
+                    Recurring Event
+                  </Label>
+                </div>
+                
+                {isRecurring && editedEvent.recurrence && (
+                  <div className="space-y-3 p-3 rounded-lg bg-muted/30 border ml-6">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Frequency</Label>
+                        <Select
+                          value={editedEvent.recurrence.frequency}
+                          onValueChange={(value: RecurrenceRule['frequency']) =>
+                            setEditedEvent({
+                              ...editedEvent,
+                              recurrence: { ...editedEvent.recurrence!, frequency: value }
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs mt-1" onClick={(e) => e.stopPropagation()}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[10001]" onClick={(e) => e.stopPropagation()}>
+                            <SelectItem value="daily">Daily</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="yearly">Yearly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Every</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={editedEvent.recurrence.interval}
+                          onChange={(e) =>
+                            setEditedEvent({
+                              ...editedEvent,
+                              recurrence: {
+                                ...editedEvent.recurrence!,
+                                interval: parseInt(e.target.value) || 1
+                              }
+                            })
+                          }
+                          className="h-8 text-xs mt-1"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    
+                    {editedEvent.recurrence.frequency === 'weekly' && (
+                      <div>
+                        <Label className="text-xs mb-2 block">Days of Week</Label>
+                        <div className="flex gap-1">
+                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => {
+                            const isSelected = editedEvent.recurrence?.daysOfWeek?.includes(index);
+                            return (
+                              <Button
+                                key={index}
+                                type="button"
+                                variant={isSelected ? "default" : "outline"}
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const current = editedEvent.recurrence?.daysOfWeek || [];
+                                  const updated = current.includes(index)
+                                    ? current.filter(d => d !== index)
+                                    : [...current, index].sort();
+                                  setEditedEvent({
+                                    ...editedEvent,
+                                    recurrence: {
+                                      ...editedEvent.recurrence!,
+                                      daysOfWeek: updated
+                                    }
+                                  });
+                                }}
+                                className="w-8 h-8 p-0 text-xs"
+                              >
+                                {day}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-muted-foreground">
+                      {describeRecurrence(editedEvent.recurrence)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Description</Label>
+                <Textarea
+                  value={editedEvent.description || ''}
+                  onChange={(e) => setEditedEvent({ ...editedEvent, description: e.target.value })}
+                  className="text-sm min-h-[60px] resize-none"
+                  placeholder="Add description..."
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              {/* AI Tip */}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Lightbulb className="h-3 w-3 text-amber-600" />
+                    AI Tip / Suggestion
+                  </Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setIsGeneratingTip(true);
+                      try {
+                        const { llmService } = await import('@/services/llmService');
+                        
+                        // Get surrounding events (2 hours before and after) - we'd need to pass this as a prop
+                        // For now, use empty array as placeholder
+                        const surroundingEvents: Array<{ title: string; startTime: string; endTime: string; category: string }> = [];
+                        
+                        const tip = await llmService.generateEventTip(
+                          editedEvent.title,
+                          editedEvent.description || '',
+                          editedEvent.category,
+                          editedEvent.startTime,
+                          editedEvent.endTime,
+                          surroundingEvents
+                        );
+                        
+                        if (tip) {
+                          setEditedEvent({ ...editedEvent, aiTip: tip });
+                        }
+                      } catch (error) {
+                        console.error('Failed to generate tip:', error);
+                      } finally {
+                        setIsGeneratingTip(false);
+                      }
+                    }}
+                    disabled={isGeneratingTip}
+                  >
+                    <Wand2 className="h-3 w-3 mr-1" />
+                    {isGeneratingTip ? 'Generating...' : 'Generate Tip'}
+                  </Button>
+                </div>
+                <div className="rounded-lg bg-amber-50 p-3 border border-amber-200">
+                  <Textarea
+                    value={editedEvent.aiTip || ''}
+                    onChange={(e) => setEditedEvent({ ...editedEvent, aiTip: e.target.value })}
+                    className="text-xs min-h-[50px] resize-none bg-white/50 border-amber-200 focus-visible:ring-amber-500"
+                    placeholder="AI will add scheduling tips here, or you can add your own notes..."
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t bg-muted/30 p-4 flex gap-2">
               <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
-                onClick={onClose}
+                variant="default"
+                size="sm"
+                className="flex-1"
+                onClick={handleSave}
               >
-                <X className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5 mr-2" />
+                Save
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  onDelete(event.id);
+                  onClose();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </div>
-
-        {/* Body */}
-        <div className="px-5 pb-5 space-y-4">
-          {/* Time & Date Info */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-foreground font-medium">{formatDate(event.startTime)}</span>
-            </div>
-            <div className="flex items-center gap-3 text-sm">
-              <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <div className="flex items-center gap-2">
-                <span className="text-foreground font-medium">
-                  {formatTime(event.startTime)} - {formatTime(event.endTime)}
-                </span>
-                <span className="text-muted-foreground">
-                  ({formatDuration(event.startTime, event.endTime)})
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 text-sm">
-              <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              {isEditing ? (
-                <div className="flex gap-2 flex-1">
-                  <Select value={editedCategory} onValueChange={(value: CalendarEvent['category']) => setEditedCategory(value)}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="health">🏃 Health</SelectItem>
-                      <SelectItem value="work">💼 Work</SelectItem>
-                      <SelectItem value="personal">🏠 Personal</SelectItem>
-                      <SelectItem value="family">👨‍👩‍👧‍👦 Family</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={editedPriority} onValueChange={(value: CalendarEvent['priority']) => setEditedPriority(value)}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryStyle.bg} ${categoryStyle.text} capitalize`}>
-                    {event.category}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {PRIORITY_LABELS[event.priority]}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recurring Event Info */}
-          {(event.recurrence || event.recurringEventId) && (
-            <div className="pt-2 border-t border-border">
-              <div className="flex items-start gap-2 rounded-lg bg-primary/5 p-3 border border-primary/20">
-                <RepeatIcon className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-primary">Recurring Event</p>
-                  {event.recurrence && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {describeRecurrence(event.recurrence)}
-                    </p>
-                  )}
-                  {event.recurringEventId && !event.recurrence && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This is an occurrence of a recurring event
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Description */}
-          {(event.description || isEditing) && (
-            <div className="pt-2 border-t border-border">
-              {isEditing ? (
-                <Textarea
-                  value={editedDescription}
-                  onChange={(e) => setEditedDescription(e.target.value)}
-                  className="text-sm min-h-[60px]"
-                  placeholder="Add description..."
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed">{event.description}</p>
-              )}
-            </div>
-          )}
-
-          {event.type && (
-            <div className="text-xs text-muted-foreground">
-              Type: <span className="font-medium capitalize">{event.type}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="border-t border-border bg-muted/30 p-4 space-y-2">
-          <div className="flex gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1 gap-2 shadow-sm"
-              onClick={() => {
-                if (onTalkToChat) {
-                  onTalkToChat(event);
-                }
-                onClose();
-              }}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Talk to Chat
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => onEdit(event)}
-            >
-              Edit Details
-            </Button>
-          </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="w-full gap-2"
-            onClick={() => {
-              onDelete(event.id);
-              onClose();
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete Event
-          </Button>
-        </div>
-      </div>
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="z-[10001]">
+        <ContextMenuItem onClick={handleSave}>
+          <Sparkles className="h-4 w-4 mr-2" />
+          Save Changes
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          onClick={() => {
+            onDelete(event.id);
+            onClose();
+          }}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete Event
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   ) : null;
 
   return (

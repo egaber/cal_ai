@@ -73,9 +73,13 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
           type: 'string',
           description: 'Optional description or notes about the meeting'
         },
-        type: {
+        emoji: {
           type: 'string',
           description: 'Emoticon icon representing the meeting type (e.g., "💼" for work meetings, "🏥" for health/medical, "👨‍👩‍👧‍👦" for family events, "🎯" for personal goals, "🍽️" for meals, "🏋️" for exercise, "📚" for learning)'
+        },
+        aiTip: {
+          type: 'string',
+          description: 'AI-generated scheduling tip or suggestion for this event. Should provide context-aware advice about preparation, timing, or potential conflicts based on the surrounding schedule.'
         }
       },
       required: ['title', 'startTime', 'endTime', 'memberId', 'category', 'priority', 'type']
@@ -345,7 +349,8 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
       category: (params.category as CalendarEvent['category']) || 'personal',
       priority: (params.priority as CalendarEvent['priority']) || 'medium',
       description: params.description as string | undefined,
-      type: params.type as string | undefined
+      emoji: params.emoji as string | undefined,
+      aiTip: params.aiTip as string | undefined
     };
 
     // Validate datetime strings

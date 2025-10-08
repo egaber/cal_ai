@@ -31,6 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect } from "react";
 import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
 import { RepeatIcon, Trash2Icon } from "lucide-react";
+import { llmService } from "@/services/llmService";
 
 interface EventDetailsDialogProps {
   event: CalendarEvent | null;
@@ -98,7 +99,7 @@ export const EventDetailsDialog = ({
 
   const isRecurringInstance = !!editedEvent.recurringEventId;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate recurrence if enabled
     if (isRecurring) {
       const error = validateRecurrenceRule(recurrence);
@@ -108,8 +109,25 @@ export const EventDetailsDialog = ({
       }
     }
 
+    // Check if title or description changed to regenerate emoji
+    const titleChanged = editedEvent.title !== event?.title;
+    const descriptionChanged = editedEvent.description !== event?.description;
+    const categoryChanged = editedEvent.category !== event?.category;
+    
+    let emoji = editedEvent.emoji;
+    
+    // Regenerate emoji if content changed
+    if (titleChanged || descriptionChanged || categoryChanged) {
+      emoji = await llmService.generateEventEmoji(
+        editedEvent.title,
+        editedEvent.description || '',
+        editedEvent.category
+      );
+    }
+
     const updatedEvent: CalendarEvent = {
       ...editedEvent,
+      emoji,
       recurrence: isRecurring ? recurrence : undefined,
     };
 
@@ -236,6 +254,14 @@ export const EventDetailsDialog = ({
                     <SelectItem value="work">Work</SelectItem>
                     <SelectItem value="personal">Personal</SelectItem>
                     <SelectItem value="family">Family</SelectItem>
+                    <SelectItem value="education">Education</SelectItem>
+                    <SelectItem value="social">Social</SelectItem>
+                    <SelectItem value="finance">Finance</SelectItem>
+                    <SelectItem value="home">Home</SelectItem>
+                    <SelectItem value="travel">Travel</SelectItem>
+                    <SelectItem value="fitness">Fitness</SelectItem>
+                    <SelectItem value="food">Food</SelectItem>
+                    <SelectItem value="shopping">Shopping</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

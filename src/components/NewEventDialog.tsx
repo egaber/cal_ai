@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
 import { RepeatIcon } from "lucide-react";
+import { llmService } from "@/services/llmService";
 
 interface NewEventDialogProps {
   isOpen: boolean;
@@ -71,7 +72,7 @@ export const NewEventDialog = ({
   });
   const [endType, setEndType] = useState<'never' | 'date' | 'count'>('never');
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!newEvent.title.trim()) return;
 
     // Validate recurrence if enabled
@@ -83,10 +84,18 @@ export const NewEventDialog = ({
       }
     }
 
+    // Generate emoji and category suggestion for the event using AI
+    const metadata = await llmService.generateEventMetadata(
+      newEvent.title,
+      newEvent.description
+    );
+
     const eventData: Omit<CalendarEvent, 'id'> = {
       ...newEvent,
       startTime: new Date(newEvent.startTime).toISOString(),
       endTime: new Date(newEvent.endTime).toISOString(),
+      emoji: metadata.emoji,
+      category: metadata.category as CalendarEvent['category'], // Use AI-suggested category
       recurrence: isRecurring ? recurrence : undefined,
     };
 
@@ -180,6 +189,28 @@ export const NewEventDialog = ({
                   <SelectItem value="work">Work</SelectItem>
                   <SelectItem value="personal">Personal</SelectItem>
                   <SelectItem value="family">Family</SelectItem>
+                  <SelectItem value="education">Education</SelectItem>
+                  <SelectItem value="social">Social</SelectItem>
+                  <SelectItem value="finance">Finance</SelectItem>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="travel">Travel</SelectItem>
+                  <SelectItem value="fitness">Fitness</SelectItem>
+                  <SelectItem value="food">Food</SelectItem>
+                  <SelectItem value="shopping">Shopping</SelectItem>
+                  <SelectItem value="entertainment">Entertainment</SelectItem>
+                  <SelectItem value="sports">Sports</SelectItem>
+                  <SelectItem value="hobby">Hobby</SelectItem>
+                  <SelectItem value="volunteer">Volunteer</SelectItem>
+                  <SelectItem value="appointment">Appointment</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="celebration">Celebration</SelectItem>
+                  <SelectItem value="meeting">Meeting</SelectItem>
+                  <SelectItem value="childcare">Childcare</SelectItem>
+                  <SelectItem value="pet">Pet</SelectItem>
+                  <SelectItem value="errand">Errand</SelectItem>
+                  <SelectItem value="transport">Transport</SelectItem>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="deadline">Deadline</SelectItem>
                 </SelectContent>
               </Select>
             </div>
