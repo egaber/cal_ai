@@ -1,8 +1,18 @@
 import { CalendarEvent } from "@/types/calendar";
 import { Button } from "@/components/ui/button";
-import { X, Sparkles, Calendar, Clock, Tag } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { X, Calendar, Clock, Tag, MessageSquare, Trash2, RepeatIcon, Edit2, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { describeRecurrence } from "@/utils/recurrenceUtils";
 
 interface EventPopoverProps {
   event: CalendarEvent | null;
@@ -10,6 +20,7 @@ interface EventPopoverProps {
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
   onDelete: (eventId: string) => void;
+  onTalkToChat?: (event: CalendarEvent) => void;
   position: { x: number; y: number };
   children: React.ReactNode;
 }
@@ -33,10 +44,27 @@ export const EventPopover = ({
   onClose,
   onEdit,
   onDelete,
+  onTalkToChat,
   position,
   children,
 }: EventPopoverProps) => {
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedDescription, setEditedDescription] = useState("");
+  const [editedCategory, setEditedCategory] = useState<CalendarEvent['category']>("personal");
+  const [editedPriority, setEditedPriority] = useState<CalendarEvent['priority']>("medium");
+
+  // Reset editing state when event changes
+  useEffect(() => {
+    if (event) {
+      setEditedTitle(event.title);
+      setEditedDescription(event.description || "");
+      setEditedCategory(event.category);
+      setEditedPriority(event.priority);
+      setIsEditing(false);
+    }
+  }, [event]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -137,17 +165,58 @@ export const EventPopover = ({
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <span className="text-3xl flex-shrink-0 leading-none">{categoryStyle.icon}</span>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-lg leading-tight text-foreground pr-2">{event.title}</h3>
+                {isEditing ? (
+                  <Input
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="font-bold text-lg"
+                    placeholder="Event title"
+                    autoFocus
+                  />
+                ) : (
+                  <h3 className="font-bold text-lg leading-tight text-foreground pr-2">{event.title}</h3>
+                )}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
-              onClick={onClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-1">
+              {!isEditing ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
+                  onClick={() => {
+                    onEdit({
+                      ...event,
+                      title: editedTitle,
+                      description: editedDescription,
+                      category: editedCategory,
+                      priority: editedPriority,
+                    });
+                    setIsEditing(false);
+                    onClose();
+                  }}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 flex-shrink-0 hover:bg-muted/80"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -172,21 +241,78 @@ export const EventPopover = ({
             </div>
             <div className="flex items-center gap-3 text-sm">
               <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryStyle.bg} ${categoryStyle.text} capitalize`}>
-                  {event.category}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {PRIORITY_LABELS[event.priority]}
-                </span>
-              </div>
+              {isEditing ? (
+                <div className="flex gap-2 flex-1">
+                  <Select value={editedCategory} onValueChange={(value: CalendarEvent['category']) => setEditedCategory(value)}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="health">🏃 Health</SelectItem>
+                      <SelectItem value="work">💼 Work</SelectItem>
+                      <SelectItem value="personal">🏠 Personal</SelectItem>
+                      <SelectItem value="family">👨‍👩‍👧‍👦 Family</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={editedPriority} onValueChange={(value: CalendarEvent['priority']) => setEditedPriority(value)}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${categoryStyle.bg} ${categoryStyle.text} capitalize`}>
+                    {event.category}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {PRIORITY_LABELS[event.priority]}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Description */}
-          {event.description && (
+          {/* Recurring Event Info */}
+          {(event.recurrence || event.recurringEventId) && (
             <div className="pt-2 border-t border-border">
-              <p className="text-sm text-muted-foreground leading-relaxed">{event.description}</p>
+              <div className="flex items-start gap-2 rounded-lg bg-primary/5 p-3 border border-primary/20">
+                <RepeatIcon className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-primary">Recurring Event</p>
+                  {event.recurrence && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {describeRecurrence(event.recurrence)}
+                    </p>
+                  )}
+                  {event.recurringEventId && !event.recurrence && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This is an occurrence of a recurring event
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          {(event.description || isEditing) && (
+            <div className="pt-2 border-t border-border">
+              {isEditing ? (
+                <Textarea
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  className="text-sm min-h-[60px]"
+                  placeholder="Add description..."
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed">{event.description}</p>
+              )}
             </div>
           )}
 
@@ -198,26 +324,42 @@ export const EventPopover = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="border-t border-border bg-muted/30 p-4 flex gap-2">
+        <div className="border-t border-border bg-muted/30 p-4 space-y-2">
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="flex-1 gap-2 shadow-sm"
+              onClick={() => {
+                if (onTalkToChat) {
+                  onTalkToChat(event);
+                }
+                onClose();
+              }}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Talk to Chat
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => onEdit(event)}
+            >
+              Edit Details
+            </Button>
+          </div>
           <Button
-            variant="default"
+            variant="destructive"
             size="sm"
-            className="flex-1 gap-2 shadow-sm"
+            className="w-full gap-2"
             onClick={() => {
-              // TODO: Connect to AI assistant
+              onDelete(event.id);
               onClose();
             }}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            AI Suggestions
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            onClick={() => onEdit(event)}
-          >
-            Edit Details
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Event
           </Button>
         </div>
       </div>

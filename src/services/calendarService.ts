@@ -1,6 +1,6 @@
 // Calendar Service - provides tools for AI to control the calendar
 
-import { CalendarEvent, FamilyMember } from '@/types/calendar';
+import { CalendarEvent, FamilyMember, RecurrenceRule } from '@/types/calendar';
 
 export interface CalendarTool {
   name: string;
@@ -79,6 +79,75 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
         }
       },
       required: ['title', 'startTime', 'endTime', 'memberId', 'category', 'priority', 'type']
+    }
+  },
+  {
+    name: 'create_recurring_meeting',
+    description: 'Create a recurring meeting/event that repeats on a schedule. Use this when the user asks to schedule recurring, repeating, or regular meetings.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'The title/name of the meeting or event'
+        },
+        startTime: {
+          type: 'string',
+          description: 'ISO 8601 datetime string for when the first meeting starts'
+        },
+        endTime: {
+          type: 'string',
+          description: 'ISO 8601 datetime string for when the first meeting ends'
+        },
+        memberId: {
+          type: 'string',
+          description: 'The ID of the family member this event is for'
+        },
+        category: {
+          type: 'string',
+          description: 'The category of the event',
+          enum: ['health', 'work', 'personal', 'family']
+        },
+        priority: {
+          type: 'string',
+          description: 'The priority level of the event',
+          enum: ['low', 'medium', 'high']
+        },
+        description: {
+          type: 'string',
+          description: 'Optional description or notes about the meeting'
+        },
+        type: {
+          type: 'string',
+          description: 'Emoticon icon representing the meeting type'
+        },
+        frequency: {
+          type: 'string',
+          description: 'How often the meeting repeats',
+          enum: ['daily', 'weekly', 'monthly', 'yearly']
+        },
+        interval: {
+          type: 'number',
+          description: 'Repeat every N periods (e.g., every 2 weeks). Default is 1.'
+        },
+        daysOfWeek: {
+          type: 'array',
+          description: 'For weekly recurrence: days of week (0=Sunday, 1=Monday, etc.). Example: [1,3,5] for Mon, Wed, Fri'
+        },
+        dayOfMonth: {
+          type: 'number',
+          description: 'For monthly recurrence: day of month (1-31)'
+        },
+        endDate: {
+          type: 'string',
+          description: 'ISO 8601 date string for when to stop recurring. Use either endDate OR count, not both.'
+        },
+        count: {
+          type: 'number',
+          description: 'Number of occurrences. Use either count OR endDate, not both.'
+        }
+      },
+      required: ['title', 'startTime', 'endTime', 'memberId', 'category', 'priority', 'type', 'frequency', 'interval']
     }
   },
   {
@@ -230,6 +299,9 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
         case 'create_meeting':
           return this.handleCreateMeeting(request.parameters);
         
+        case 'create_recurring_meeting':
+          return this.handleCreateRecurringMeeting(request.parameters);
+        
         case 'move_meeting':
           return this.handleMoveMeeting(request.parameters);
         
@@ -360,6 +432,79 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
     return {
       success: true,
       message: `Updated meeting: ${updatesList}`
+    };
+  }
+
+  private handleCreateRecurringMeeting(params: Record<string, unknown>) {
+    // Validate required parameters
+    if (!params.title || !params.startTime || !params.endTime || !params.memberId || !params.frequency || !params.interval) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameters: title, startTime, endTime, memberId, frequency, interval'
+      };
+    }
+
+    // Build recurrence rule
+    const recurrenceRule: RecurrenceRule = {
+      frequency: params.frequency as RecurrenceRule['frequency'],
+      interval: params.interval as number,
+      daysOfWeek: params.daysOfWeek as number[] | undefined,
+      dayOfMonth: params.dayOfMonth as number | undefined,
+      endDate: params.endDate as string | undefined,
+      count: params.count as number | undefined
+    };
+
+    // Validate recurrence rule
+    if (recurrenceRule.endDate && recurrenceRule.count) {
+      return {
+        success: false,
+        message: '',
+        error: 'Cannot specify both endDate and count'
+      };
+    }
+
+    const eventData: Omit<CalendarEvent, 'id'> = {
+      title: params.title as string,
+      startTime: params.startTime as string,
+      endTime: params.endTime as string,
+      memberId: params.memberId as string,
+      category: (params.category as CalendarEvent['category']) || 'personal',
+      priority: (params.priority as CalendarEvent['priority']) || 'medium',
+      description: params.description as string | undefined,
+      type: params.type as string | undefined,
+      recurrence: recurrenceRule
+    };
+
+    // Validate datetime strings
+    const startDate = new Date(eventData.startTime);
+    const endDate = new Date(eventData.endTime);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return {
+        success: false,
+        message: '',
+        error: 'Invalid datetime format. Use ISO 8601 format'
+      };
+    }
+
+    this.operations.createEvent(eventData);
+
+    // Create description of recurrence
+    const freqDesc = recurrenceRule.interval === 1 
+      ? recurrenceRule.frequency 
+      : `every ${recurrenceRule.interval} ${recurrenceRule.frequency}`;
+    
+    let endDesc = '';
+    if (recurrenceRule.endDate) {
+      endDesc = ` until ${new Date(recurrenceRule.endDate).toLocaleDateString()}`;
+    } else if (recurrenceRule.count) {
+      endDesc = ` for ${recurrenceRule.count} occurrences`;
+    }
+
+    return {
+      success: true,
+      message: `Created recurring meeting "${eventData.title}" (${freqDesc}${endDesc})`
     };
   }
 

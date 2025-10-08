@@ -14,6 +14,7 @@ import { MemoryData } from "@/types/memory";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarService, CalendarOperations } from "@/services/calendarService";
 import { StorageService } from "@/services/storageService";
+import { generateRecurringEvents } from "@/utils/recurrenceUtils";
 import { Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -74,6 +75,7 @@ const Index = () => {
     travelInfo: [],
   });
   const [isMemoryDialogOpen, setIsMemoryDialogOpen] = useState(false);
+  const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
   const refreshMemoryData = useCallback(() => {
     const updatedMemory = StorageService.loadMemoryData();
     setMemoryData(updatedMemory);
@@ -236,13 +238,34 @@ const Index = () => {
   }, [toast]);
 
   const handleEventUpdate = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
-    setEvents(prev =>
-      prev.map(event =>
+    setEvents(prev => {
+      // Find the event being updated
+      const eventToUpdate = prev.find(e => e.id === eventId);
+      
+      // Check if this is a recurring event instance (has recurringEventId)
+      if (eventToUpdate?.recurringEventId) {
+        // This is an instance of a recurring event
+        // Create a new standalone event for this specific occurrence
+        const newEvent: CalendarEvent = {
+          ...eventToUpdate,
+          id: `event_${Date.now()}_exception`,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          recurringEventId: undefined, // Remove the recurring link
+          recurrence: undefined, // This is now a one-time event
+        };
+        
+        // Add the new event (the moved instance becomes independent)
+        return [...prev, newEvent];
+      }
+      
+      // For regular events or parent recurring events, update normally
+      return prev.map(event =>
         event.id === eventId
           ? { ...event, startTime: newStartTime, endTime: newEndTime }
           : event
-      )
-    );
+      );
+    });
   }, []);
 
   const handleEventUpdatePartial = useCallback((eventId: string, updates: Partial<CalendarEvent>) => {
@@ -289,6 +312,38 @@ const Index = () => {
     });
   }, [toast]);
 
+  const handleDeleteRecurring = useCallback((recurringEventId: string, deleteAll: boolean) => {
+    let deletedTitle: string | null = null;
+    
+    setEvents(prev => {
+      if (deleteAll) {
+        // Delete the parent recurring event (which will remove all instances when expanded)
+        const parentEvent = prev.find(e => e.id === recurringEventId);
+        if (parentEvent) {
+          deletedTitle = parentEvent.title;
+        }
+        return prev.filter(event => event.id !== recurringEventId);
+      } else {
+        // For "delete this occurrence only", we need to handle it differently
+        // We can't actually delete a single occurrence of a recurring event pattern
+        // Instead, we would need to add an "exception" system or modify the recurrence rule
+        // For now, just show a message that this feature needs more work
+        toast({
+          title: "Not Yet Implemented",
+          description: "Deleting single occurrences requires exception handling. Please delete the entire series for now.",
+        });
+        return prev;
+      }
+    });
+
+    if (deleteAll && deletedTitle) {
+      toast({
+        title: "Recurring Event Deleted",
+        description: `All occurrences of "${deletedTitle}" have been removed`,
+      });
+    }
+  }, [toast]);
+
   const handleAutoOptimize = () => {
     toast({
       title: "AI Schedule Optimization",
@@ -308,9 +363,117 @@ const Index = () => {
     setIsEventDialogOpen(true);
   };
 
+  const handleTalkToChatAboutEvent = (event: CalendarEvent) => {
+    const formatTime = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    };
+
+    const formatDate = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    };
+
+    const member = familyMembers.find(m => m.id === event.memberId);
+    const memberName = member ? member.name : 'Unknown';
+
+    const message = `I want to talk about this event:
+
+Title: ${event.title}
+Date: ${formatDate(event.startTime)}
+Time: ${formatTime(event.startTime)} - ${formatTime(event.endTime)}
+Category: ${event.category}
+Priority: ${event.priority}
+Assigned to: ${memberName}
+${event.description ? `Description: ${event.description}` : ''}
+
+What would you like to know or do with this event?`;
+
+    setChatInitialMessage(message);
+    // Scroll to AI Assistant
+    setTimeout(() => {
+      const assistantElement = document.querySelector('[data-ai-assistant]');
+      if (assistantElement) {
+        assistantElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  // Expand recurring events into individual instances for display
+  const expandedEvents = useMemo(() => {
+    const expanded: CalendarEvent[] = [];
+    
+    // Calculate view range based on current date and view mode
+    const viewStart = new Date(currentDate);
+    const viewEnd = new Date(currentDate);
+    
+    switch (viewMode) {
+      case 'day':
+        viewStart.setHours(0, 0, 0, 0);
+        viewEnd.setHours(23, 59, 59, 999);
+        break;
+      case 'week':
+      case 'workweek':
+        // Start from Sunday of current week
+        viewStart.setDate(currentDate.getDate() - currentDate.getDay());
+        viewStart.setHours(0, 0, 0, 0);
+        viewEnd.setDate(viewStart.getDate() + 7);
+        viewEnd.setHours(23, 59, 59, 999);
+        break;
+      case 'month':
+        viewStart.setDate(1);
+        viewStart.setHours(0, 0, 0, 0);
+        viewEnd.setMonth(viewStart.getMonth() + 1);
+        viewEnd.setDate(0);
+        viewEnd.setHours(23, 59, 59, 999);
+        break;
+    }
+    
+    // Add a buffer to generate events slightly outside the view range
+    const bufferStart = new Date(viewStart);
+    bufferStart.setDate(bufferStart.getDate() - 7);
+    const bufferEnd = new Date(viewEnd);
+    bufferEnd.setDate(bufferEnd.getDate() + 7);
+    
+    events.forEach(event => {
+      if (event.recurrence) {
+        // Generate recurring event instances
+        const instances = generateRecurringEvents(
+          event,
+          event.recurrence,
+          bufferStart,
+          bufferEnd
+        );
+        
+        // Add unique IDs to each instance
+        instances.forEach((instance, index) => {
+          expanded.push({
+            ...instance,
+            id: `${event.id}_occurrence_${index}_${new Date(instance.startTime).getTime()}`,
+            recurringEventId: event.id,
+          });
+        });
+      } else {
+        // Regular non-recurring event
+        expanded.push(event);
+      }
+    });
+    
+    return expanded;
+  }, [events, currentDate, viewMode]);
+
   const filteredEvents = useMemo(
-    () => events.filter(event => selectedMembers.includes(event.memberId)),
-    [events, selectedMembers]
+    () => expandedEvents.filter(event => selectedMembers.includes(event.memberId)),
+    [expandedEvents, selectedMembers]
   );
 
   const todaysEvents = useMemo(() => {
@@ -468,14 +631,17 @@ const Index = () => {
               </DialogContent>
             </Dialog>
 
-            <AIAssistant 
-              calendarService={calendarService}
-              currentDate={currentDate}
-              todayEvents={todaysEvents}
-              weekEvents={weekEvents}
-              familyMembers={familyMembers}
-              onMemoryUpdate={refreshMemoryData}
-            />
+            <div data-ai-assistant>
+              <AIAssistant 
+                calendarService={calendarService}
+                currentDate={currentDate}
+                todayEvents={todaysEvents}
+                weekEvents={weekEvents}
+                familyMembers={familyMembers}
+                onMemoryUpdate={refreshMemoryData}
+                initialMessage={chatInitialMessage}
+              />
+            </div>
           </aside>
 
           {/* Main Calendar View - Center, Most Important */}
@@ -498,6 +664,7 @@ const Index = () => {
                   onClose={() => setIsEventPopoverOpen(false)}
                   onEdit={handleEditFromPopover}
                   onDelete={handleEventDelete}
+                  onTalkToChat={handleTalkToChatAboutEvent}
                 >
                   <div className="h-full w-full">
                     <CalendarGrid
@@ -522,6 +689,7 @@ const Index = () => {
         onClose={() => setIsEventDialogOpen(false)}
         onSave={handleEventSave}
         onDelete={handleEventDelete}
+        onDeleteRecurring={handleDeleteRecurring}
       />
 
       <NewEventDialog

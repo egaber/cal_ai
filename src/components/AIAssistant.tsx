@@ -32,6 +32,7 @@ interface AIAssistantProps {
   weekEvents: CalendarEvent[];
   familyMembers: FamilyMember[];
   onMemoryUpdate?: () => void;
+  initialMessage?: string;
 }
 
 export const AIAssistant = ({
@@ -41,6 +42,7 @@ export const AIAssistant = ({
   weekEvents,
   familyMembers,
   onMemoryUpdate,
+  initialMessage,
 }: AIAssistantProps) => {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -109,6 +111,18 @@ export const AIAssistant = ({
     loadModels();
   }, []);
 
+  // Handle initial message when provided
+  useEffect(() => {
+    if (initialMessage && selectedModel) {
+      setMessage(initialMessage);
+      // Auto-send after a brief delay to ensure UI is ready
+      const timer = setTimeout(() => {
+        handleSendWithMessage(initialMessage);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [initialMessage, selectedModel]);
+
   const loadModels = async () => {
     const availableModels = await llmService.getAvailableModels();
     setModels(availableModels);
@@ -131,8 +145,8 @@ export const AIAssistant = ({
     setSettingsOpen(false);
   };
 
-  const handleSend = async () => {
-    if (!message.trim()) return;
+  const handleSendWithMessage = async (messageToSend: string) => {
+    if (!messageToSend.trim()) return;
 
     if (!selectedModel) {
       toast({
@@ -145,7 +159,7 @@ export const AIAssistant = ({
 
     const userMessage: Message = {
       role: 'user',
-      content: message.trim()
+      content: messageToSend.trim()
     };
 
     setChatHistory(prev => [...prev, userMessage]);
@@ -322,6 +336,11 @@ When calculating times, use the current date and timezone shown above. For "toda
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+    await handleSendWithMessage(message);
   };
 
   return (

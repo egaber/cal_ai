@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { CalendarEvent } from "@/types/calendar";
-import { GripVertical } from "lucide-react";
+import { GripVertical, RepeatIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DraggableEventCardProps {
@@ -241,9 +241,14 @@ export const DraggableEventCard = ({
 
       <div className="flex h-full flex-col gap-0.5 pl-5 pr-4 py-2">
         <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-foreground leading-tight flex-1">
-            {event.title}
-          </h4>
+          <div className="flex items-center gap-1.5 flex-1">
+            {(event.recurrence || event.recurringEventId) && (
+              <RepeatIcon className="h-3 w-3 flex-shrink-0 text-primary" />
+            )}
+            <h4 className="text-sm font-semibold text-foreground leading-tight flex-1">
+              {event.title}
+            </h4>
+          </div>
           <GripVertical className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40 pointer-events-none" />
         </div>
 
