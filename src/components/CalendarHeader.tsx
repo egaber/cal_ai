@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 
 interface CalendarHeaderProps {
   currentDate: Date;
-  viewMode: 'day' | 'week' | 'month';
-  onViewModeChange: (mode: 'day' | 'week' | 'month') => void;
+  viewMode: 'day' | 'week' | 'workweek' | 'month';
+  onViewModeChange: (mode: 'day' | 'week' | 'workweek' | 'month') => void;
   onNavigate: (direction: 'prev' | 'next' | 'today') => void;
   onNewEvent: () => void;
   onAutoOptimize: () => void;
@@ -41,11 +41,18 @@ export const CalendarHeader = ({
       });
     }
 
+    // For week and workweek views
     const start = new Date(currentDate);
     start.setDate(currentDate.getDate() - currentDate.getDay());
 
     const end = new Date(start);
-    end.setDate(start.getDate() + 6);
+    if (viewMode === 'workweek') {
+      // Work week: Sunday to Thursday (5 days)
+      end.setDate(start.getDate() + 4);
+    } else {
+      // Regular week: Sunday to Saturday (7 days)
+      end.setDate(start.getDate() + 6);
+    }
 
     const startLabel = start.toLocaleDateString('en-US', {
       month: 'short',
@@ -127,15 +134,23 @@ export const CalendarHeader = ({
               variant={viewMode === 'day' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onViewModeChange('day')}
-              className={`rounded-full px-4 text-sm font-medium transition ${viewMode === 'day' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-white/70'}`}
+              className={`rounded-full px-3 text-sm font-medium transition ${viewMode === 'day' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-white/70'}`}
             >
               Day
+            </Button>
+            <Button
+              variant={viewMode === 'workweek' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => onViewModeChange('workweek')}
+              className={`rounded-full px-3 text-sm font-medium transition ${viewMode === 'workweek' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-white/70'}`}
+            >
+              Work Week
             </Button>
             <Button
               variant={viewMode === 'week' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onViewModeChange('week')}
-              className={`rounded-full px-4 text-sm font-medium transition ${viewMode === 'week' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-white/70'}`}
+              className={`rounded-full px-3 text-sm font-medium transition ${viewMode === 'week' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-white/70'}`}
             >
               Week
             </Button>

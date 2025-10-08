@@ -17,7 +17,7 @@ import { CalendarService, CalendarOperations } from "@/services/calendarService"
 const Index = () => {
   const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week');
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'workweek' | 'month'>('week');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEventPopoverOpen, setIsEventPopoverOpen] = useState(false);
   const [eventPopoverPosition, setEventPopoverPosition] = useState({ x: 0, y: 0 });
@@ -102,14 +102,14 @@ const Index = () => {
     if (direction === 'today') {
       setCurrentDate(new Date());
     } else if (direction === 'prev') {
-      if (viewMode === 'week') {
+      if (viewMode === 'week' || viewMode === 'workweek') {
         newDate.setDate(currentDate.getDate() - 7);
       } else {
         newDate.setDate(currentDate.getDate() - 1);
       }
       setCurrentDate(newDate);
     } else {
-      if (viewMode === 'week') {
+      if (viewMode === 'week' || viewMode === 'workweek') {
         newDate.setDate(currentDate.getDate() + 7);
       } else {
         newDate.setDate(currentDate.getDate() + 1);

@@ -3,7 +3,7 @@ import { CalendarEvent } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 
 interface CalendarGridProps {
-  viewMode: 'day' | 'week' | 'month';
+  viewMode: 'day' | 'week' | 'workweek' | 'month';
   currentDate: Date;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent, clickX: number, clickY: number) => void;
@@ -11,11 +11,14 @@ interface CalendarGridProps {
   onTimeSlotClick: (date: Date, hour: number, minute: number, clickX: number, clickY: number) => void;
 }
 
+const START_HOUR = 0; // 12 AM - start of day
+const END_HOUR = 23; // 11 PM - end of day
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAYS_OF_WEEK = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const TIME_SLOT_HEIGHT = 72; // pixels per hour
-const DEFAULT_VISIBLE_START_HOUR = 6;
-const GRID_HEIGHT = 24 * TIME_SLOT_HEIGHT;
+const TIME_SLOT_HEIGHT = 100; // pixels per hour - increased for better readability
+const DEFAULT_VISIBLE_START_HOUR = 6; // Start scroll at 6 AM (viewport shows 6am-6pm)
+const GRID_HEIGHT = 24 * TIME_SLOT_HEIGHT; // Full 24-hour height for calculations
+const visibleHoursCount = 12;
 
 export const CalendarGrid = ({
   viewMode,
@@ -33,7 +36,9 @@ export const CalendarGrid = ({
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
 
-    for (let i = 0; i < 7; i++) {
+    const daysToShow = viewMode === 'workweek' ? 5 : 7; // Work week: Sun-Thu (5 days), Regular week: Sun-Sat (7 days)
+
+    for (let i = 0; i < daysToShow; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       week.push(date);
@@ -45,7 +50,7 @@ export const CalendarGrid = ({
     return [currentDate];
   };
 
-  const dates = viewMode === 'week' ? getWeekDates() : getDayDates();
+  const dates = viewMode === 'week' || viewMode === 'workweek' ? getWeekDates() : getDayDates();
   
   const isToday = (date: Date) => {
     const today = new Date();
@@ -87,19 +92,23 @@ export const CalendarGrid = ({
 
     const container = scrollContainerRef.current;
     if (container) {
-      container.scrollTop = DEFAULT_VISIBLE_START_HOUR * TIME_SLOT_HEIGHT;
+      // Scroll to 6 AM at the start
+      const scrollOffset = (DEFAULT_VISIBLE_START_HOUR - START_HOUR) * TIME_SLOT_HEIGHT;
+      container.scrollTop = scrollOffset;
     }
   }, [currentDate, viewMode]);
 
+  
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-secondary/40 select-none">
-      {/* Day headers */}
-      <div className="sticky top-0 z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
+      {/* Day headers - Fixed outside scroll container */}
+      <div className="z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
         <div className="w-20 flex-shrink-0 border-r border-border/60 bg-white/80" />
         {dates.map((date, idx) => (
           <div
             key={idx}
             className="flex flex-1 flex-col items-center justify-center border-r border-border/60 py-3 last:border-r-0"
+            style={{ minWidth: '200px' }}
           >
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {DAYS_OF_WEEK[date.getDay()]}
@@ -122,8 +131,12 @@ export const CalendarGrid = ({
         ))}
       </div>
 
-      {/* Time grid */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+      {/* Time grid - Scrollable container with fixed viewport */}
+      <div 
+        ref={scrollContainerRef} 
+        className="overflow-y-scroll overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+        style={{ height: `${visibleHoursCount * TIME_SLOT_HEIGHT}px` }}
+      >
         <div ref={gridRef} className="calendar-grid relative">
           {showCurrentTimeIndicator && (
             <div
@@ -162,16 +175,25 @@ export const CalendarGrid = ({
               </div>
 
               {/* Time slots for each day */}
-              {dates.map((date, dateIdx) => (
-                <div
-                  key={dateIdx}
-                  className={`group relative flex-1 cursor-pointer border-r border-border/60 transition-colors last:border-r-0 ${
-                    isToday(date)
-                      ? 'bg-primary/5 hover:bg-primary/10'
-                      : 'bg-white/70 hover:bg-secondary/30'
-                  }`}
-                  onClick={(e) => handleTimeSlotClick(date, hour, e)}
-                >
+              {dates.map((date, dateIdx) => {
+                // Define night hours (before 6 AM and after 8 PM)
+                const isNightHour = hour < 6 || hour >= 20;
+                
+                return (
+                  <div
+                    key={dateIdx}
+                    className={`group relative flex-1 cursor-pointer border-r border-border/60 transition-colors last:border-r-0 ${
+                      isToday(date)
+                        ? isNightHour
+                          ? 'bg-slate-100/90 hover:bg-slate-200/70'
+                          : 'bg-primary/5 hover:bg-primary/10'
+                        : isNightHour
+                        ? 'bg-slate-50/80 hover:bg-slate-100/60'
+                        : 'bg-white/70 hover:bg-secondary/30'
+                    }`}
+                    style={{ minWidth: '200px' }}
+                    onClick={(e) => handleTimeSlotClick(date, hour, e)}
+                  >
                   {/* 15-minute grid lines */}
                   <div className="absolute inset-0 flex flex-col">
                     <div className="flex-1 border-b border-border/40" />
@@ -185,26 +207,27 @@ export const CalendarGrid = ({
                     <div className="absolute inset-x-2 top-1 h-0.5 rounded bg-primary/40" />
                   </div>
 
-                  {/* Events container for this time slot */}
-                  {hour === 0 && (
-                    <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
-                      {getEventsForDate(date).map((event) => (
-                        <DraggableEventCard
-                          key={event.id}
-                          event={event}
-                          onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
-                          onMove={onEventUpdate}
-                          gridHeight={GRID_HEIGHT}
-                          columnWidth={100}
-                          timeSlotHeight={TIME_SLOT_HEIGHT}
-                          columnIndex={dateIdx}
-                          dates={dates}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    {/* Events container for this time slot */}
+                    {hour === START_HOUR && (
+                      <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
+                        {getEventsForDate(date).map((event) => (
+                          <DraggableEventCard
+                            key={event.id}
+                            event={event}
+                            onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
+                            onMove={onEventUpdate}
+                            gridHeight={GRID_HEIGHT}
+                            columnWidth={100}
+                            timeSlotHeight={TIME_SLOT_HEIGHT}
+                            columnIndex={dateIdx}
+                            dates={dates}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

@@ -15,44 +15,29 @@ interface DraggableEventCardProps {
 }
 
 const CATEGORY_STYLES: Record<CalendarEvent["category"], {
-  background: string;
-  ring: string;
-  accent: string;
-  text: string;
-  badge: string;
+  card: string;
   bar: string;
+  badge: string;
 }> = {
   health: {
-    background: 'from-emerald-400/90 via-emerald-500/90 to-emerald-600/95',
-    ring: 'ring-emerald-200/30',
-    accent: 'bg-emerald-300',
-    text: 'text-white',
-    badge: 'bg-white/20 text-white',
+    card: 'border-emerald-100/80 hover:border-emerald-200 shadow-emerald-100/70',
     bar: 'bg-emerald-500',
+    badge: 'bg-emerald-100 text-emerald-700',
   },
   work: {
-    background: 'from-sky-400/90 via-sky-500/90 to-blue-600/95',
-    ring: 'ring-sky-200/30',
-    accent: 'bg-sky-300',
-    text: 'text-white',
-    badge: 'bg-white/20 text-white',
+    card: 'border-sky-100/80 hover:border-sky-200 shadow-sky-100/70',
     bar: 'bg-sky-500',
+    badge: 'bg-sky-100 text-sky-700',
   },
   personal: {
-    background: 'from-amber-400/90 via-orange-400/85 to-orange-500/90',
-    ring: 'ring-amber-200/30',
-    accent: 'bg-amber-300',
-    text: 'text-slate-900',
-    badge: 'bg-white/50 text-amber-900',
+    card: 'border-amber-100/80 hover:border-amber-200 shadow-amber-100/70',
     bar: 'bg-amber-500',
+    badge: 'bg-amber-100 text-amber-700',
   },
   family: {
-    background: 'from-fuchsia-400/90 via-fuchsia-500/90 to-purple-600/95',
-    ring: 'ring-fuchsia-200/30',
-    accent: 'bg-fuchsia-300',
-    text: 'text-white',
-    badge: 'bg-white/20 text-white',
+    card: 'border-fuchsia-100/80 hover:border-fuchsia-200 shadow-fuchsia-100/70',
     bar: 'bg-fuchsia-500',
+    badge: 'bg-fuchsia-100 text-fuchsia-700',
   },
 };
 
@@ -224,11 +209,13 @@ export const DraggableEventCard = ({
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       className={cn(
-        'absolute left-1 right-1 cursor-move select-none overflow-hidden rounded-2xl border border-white/20 shadow-lg shadow-black/10 transition-all',
-        'bg-gradient-to-br backdrop-blur-sm',
-        styles.background,
-        styles.ring,
-        isDragging || isResizing ? 'z-50 scale-[1.01] opacity-90 ring-2' : 'z-20 hover:shadow-xl hover:ring-1',
+        'absolute left-1 right-1 cursor-move select-none overflow-hidden rounded-2xl border bg-white/90 shadow-sm transition-all hover:shadow-md',
+        styles.card,
+        isDragging && 'scale-[1.01] border-primary/40',
+        isResizing && 'scale-[1.01] border-primary/40',
+        isHappening && 'scale-[1.01] border-primary/40',
+        isUpcoming && 'ring-1 ring-primary/20',
+        isDragging || isResizing ? 'z-50' : 'z-20',
       )}
       style={{
         top: `${topPosition}px`,
@@ -241,58 +228,47 @@ export const DraggableEventCard = ({
 
       {/* Top resize handle */}
       <div
-        className="resize-handle absolute left-4 right-4 top-1 h-1 rounded-full bg-white/20 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
+        className="resize-handle absolute left-4 right-4 top-1 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
         onMouseDown={(e) => handleResizeMouseDown(e, 'top')}
       />
 
-      <div className={cn('flex h-full flex-col gap-2 p-3 pl-4 text-xs text-white', styles.text)}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className={cn('h-2.5 w-2.5 rounded-full border border-white/40', styles.accent)} />
-            <p className="font-semibold uppercase tracking-[0.32em] opacity-80">
-              {formatTime(startDate)} – {formatTime(endDate)}
-            </p>
-          </div>
-          <GripVertical className="h-4 w-4 flex-shrink-0 opacity-60 pointer-events-none" />
+      <div className="flex h-full flex-col gap-0.5 pl-5 pr-4 py-2">
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="text-sm font-semibold text-foreground leading-tight flex-1">
+            {event.title}
+          </h4>
+          <GripVertical className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40 pointer-events-none" />
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <h4 className="truncate text-base font-semibold leading-tight pointer-events-none">
-              {event.title}
-            </h4>
+        <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          {formatTime(startDate)} – {formatTime(endDate)}
+        </p>
+
+        {event.description && height > 80 && (
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+            {event.description}
+          </p>
+        )}
+
+        {height > 60 && (
+          <div className="mt-auto flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="uppercase tracking-[0.25em]">{formatDuration(startDate, endDate)}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em]', styles.badge)}>
+              {event.category}
+            </span>
             {isHappening && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-white">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-primary-foreground">
+                <span className="h-1 w-1 animate-pulse rounded-full bg-white" />
                 Now
               </span>
             )}
-            {!isHappening && isUpcoming && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-white">
-                Next
-              </span>
-            )}
           </div>
-
-          {event.description && (
-            <p className="max-h-12 overflow-hidden text-sm leading-relaxed opacity-90 pointer-events-none">
-              {event.description}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] opacity-85">
-          <span>{formatDuration(startDate, endDate)}</span>
-          <span className="h-1 w-1 rounded-full bg-white/60 opacity-70" />
-          <span className={cn('rounded-full px-2 py-1', styles.badge)}>{event.category}</span>
-          <span className="h-1 w-1 rounded-full bg-white/60 opacity-70" />
-          <span>Priority {event.priority}</span>
-        </div>
+        )}
       </div>
 
       {/* Bottom resize handle */}
       <div
-        className="resize-handle absolute bottom-1 left-4 right-4 h-1 rounded-full bg-white/20 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
+        className="resize-handle absolute bottom-1 left-4 right-4 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
         onMouseDown={(e) => handleResizeMouseDown(e, 'bottom')}
       />
     </div>
