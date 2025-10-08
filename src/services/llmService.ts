@@ -12,13 +12,25 @@ export interface LLMModel {
   provider: 'gemini' | 'local';
 }
 
+export interface ToolCall {
+  tool: string;
+  parameters: Record<string, unknown>;
+}
+
 export interface ChatRequest {
   messages: Message[];
   model: LLMModel;
+  tools?: {
+    name: string;
+    description: string;
+    parameters: unknown;
+  }[];
+  systemPrompt?: string;
 }
 
 export interface ChatResponse {
   content: string;
+  toolCalls?: ToolCall[];
   error?: string;
 }
 
@@ -30,8 +42,13 @@ class GeminiHandler {
     this.apiKey = apiKey;
   }
 
-  async chat(messages: Message[]): Promise<ChatResponse> {
+  async chat(messages: Message[], systemPrompt?: string, tools?: ChatRequest['tools']): Promise<ChatResponse> {
     try {
+      // Add system prompt as first message if provided
+      const allMessages = systemPrompt
+        ? [{ role: 'user' as const, content: systemPrompt }, ...messages]
+        : messages;
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.apiKey}`,
         {
@@ -40,7 +57,7 @@ class GeminiHandler {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contents: messages.map(msg => ({
+            contents: allMessages.map(msg => ({
               role: msg.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: msg.content }]
             }))
@@ -55,7 +72,10 @@ class GeminiHandler {
       const data = await response.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
 
-      return { content };
+      return { 
+        content,
+        toolCalls: this.extractToolCalls(content)
+      };
     } catch (error) {
       console.error('Gemini error:', error);
       return {
@@ -63,6 +83,25 @@ class GeminiHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractToolCalls(content: string): ToolCall[] | undefined {
+    // Try to extract JSON tool calls from the response
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.tool && parsed.parameters) {
+          return [parsed];
+        }
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
+          return parsed;
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
+    }
+    return undefined;
   }
 }
 
@@ -89,13 +128,20 @@ class LocalLMHandler {
     }
   }
 
-  async chat(messages: Message[], modelId?: string): Promise<ChatResponse> {
+  async chat(messages: Message[], modelId?: string, systemPrompt?: string, tools?: ChatRequest['tools']): Promise<ChatResponse> {
     try {
+      // Add system prompt as first message if provided
+      const allMessages = systemPrompt
+        ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+        : messages;
+
       const requestBody: { 
-        messages: { content: string }[];
+        messages: { role: string; content: string }[];
         model?: { id: string };
+        tools?: ChatRequest['tools'];
       } = {
-        messages: messages.map(msg => ({
+        messages: allMessages.map(msg => ({
+          role: msg.role,
           content: msg.content
         }))
       };
@@ -103,6 +149,11 @@ class LocalLMHandler {
       // Add model if specified
       if (modelId) {
         requestBody.model = { id: modelId };
+      }
+
+      // Add tools if specified
+      if (tools) {
+        requestBody.tools = tools;
       }
 
       const response = await fetch('http://localhost:3000/api/chat', {
@@ -126,7 +177,12 @@ class LocalLMHandler {
                      data.content || 
                      'No response';
 
-      return { content };
+      // Extract tool calls if present
+      const toolCalls = data.tool_calls || 
+                       data.choices?.[0]?.message?.tool_calls ||
+                       this.extractToolCalls(content);
+
+      return { content, toolCalls };
     } catch (error) {
       console.error('Local LM error:', error);
       return {
@@ -134,6 +190,25 @@ class LocalLMHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractToolCalls(content: string): ToolCall[] | undefined {
+    // Try to extract JSON tool calls from the response
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.tool && parsed.parameters) {
+          return [parsed];
+        }
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
+          return parsed;
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
+    }
+    return undefined;
   }
 }
 
@@ -171,7 +246,7 @@ export class LLMService {
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
-    const { messages, model } = request;
+    const { messages, model, tools, systemPrompt } = request;
 
     if (model.provider === 'gemini') {
       if (!this.geminiHandler) {
@@ -180,9 +255,9 @@ export class LLMService {
           error: 'Gemini API key not set'
         };
       }
-      return this.geminiHandler.chat(messages);
+      return this.geminiHandler.chat(messages, systemPrompt, tools);
     } else {
-      return this.localHandler.chat(messages, model.id);
+      return this.localHandler.chat(messages, model.id, systemPrompt, tools);
     }
   }
 }

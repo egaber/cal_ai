@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, Settings } from "lucide-react";
+import { Send, Sparkles, Settings, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,9 +19,25 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { llmService, LLMModel, Message } from "@/services/llmService";
+import { CalendarService, CALENDAR_TOOLS } from "@/services/calendarService";
+import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
 
-export const AIAssistant = () => {
+interface AIAssistantProps {
+  calendarService: CalendarService;
+  currentDate: Date;
+  todayEvents: CalendarEvent[];
+  weekEvents: CalendarEvent[];
+  familyMembers: FamilyMember[];
+}
+
+export const AIAssistant = ({
+  calendarService,
+  currentDate,
+  todayEvents,
+  weekEvents,
+  familyMembers,
+}: AIAssistantProps) => {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,9 +101,110 @@ export const AIAssistant = () => {
     setIsLoading(true);
 
     try {
+      // Generate calendar context
+      const calendarContext = calendarService.generateContextString({
+        currentDate,
+        todayEvents,
+        weekEvents,
+        familyMembers,
+      });
+
+      // Create system prompt with calendar tools information
+      const systemPrompt = `You are an AI calendar assistant with intelligent scheduling capabilities. You help users manage their calendar by creating, moving, editing, and deleting meetings while providing smart suggestions.
+
+CRITICAL: You MUST use exact parameter names as specified in the tool definitions below. Do NOT use snake_case or any other naming convention.
+
+INTELLIGENT FEATURES:
+1. **Auto-Categorization**: Analyze meeting content and automatically assign the correct category:
+   - "work" for business meetings, team syncs, project discussions, client calls
+   - "health" for doctor appointments, therapy, gym, medical tests, wellness activities
+   - "personal" for errands, shopping, personal goals, hobbies
+   - "family" for family time, kids activities, family events, meals together
+
+2. **Emoticon Icons**: Choose an appropriate emoticon for the meeting type:
+   - 💼 Business/work meetings, professional calls
+   - 🏥 Medical/health appointments
+   - 🏋️ Exercise, gym, fitness
+   - 🍽️ Meals, lunch, dinner
+   - 📚 Learning, courses, reading
+   - 👨‍👩‍👧‍👦 Family events, quality time
+   - 🎯 Personal goals, important tasks
+   - 🛒 Shopping, errands
+   - ✈️ Travel, trips
+   - 🎉 Celebrations, parties
+   - 🎮 Entertainment, leisure
+   - 💪 Sports, physical activities
+
+3. **Smart Scheduling Suggestions**: After analyzing the schedule, provide helpful suggestions like:
+   - Identifying scheduling conflicts
+   - Recommending optimal meeting times
+   - Suggesting prep time before important meetings
+   - Noticing overbooked days
+   - Recommending breaks between back-to-back meetings
+   - Finding time for recurring activities
+
+Available Tools:
+
+1. create_meeting - Create a new meeting/event
+   Required parameters (use EXACTLY these names):
+   - title (string): Meeting title
+   - startTime (string): ISO 8601 datetime (e.g., "2025-10-08T18:00:00.000+03:00")
+   - endTime (string): ISO 8601 datetime
+   - memberId (string): Family member ID from the context
+   - category (string): One of: health, work, personal, family (intelligently determined)
+   - priority (string): One of: low, medium, high (based on importance)
+   - type (string): Appropriate emoticon icon for the meeting
+   Optional:
+   - description (string): Meeting notes
+
+2. move_meeting - Reschedule an existing meeting
+   Required parameters:
+   - eventId (string): The event ID from calendar context
+   - newStartTime (string): New ISO 8601 datetime
+   - newEndTime (string): New ISO 8601 datetime
+
+3. edit_meeting - Edit meeting details
+   Required parameters:
+   - eventId (string): The event ID from calendar context
+   Optional (at least one required):
+   - title, description, category, priority
+
+4. delete_meeting - Delete a meeting
+   Required parameters:
+   - eventId (string): The event ID from calendar context
+
+When the user asks you to perform calendar operations, respond with a JSON code block:
+\`\`\`json
+{
+  "tool": "create_meeting",
+  "parameters": {
+    "title": "Meeting with Gil",
+    "startTime": "2025-10-08T18:00:00.000+03:00",
+    "endTime": "2025-10-08T19:00:00.000+03:00",
+    "memberId": "1",
+    "category": "personal",
+    "priority": "medium",
+    "type": "💼"
+  }
+}
+\`\`\`
+
+After creating/modifying events, provide helpful suggestions based on the schedule such as:
+- "I notice you have back-to-back meetings. Would you like me to add a 15-minute break?"
+- "Your schedule looks busy tomorrow. Consider blocking focus time."
+- "This meeting conflicts with an existing event. Should I reschedule one of them?"
+
+Calendar Context:
+${calendarContext}
+
+Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+When calculating times, use the current date and timezone shown above. For "today at 6pm", use today's date (${currentDate.toLocaleDateString()}) with 18:00 in the local timezone format.`;
+
       const response = await llmService.chat({
         messages: [...chatHistory, userMessage],
-        model: selectedModel
+        model: selectedModel,
+        tools: CALENDAR_TOOLS,
+        systemPrompt,
       });
 
       if (response.error) {
@@ -96,15 +213,50 @@ export const AIAssistant = () => {
           description: response.error,
           variant: "destructive",
         });
+        setIsLoading(false);
         return;
       }
 
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.content
-      };
+      // Check if there are tool calls to execute
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        // Execute each tool call
+        const toolResults: string[] = [];
+        
+        for (const toolCall of response.toolCalls) {
+          const result = calendarService.executeToolCall(toolCall);
+          
+          if (result.success) {
+            toolResults.push(`✓ ${result.message}`);
+            toast({
+              title: "Action Completed",
+              description: result.message,
+            });
+          } else {
+            toolResults.push(`✗ Error: ${result.error}`);
+            toast({
+              title: "Action Failed",
+              description: result.error,
+              variant: "destructive",
+            });
+          }
+        }
 
-      setChatHistory(prev => [...prev, assistantMessage]);
+        // Add assistant message with tool execution results
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response.content + '\n\n' + toolResults.join('\n')
+        };
+
+        setChatHistory(prev => [...prev, assistantMessage]);
+      } else {
+        // No tool calls, just add the response
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response.content
+        };
+
+        setChatHistory(prev => [...prev, assistantMessage]);
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -226,10 +378,21 @@ export const AIAssistant = () => {
       {/* Initial Prompt */}
       {chatHistory.length === 0 && (
         <div className="mb-4 rounded-lg bg-secondary p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <Wrench className="h-3 w-3" />
+            <span>Calendar Control Enabled</span>
+          </div>
           <p className="text-sm text-foreground">
-            Hi! I'm your AI calendar assistant. I can help you schedule tasks, break down complex
-            projects, create prep time, and even suggest recipes or shopping lists. What would you
-            like to schedule today?
+            Hi! I'm your AI calendar assistant with full calendar control. I can:
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-foreground">
+            <li>• Create new meetings and events</li>
+            <li>• Move or reschedule existing meetings</li>
+            <li>• Edit meeting details (title, description, priority)</li>
+            <li>• Delete or cancel meetings</li>
+          </ul>
+          <p className="mt-3 text-sm text-foreground">
+            I can see your current schedule for today and this week. Just tell me what you need!
           </p>
         </div>
       )}

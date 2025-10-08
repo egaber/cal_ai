@@ -1,8 +1,7 @@
 import { CalendarEvent } from "@/types/calendar";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 
 interface EventPopoverProps {
   event: CalendarEvent | null;
@@ -10,6 +9,7 @@ interface EventPopoverProps {
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
   onDelete: (eventId: string) => void;
+  position: { x: number; y: number };
   children: React.ReactNode;
 }
 
@@ -32,8 +32,24 @@ export const EventPopover = ({
   onClose,
   onEdit,
   onDelete,
+  position,
   children,
 }: EventPopoverProps) => {
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen, onClose]);
+
   if (!event) return <>{children}</>;
 
   const formatTime = (dateString: string) => {
@@ -55,14 +71,21 @@ export const EventPopover = ({
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <PopoverTrigger asChild>
-        {children}
-      </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="start" side="right">
-        <div className="flex flex-col">
-          {/* Header */}
-          <div className="flex items-start justify-between border-b border-border p-4">
+    <>
+      {children}
+      {isOpen && (
+        <div
+          ref={popoverRef}
+          className="fixed z-[9999] w-96 rounded-lg border border-border bg-white shadow-xl"
+          style={{
+            top: `${position.y}px`,
+            left: `${position.x}px`,
+            transform: "translate(12px, -50%)",
+          }}
+        >
+          <div className="flex flex-col">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border p-4">
             <div className="flex items-start gap-3 flex-1">
               <span className="text-2xl">{CATEGORY_COLORS[event.category]}</span>
               <div className="flex-1">
@@ -80,10 +103,10 @@ export const EventPopover = ({
             >
               <X className="h-4 w-4" />
             </Button>
-          </div>
+            </div>
 
-          {/* Body */}
-          <div className="p-4 space-y-4">
+            {/* Body */}
+            <div className="p-4 space-y-4">
             {event.description && (
               <div>
                 <h4 className="text-sm font-medium mb-1">Description</h4>
@@ -110,10 +133,10 @@ export const EventPopover = ({
                 <p className="text-sm text-muted-foreground capitalize">{event.type}</p>
               </div>
             )}
-          </div>
+            </div>
 
-          {/* Footer */}
-          <div className="flex gap-2 border-t border-border p-4">
+            {/* Footer */}
+            <div className="flex gap-2 border-t border-border p-4">
             <Button
               variant="default"
               className="flex-1 gap-2"
@@ -132,9 +155,10 @@ export const EventPopover = ({
             >
               Edit Details
             </Button>
+            </div>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </>
   );
 };

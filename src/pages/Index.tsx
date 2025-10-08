@@ -8,9 +8,11 @@ import { AIAssistant } from "@/components/AIAssistant";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
+import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { TodayOverview } from "@/components/TodayOverview";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
+import { CalendarService, CalendarOperations } from "@/services/calendarService";
 
 const Index = () => {
   const { toast } = useToast();
@@ -18,8 +20,16 @@ const Index = () => {
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEventPopoverOpen, setIsEventPopoverOpen] = useState(false);
+  const [eventPopoverPosition, setEventPopoverPosition] = useState({ x: 0, y: 0 });
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isNewEventDialogOpen, setIsNewEventDialogOpen] = useState(false);
+  const [isInlineCreatorOpen, setIsInlineCreatorOpen] = useState(false);
+  const [inlineCreatorData, setInlineCreatorData] = useState<{
+    date: Date;
+    hour: number;
+    minute: number;
+    position: { x: number; y: number };
+  } | null>(null);
   const [newEventDefaults, setNewEventDefaults] = useState<{
     date?: Date;
     hour?: number;
@@ -121,9 +131,48 @@ const Index = () => {
     setIsNewEventDialogOpen(true);
   };
 
-  const handleTimeSlotClick = (date: Date, hour: number, minute: number) => {
-    setNewEventDefaults({ date, hour, minute });
-    setIsNewEventDialogOpen(true);
+  const handleTimeSlotClick = (date: Date, hour: number, minute: number, clickX: number, clickY: number) => {
+    setInlineCreatorData({
+      date,
+      hour,
+      minute,
+      position: { x: clickX, y: clickY },
+    });
+    setIsInlineCreatorOpen(true);
+  };
+
+  const handleInlineEventSave = (title: string) => {
+    if (inlineCreatorData) {
+      const { date, hour, minute } = inlineCreatorData;
+      const startDate = new Date(date);
+      startDate.setHours(hour, minute, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setHours(hour + 1, minute, 0, 0); // Default 1 hour duration
+
+      const newEvent: CalendarEvent = {
+        id: `event_${Date.now()}`,
+        title,
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+        category: 'personal',
+        priority: 'medium',
+        memberId: selectedMembers[0] || '1',
+      };
+
+      setEvents([...events, newEvent]);
+      setIsInlineCreatorOpen(false);
+      setInlineCreatorData(null);
+      
+      toast({
+        title: "Event Created",
+        description: `"${title}" has been added to your calendar`,
+      });
+    }
+  };
+
+  const handleInlineCreatorCancel = () => {
+    setIsInlineCreatorOpen(false);
+    setInlineCreatorData(null);
   };
 
   const handleCreateEvent = (eventData: Omit<CalendarEvent, 'id'>) => {
@@ -144,6 +193,22 @@ const Index = () => {
         ? { ...event, startTime: newStartTime, endTime: newEndTime }
         : event
     ));
+  };
+
+  const handleEventUpdatePartial = (eventId: string, updates: Partial<CalendarEvent>) => {
+    setEvents(events.map(event =>
+      event.id === eventId
+        ? { ...event, ...updates }
+        : event
+    ));
+  };
+
+  const handleMoveEvent = (eventId: string, newStartTime: string, newEndTime: string) => {
+    handleEventUpdate(eventId, newStartTime, newEndTime);
+    toast({
+      title: "Event Moved",
+      description: "The event has been rescheduled",
+    });
   };
 
   const handleEventSave = (updatedEvent: CalendarEvent) => {
@@ -172,8 +237,9 @@ const Index = () => {
     });
   };
 
-  const handleEventClick = (event: CalendarEvent) => {
+  const handleEventClick = (event: CalendarEvent, clickX: number, clickY: number) => {
     setSelectedEvent(event);
+    setEventPopoverPosition({ x: clickX, y: clickY });
     setIsEventPopoverOpen(true);
   };
 
@@ -237,6 +303,34 @@ const Index = () => {
     );
   }, [todaysEvents, currentDate]);
 
+  // Get week's events for calendar context
+  const weekEvents = useMemo(() => {
+    const weekStart = new Date(currentDate);
+    weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+
+    return filteredEvents.filter((event) => {
+      const eventDate = new Date(event.startTime);
+      return eventDate >= weekStart && eventDate < weekEnd;
+    });
+  }, [filteredEvents, currentDate]);
+
+  // Create calendar service with operations
+  const calendarOperations: CalendarOperations = useMemo(() => ({
+    createEvent: handleCreateEvent,
+    updateEvent: handleEventUpdatePartial,
+    deleteEvent: handleEventDelete,
+    moveEvent: handleMoveEvent,
+  }), []);
+
+  const calendarService = useMemo(
+    () => new CalendarService(calendarOperations),
+    [calendarOperations]
+  );
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(101,84,192,0.16),_transparent_60%)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-6 pb-10 pt-10 md:px-12">
@@ -245,6 +339,7 @@ const Index = () => {
           totalTasks={todaysEvents.length}
           totalHours={totalMinutesToday / 60}
           focusHours={focusMinutesToday / 60}
+          events={todaysEvents}
           upcomingEvent={upcomingEvent}
         />
 
@@ -264,6 +359,7 @@ const Index = () => {
                 <EventPopover
                   event={selectedEvent}
                   isOpen={isEventPopoverOpen}
+                  position={eventPopoverPosition}
                   onClose={() => setIsEventPopoverOpen(false)}
                   onEdit={handleEditFromPopover}
                   onDelete={handleEventDelete}
@@ -297,7 +393,13 @@ const Index = () => {
               onDateSelect={setCurrentDate}
             />
 
-            <AIAssistant />
+            <AIAssistant 
+              calendarService={calendarService}
+              currentDate={currentDate}
+              todayEvents={todaysEvents}
+              weekEvents={weekEvents}
+              familyMembers={familyMembers}
+            />
           </aside>
         </div>
       </div>
@@ -319,6 +421,17 @@ const Index = () => {
         defaultMinute={newEventDefaults.minute}
         members={familyMembers}
       />
+
+      {isInlineCreatorOpen && inlineCreatorData && (
+        <InlineEventCreator
+          date={inlineCreatorData.date}
+          hour={inlineCreatorData.hour}
+          minute={inlineCreatorData.minute}
+          position={inlineCreatorData.position}
+          onSave={handleInlineEventSave}
+          onCancel={handleInlineCreatorCancel}
+        />
+      )}
     </div>
   );
 };

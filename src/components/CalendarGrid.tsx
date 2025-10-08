@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { CalendarEvent } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 
@@ -6,14 +6,16 @@ interface CalendarGridProps {
   viewMode: 'day' | 'week' | 'month';
   currentDate: Date;
   events: CalendarEvent[];
-  onEventClick: (event: CalendarEvent) => void;
+  onEventClick: (event: CalendarEvent, clickX: number, clickY: number) => void;
   onEventUpdate: (eventId: string, newStartTime: string, newEndTime: string) => void;
-  onTimeSlotClick: (date: Date, hour: number, minute: number) => void;
+  onTimeSlotClick: (date: Date, hour: number, minute: number, clickX: number, clickY: number) => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const DAYS_OF_WEEK = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const TIME_SLOT_HEIGHT = 60; // pixels per hour
+const TIME_SLOT_HEIGHT = 72; // pixels per hour
+const DEFAULT_VISIBLE_START_HOUR = 6;
+const GRID_HEIGHT = 24 * TIME_SLOT_HEIGHT;
 
 export const CalendarGrid = ({
   viewMode,
@@ -24,6 +26,7 @@ export const CalendarGrid = ({
   onTimeSlotClick,
 }: CalendarGridProps) => {
   const gridRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const getWeekDates = () => {
     const week = [];
@@ -76,8 +79,17 @@ export const CalendarGrid = ({
     const clickY = e.clientY - rect.top;
     const minuteFraction = clickY / TIME_SLOT_HEIGHT;
     const minutes = Math.round(minuteFraction * 60);
-    onTimeSlotClick(date, hour, minutes);
+    onTimeSlotClick(date, hour, minutes, e.clientX, e.clientY);
   };
+
+  useEffect(() => {
+    if (viewMode === 'month') return;
+
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTop = DEFAULT_VISIBLE_START_HOUR * TIME_SLOT_HEIGHT;
+    }
+  }, [currentDate, viewMode]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-secondary/40 select-none">
@@ -111,7 +123,7 @@ export const CalendarGrid = ({
       </div>
 
       {/* Time grid */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         <div ref={gridRef} className="calendar-grid relative">
           {showCurrentTimeIndicator && (
             <div
@@ -175,14 +187,14 @@ export const CalendarGrid = ({
 
                   {/* Events container for this time slot */}
                   {hour === 0 && (
-                    <div className="absolute inset-0" style={{ height: `${24 * TIME_SLOT_HEIGHT}px` }}>
+                    <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
                       {getEventsForDate(date).map((event) => (
                         <DraggableEventCard
                           key={event.id}
                           event={event}
-                          onClick={() => onEventClick(event)}
+                          onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
                           onMove={onEventUpdate}
-                          gridHeight={24 * TIME_SLOT_HEIGHT}
+                          gridHeight={GRID_HEIGHT}
                           columnWidth={100}
                           timeSlotHeight={TIME_SLOT_HEIGHT}
                           columnIndex={dateIdx}
