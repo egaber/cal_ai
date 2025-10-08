@@ -44,6 +44,7 @@ interface DraggableEventCardProps {
   columnIndex: number;
   dates: Date[];
   member?: FamilyMember;
+  familyMembers?: FamilyMember[]; // All family members to lookup multiple attendees
 }
 
 const CATEGORY_STYLES: Record<CalendarEvent["category"], {
@@ -293,6 +294,7 @@ export const DraggableEventCard = ({
   columnIndex,
   dates,
   member,
+  familyMembers = [],
 }: DraggableEventCardProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'top' | 'bottom' | null>(null);
@@ -516,20 +518,26 @@ export const DraggableEventCard = ({
 
         {height > 60 && (
           <div className="mt-auto flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-            {member && (
-              <div className="flex items-center gap-1">
-                <Avatar className="h-4 w-4 border border-white shadow-sm">
-                  {member.avatar ? (
-                    <AvatarImage src={member.avatar} alt={member.name} />
-                  ) : (
-                    <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
-                      {getMemberInitials(member.name)}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <div className={cn('h-1.5 w-1.5 rounded-full', member.color)} />
-              </div>
-            )}
+            {/* Show all attending members */}
+            {(event.memberIds || [event.memberId]).map((mId) => {
+              const attendee = familyMembers.find(m => m.id === mId) || (mId === event.memberId ? member : null);
+              if (!attendee) return null;
+              
+              return (
+                <div key={mId} className="flex items-center gap-1">
+                  <Avatar className="h-4 w-4 border border-white shadow-sm">
+                    {attendee.avatar ? (
+                      <AvatarImage src={attendee.avatar} alt={attendee.name} />
+                    ) : (
+                      <AvatarFallback className={cn('text-[8px]', attendee.color, 'text-white')}>
+                        {getMemberInitials(attendee.name)}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className={cn('h-1.5 w-1.5 rounded-full', attendee.color)} />
+                </div>
+              );
+            })}
             <span className="uppercase tracking-[0.25em]">{formatDuration(startDate, endDate)}</span>
             <span className={cn('rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em]', styles.badge)}>
               {event.category}

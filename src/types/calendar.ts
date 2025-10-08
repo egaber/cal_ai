@@ -14,7 +14,8 @@ export interface CalendarEvent {
   endTime: string;
   category: 'health' | 'work' | 'personal' | 'family' | 'education' | 'social' | 'finance' | 'home' | 'travel' | 'fitness' | 'food' | 'shopping' | 'entertainment' | 'sports' | 'hobby' | 'volunteer' | 'appointment' | 'maintenance' | 'celebration' | 'meeting' | 'childcare' | 'pet' | 'errand' | 'transport' | 'project' | 'deadline';
   priority: 'low' | 'medium' | 'high';
-  memberId: string;
+  memberId: string; // Primary member (for backward compatibility and filtering)
+  memberIds?: string[]; // Optional: multiple family members attending this event
   description?: string;
   type?: string;
   emoji?: string; // AI-generated emoji representing the event

@@ -242,12 +242,14 @@ Available Tools:
    - title (string): Meeting title
    - startTime (string): ISO 8601 datetime (e.g., "2025-10-08T18:00:00.000+03:00")
    - endTime (string): ISO 8601 datetime
-   - memberId (string): Family member ID from the context
+   - memberId (string): Primary family member ID from the context
    - category (string): One of: health, work, personal, family, education, social, finance, home, travel, fitness, food, shopping, entertainment, sports, hobby, volunteer, appointment, maintenance, celebration, meeting, childcare, pet, errand, transport, project, deadline (intelligently determined)
    - priority (string): One of: low, medium, high (based on importance)
-   - type (string): Appropriate emoticon icon for the meeting
+   - emoji (string): Appropriate emoticon icon for the meeting (not "type")
+   - aiTip (string): Context-aware scheduling tip in Hebrew if title is Hebrew, otherwise in English
    Optional:
    - description (string): Meeting notes
+   - memberIds (array of strings): For multi-person events, include all attending family member IDs (e.g., ["1", "2", "3"]). Use this for family events, group activities, or when multiple people are mentioned. memberId should be the first ID in this array.
 
 2. move_meeting - Reschedule an existing meeting
    Required parameters:

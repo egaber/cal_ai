@@ -233,6 +233,10 @@ const Index = () => {
   };
 
   const handleInlineEventSave = async (title: string) => {
+    // Close any open popovers first
+    setIsEventPopoverOpen(false);
+    setSelectedEvent(null);
+    
     if (inlineCreatorData) {
       const { date, hour, minute } = inlineCreatorData;
       const startDate = new Date(date);

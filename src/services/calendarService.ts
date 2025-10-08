@@ -57,7 +57,11 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
         },
         memberId: {
           type: 'string',
-          description: 'The ID of the family member this event is for'
+          description: 'The ID of the primary family member this event is for'
+        },
+        memberIds: {
+          type: 'array',
+          description: 'Optional: Array of family member IDs if multiple people are attending (e.g., ["1", "2", "3"] for a family event). If provided, memberId should be the first member in this array.'
         },
         category: {
           type: 'string',
@@ -346,6 +350,7 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
       startTime: params.startTime as string,
       endTime: params.endTime as string,
       memberId: params.memberId as string,
+      memberIds: params.memberIds as string[] | undefined,
       category: (params.category as CalendarEvent['category']) || 'personal',
       priority: (params.priority as CalendarEvent['priority']) || 'medium',
       description: params.description as string | undefined,

@@ -226,6 +226,7 @@ export const CalendarGrid = ({
                               columnIndex={dateIdx}
                               dates={dates}
                               member={member}
+                              familyMembers={familyMembers}
                             />
                           );
                         })}

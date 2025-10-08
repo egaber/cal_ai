@@ -290,47 +290,92 @@ export const EventPopover = ({
                   />
                   
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Family Member Selector */}
-                    <Select
-                      value={editedEvent.memberId}
-                      onValueChange={(value) => setEditedEvent({ ...editedEvent, memberId: value })}
-                    >
-                      <SelectTrigger 
-                        className="h-7 w-auto border-0 px-2 gap-2 focus:ring-0 hover:bg-muted/50 rounded-md"
-                        onClick={(e) => e.stopPropagation()}
+                    {/* Family Members - Multi-select with avatars */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(editedEvent.memberIds || [editedEvent.memberId]).map((mId) => {
+                        const member = familyMembers.find(m => m.id === mId);
+                        if (!member) return null;
+                        
+                        return (
+                          <div
+                            key={mId}
+                            className="flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full bg-muted/50 hover:bg-muted transition-colors group"
+                          >
+                            <Avatar className="h-5 w-5 border border-white shadow-sm">
+                              {member.avatar ? (
+                                <AvatarImage src={member.avatar} alt={member.name} />
+                              ) : (
+                                <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
+                                  {getMemberInitials(member.name)}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                            <span className="text-xs font-medium">{member.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const currentIds = editedEvent.memberIds || [editedEvent.memberId];
+                                const updatedIds = currentIds.filter(id => id !== mId);
+                                if (updatedIds.length === 0) return; // Keep at least one member
+                                setEditedEvent({
+                                  ...editedEvent,
+                                  memberId: updatedIds[0],
+                                  memberIds: updatedIds.length > 1 ? updatedIds : undefined
+                                });
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Add member button */}
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          const currentIds = editedEvent.memberIds || [editedEvent.memberId];
+                          if (!currentIds.includes(value)) {
+                            const updatedIds = [...currentIds, value];
+                            setEditedEvent({
+                              ...editedEvent,
+                              memberId: updatedIds[0],
+                              memberIds: updatedIds
+                            });
+                          }
+                        }}
                       >
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-5 w-5 border border-white shadow-sm">
-                            {currentMember?.avatar ? (
-                              <AvatarImage src={currentMember.avatar} alt={currentMember.name} />
-                            ) : (
-                              <AvatarFallback className={cn('text-[8px]', currentMember?.color, 'text-white')}>
-                                {currentMember ? getMemberInitials(currentMember.name) : '??'}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                          <span className="text-xs font-medium">{currentMember?.name || 'Unknown'}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent className="z-[10000]" onClick={(e) => e.stopPropagation()}>
-                        {familyMembers.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-5 w-5">
-                                {member.avatar ? (
-                                  <AvatarImage src={member.avatar} alt={member.name} />
-                                ) : (
-                                  <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
-                                    {getMemberInitials(member.name)}
-                                  </AvatarFallback>
-                                )}
-                              </Avatar>
-                              {member.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger 
+                          className="h-7 w-7 border-0 px-0 focus:ring-0 hover:bg-muted/50 rounded-full"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <User className="h-4 w-4 text-muted-foreground" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[10000]" onClick={(e) => e.stopPropagation()}>
+                          {familyMembers
+                            .filter(m => !(editedEvent.memberIds || [editedEvent.memberId]).includes(m.id))
+                            .map((member) => (
+                              <SelectItem key={member.id} value={member.id}>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    {member.avatar ? (
+                                      <AvatarImage src={member.avatar} alt={member.name} />
+                                    ) : (
+                                      <AvatarFallback className={cn('text-[8px]', member.color, 'text-white')}>
+                                        {getMemberInitials(member.name)}
+                                      </AvatarFallback>
+                                    )}
+                                  </Avatar>
+                                  {member.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     
                     {/* Category Badge Selector */}
                     <Select
