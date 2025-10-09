@@ -10,20 +10,25 @@ import { EventPopover } from "@/components/EventPopover";
 import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { MemoryManager } from "@/components/MemoryManager";
 import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
+import { EventSuggestionCard } from "@/components/EventSuggestionCard";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { MemoryData } from "@/types/memory";
+import { EventSuggestion } from "@/types/task";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarService, CalendarOperations } from "@/services/calendarService";
 import { StorageService } from "@/services/storageService";
+import { taskService } from "@/services/taskService";
 import { generateRecurringEvents } from "@/utils/recurrenceUtils";
-import { Brain, ListTodo } from "lucide-react";
+import { Brain, ListTodo, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'workweek' | 'month'>('week');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -93,6 +98,8 @@ const Index = () => {
   });
   const [isMemoryDialogOpen, setIsMemoryDialogOpen] = useState(false);
   const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
+  const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
+  const [showSuggestionsPanel, setShowSuggestionsPanel] = useState(false);
   const refreshMemoryData = useCallback(() => {
     const updatedMemory = StorageService.loadMemoryData();
     setMemoryData(updatedMemory);
@@ -104,6 +111,7 @@ const Index = () => {
     const loadedSettings = StorageService.loadSettings();
     const loadedMemory = StorageService.loadMemoryData();
     const loadedFamilyMembers = StorageService.loadFamilyMembers();
+    const loadedSuggestions = localStorage.getItem('event_suggestions');
 
     // Load family members or use defaults
     if (loadedFamilyMembers && loadedFamilyMembers.length > 0) {
@@ -155,7 +163,23 @@ const Index = () => {
     }
 
     setMemoryData(loadedMemory);
-  }, []);
+
+    // Load event suggestions if they exist
+    if (loadedSuggestions) {
+      try {
+        const suggestions = JSON.parse(loadedSuggestions);
+        setEventSuggestions(suggestions.filter((s: EventSuggestion) => s.status === 'pending'));
+        setShowSuggestionsPanel(suggestions.length > 0);
+      } catch (error) {
+        console.error('Error loading suggestions:', error);
+      }
+    }
+
+    // Check if we came from task planning with new suggestions
+    if (location.state?.showSuggestions) {
+      setShowSuggestionsPanel(true);
+    }
+  }, [location]);
 
   // Save events whenever they change
   useEffect(() => {
@@ -391,6 +415,84 @@ const Index = () => {
       description: deletedTitle ? `"${deletedTitle}" has been removed` : "Event removed",
     });
   }, [toast]);
+
+  const handleAcceptSuggestion = useCallback((suggestion: EventSuggestion) => {
+    // Create calendar event from suggestion
+    const newEvent: CalendarEvent = {
+      id: `event_${Date.now()}`,
+      title: suggestion.taskTitle,
+      startTime: suggestion.suggestedStartTime,
+      endTime: suggestion.suggestedEndTime,
+      category: 'personal', // Default category
+      priority: 'medium',
+      memberId: selectedMembers[0] || '1',
+      emoji: suggestion.taskEmoji,
+    };
+
+    setEvents(prev => [...prev, newEvent]);
+
+    // Update suggestion status
+    setEventSuggestions(prev =>
+      prev.filter(s => s.id !== suggestion.id)
+    );
+
+    // Update localStorage
+    const allSuggestions = JSON.parse(localStorage.getItem('event_suggestions') || '[]');
+    const updated = allSuggestions.map((s: EventSuggestion) =>
+      s.id === suggestion.id ? { ...s, status: 'accepted' } : s
+    );
+    localStorage.setItem('event_suggestions', JSON.stringify(updated));
+
+    // Update task status
+    const tasks = taskService.loadTasks();
+    const task = tasks.find(t => t.id === suggestion.taskId);
+    if (task) {
+      taskService.updateTask(suggestion.taskId, {
+        status: 'scheduled',
+        scheduledEventId: newEvent.id,
+      });
+    }
+
+    toast({
+      title: '✅ הצעה אושרה',
+      description: `האירוע "${suggestion.taskTitle}" נוסף ללוח השנה`,
+    });
+
+    // Close panel if no more suggestions
+    if (eventSuggestions.length === 1) {
+      setShowSuggestionsPanel(false);
+    }
+  }, [selectedMembers, eventSuggestions.length, toast]);
+
+  const handleRejectSuggestion = useCallback((suggestionId: string) => {
+    setEventSuggestions(prev =>
+      prev.filter(s => s.id !== suggestionId)
+    );
+
+    // Update localStorage
+    const allSuggestions = JSON.parse(localStorage.getItem('event_suggestions') || '[]');
+    const updated = allSuggestions.map((s: EventSuggestion) =>
+      s.id === suggestionId ? { ...s, status: 'rejected' } : s
+    );
+    localStorage.setItem('event_suggestions', JSON.stringify(updated));
+
+    toast({
+      title: '❌ הצעה נדחתה',
+      description: 'ההצעה הוסרה מהרשימה',
+    });
+
+    // Close panel if no more suggestions
+    if (eventSuggestions.length === 1) {
+      setShowSuggestionsPanel(false);
+    }
+  }, [eventSuggestions.length, toast]);
+
+  const handleDismissAllSuggestions = useCallback(() => {
+    eventSuggestions.forEach(s => {
+      handleRejectSuggestion(s.id);
+    });
+    setShowSuggestionsPanel(false);
+  }, [eventSuggestions, handleRejectSuggestion]);
 
   const handleDeleteRecurring = useCallback((recurringEventId: string, deleteAll: boolean) => {
     let deletedTitle: string | null = null;
@@ -651,11 +753,22 @@ What would you like to know or do with this event?`;
               <span>{(totalMinutesToday / 60).toFixed(1)}h total</span>
             </div>
           </div>
-          {upcomingEvent && (
-            <div className="text-sm text-muted-foreground">
-              Next: <span className="font-medium text-foreground">{upcomingEvent.title}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {eventSuggestions.length > 0 && (
+              <Button
+                onClick={() => setShowSuggestionsPanel(!showSuggestionsPanel)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {eventSuggestions.length} הצעות AI
+              </Button>
+            )}
+            {upcomingEvent && (
+              <div className="text-sm text-muted-foreground">
+                Next: <span className="font-medium text-foreground">{upcomingEvent.title}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-1 flex-col-reverse gap-6 lg:flex-row">
@@ -716,6 +829,50 @@ What would you like to know or do with this event?`;
               />
             </div>
           </aside>
+
+          {/* Event Suggestions Panel */}
+          {showSuggestionsPanel && eventSuggestions.length > 0 && (
+            <aside className="w-full lg:w-80 xl:w-96 flex-shrink-0">
+              <div className="rounded-2xl border border-blue-300 bg-blue-50/80 p-4 shadow-lg backdrop-blur">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-gray-900">הצעות AI לתזמון</h3>
+                    <Badge className="bg-blue-600">
+                      {eventSuggestions.length}
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowSuggestionsPanel(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto">
+                  {eventSuggestions.map((suggestion) => (
+                    <EventSuggestionCard
+                      key={suggestion.id}
+                      suggestion={suggestion}
+                      onAccept={handleAcceptSuggestion}
+                      onReject={handleRejectSuggestion}
+                    />
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDismissAllSuggestions}
+                    className="w-full"
+                  >
+                    דחה את כל ההצעות
+                  </Button>
+                </div>
+              </div>
+            </aside>
+          )}
 
           {/* Main Calendar View - Center, Most Important */}
           <section className="flex min-h-[0] flex-1 flex-col gap-4">

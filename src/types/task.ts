@@ -111,3 +111,17 @@ export interface WeeklyScheduleSuggestion {
     warnings: string[];
   };
 }
+
+export interface EventSuggestion {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  taskEmoji?: string;
+  suggestedStartTime: string; // ISO datetime
+  suggestedEndTime: string; // ISO datetime
+  confidence: number; // 0-1
+  reasoning: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'modified';
+  originalStartTime?: string; // For tracking if user dragged to adjust
+  originalEndTime?: string;
+}

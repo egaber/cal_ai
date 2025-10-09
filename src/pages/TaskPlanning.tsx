@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,8 +13,8 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { taskService } from '@/services/taskService';
 import { StorageService } from '@/services/storageService';
-import { Task, TaskAnalysisRequest, TaskAnalysisResponse } from '@/types/task';
-import { FamilyMember } from '@/types/calendar';
+import { Task, TaskAnalysisRequest, TaskAnalysisResponse, EventSuggestion } from '@/types/task';
+import { FamilyMember, CalendarEvent } from '@/types/calendar';
 import { 
   Plus, 
   Sparkles, 
@@ -33,9 +34,14 @@ import {
   AlertTriangle,
   Edit,
   Save,
-  X
+  X,
+  GripVertical
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { SubTask } from '@/types/task';
 
 export default function TaskPlanning() {
   const { toast } = useToast();
@@ -44,6 +50,13 @@ export default function TaskPlanning() {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [isScheduling, setIsScheduling] = useState(false);
+  const [schedulingResults, setSchedulingResults] = useState<{
+    scheduled: Array<{ taskId: string; reason: string; when: string }>;
+    deferred: Array<{ taskId: string; reason: string; period: string }>;
+    warnings: string[];
+  } | null>(null);
+  const [showResultsDialog, setShowResultsDialog] = useState(false);
+  const navigate = useNavigate();
   
   // New task form
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -236,6 +249,122 @@ export default function TaskPlanning() {
 
   const totalTasksCount = tasks.filter(t => t.status === 'pending').length;
 
+  const toggleTaskSelection = (taskId: string) => {
+    const newSelected = new Set(selectedTaskIds);
+    if (newSelected.has(taskId)) {
+      newSelected.delete(taskId);
+    } else {
+      newSelected.add(taskId);
+    }
+    setSelectedTaskIds(newSelected);
+  };
+
+  const handleScheduleSelected = async () => {
+    if (selectedTaskIds.size === 0) {
+      toast({
+        title: 'שגיאה',
+        description: 'נא לבחור לפחות משימה אחת',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsScheduling(true);
+
+    try {
+      const selectedTasks = tasks.filter(t => selectedTaskIds.has(t.id));
+      const existingEvents = StorageService.loadEvents() || [];
+      const weekStartDate = new Date();
+      weekStartDate.setHours(0, 0, 0, 0);
+
+      // Get AI scheduling suggestions
+      const schedule = await taskService.generateWeeklySchedule(
+        selectedTasks,
+        existingEvents,
+        weekStartDate
+      );
+
+      // Convert suggestions to EventSuggestion objects
+      const eventSuggestions: EventSuggestion[] = [];
+      const scheduledInfo: Array<{ taskId: string; reason: string; when: string }> = [];
+      const deferredInfo: Array<{ taskId: string; reason: string; period: string }> = [];
+      
+      schedule.tasksToSchedule.forEach(taskSchedule => {
+        const task = selectedTasks.find(t => t.id === taskSchedule.taskId);
+        if (!task) return;
+
+        // Take the first suggested slot (highest confidence)
+        const slot = taskSchedule.suggestedSlots[0];
+        if (slot) {
+          eventSuggestions.push({
+            id: `suggestion-${Date.now()}-${task.id}`,
+            taskId: task.id,
+            taskTitle: task.title,
+            taskEmoji: task.emoji,
+            suggestedStartTime: slot.startTime,
+            suggestedEndTime: slot.endTime,
+            confidence: slot.confidence,
+            reasoning: slot.reasoning,
+            status: 'pending'
+          });
+
+          // Format the time for display
+          const startDate = new Date(slot.startTime);
+          const isThisWeek = startDate <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          const whenLabel = isThisWeek 
+            ? `השבוע - ${startDate.toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })}`
+            : `שבוע הבא או מאוחר יותר - ${startDate.toLocaleDateString('he-IL')}`;
+
+          scheduledInfo.push({
+            taskId: task.id,
+            reason: slot.reasoning,
+            when: whenLabel
+          });
+        }
+      });
+
+      schedule.tasksToDefer.forEach(deferTask => {
+        const task = selectedTasks.find(t => t.id === deferTask.taskId);
+        if (!task) return;
+
+        const periodLabels = {
+          'next-week': 'שבוע הבא',
+          'later': 'מאוחר יותר',
+          'delegate': 'להאציל למישהו אחר',
+          'cancel': 'לבטל'
+        };
+
+        deferredInfo.push({
+          taskId: deferTask.taskId,
+          reason: deferTask.reason,
+          period: periodLabels[deferTask.suggestedDeferralPeriod] || deferTask.suggestedDeferralPeriod
+        });
+      });
+
+      // Save suggestions to localStorage
+      localStorage.setItem('event_suggestions', JSON.stringify(eventSuggestions));
+
+      // Save results for display
+      setSchedulingResults({
+        scheduled: scheduledInfo,
+        deferred: deferredInfo,
+        warnings: schedule.overallCapacityAnalysis.warnings
+      });
+
+      // Show results dialog
+      setShowResultsDialog(true);
+    } catch (error) {
+      console.error('Error scheduling tasks:', error);
+      toast({
+        title: 'שגיאה',
+        description: 'לא ניתן היה לתזמן את המשימות',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       {/* Header */}
@@ -251,7 +380,30 @@ export default function TaskPlanning() {
                 <p className="text-sm text-gray-600">רשימה → עדיפויות → תזמון</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4">
+              {selectedTaskIds.size > 0 && (
+                <>
+                  <Button
+                    onClick={handleScheduleSelected}
+                    disabled={isScheduling}
+                    className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
+                    size="lg"
+                  >
+                    {isScheduling ? (
+                      <>
+                        <Sparkles className="h-5 w-5 mr-2 animate-spin" />
+                        מתזמן...
+                      </>
+                    ) : (
+                      <>
+                        <Calendar className="h-5 w-5 mr-2" />
+                        תזמן {selectedTaskIds.size} משימות
+                      </>
+                    )}
+                  </Button>
+                  <Separator orientation="vertical" className="h-12" />
+                </>
+              )}
               <div className="text-right">
                 <div className="text-sm text-gray-600">סה"כ משימות</div>
                 <div className="text-2xl font-bold text-purple-600">{totalTasksCount}</div>
@@ -303,7 +455,9 @@ export default function TaskPlanning() {
                               task={task}
                               index={index}
                               isExpanded={expandedTasks.has(task.id)}
+                              isSelected={selectedTaskIds.has(task.id)}
                               onToggleExpanded={toggleTaskExpanded}
+                              onToggleSelection={toggleTaskSelection}
                               onToggleSubtask={toggleSubtask}
                               onDelete={deleteTask}
                               familyMembers={familyMembers}
@@ -409,6 +563,153 @@ export default function TaskPlanning() {
         </div>
       </div>
 
+      {/* Scheduling Results Panel at Bottom */}
+      {schedulingResults && showResultsDialog && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-purple-500 shadow-2xl z-50 max-h-[60vh] overflow-y-auto">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Brain className="h-6 w-6 text-purple-600" />
+                <h2 className="text-xl font-bold text-gray-900">תוצאות תזמון AI</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    setShowResultsDialog(false);
+                    navigate('/', { state: { showSuggestions: true } });
+                  }}
+                  className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
+                  size="lg"
+                >
+                  <CheckCircle2 className="h-5 w-5 mr-2" />
+                  אשר המלצות ועבור ללוח שנה ({schedulingResults.scheduled.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowResultsDialog(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Scheduled Tasks */}
+              {schedulingResults.scheduled.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <h3 className="text-lg font-semibold text-green-900">
+                      משימות שתוזמנו ({schedulingResults.scheduled.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {schedulingResults.scheduled.map(item => {
+                      const task = tasks.find(t => t.id === item.taskId);
+                      if (!task) return null;
+                      return (
+                        <Card key={item.taskId} className="border-l-4 border-green-500 bg-green-50/50">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-3">
+                              {task.emoji && <span className="text-2xl">{task.emoji}</span>}
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 mb-1">{task.title}</h4>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline" className="text-green-700 border-green-300">
+                                    <Calendar className="h-3 w-3 ml-1" />
+                                    {item.when}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-gray-600">
+                                    <Clock className="h-3 w-3 ml-1" />
+                                    {formatDuration(task.estimatedDuration)}
+                                  </Badge>
+                                </div>
+                                <div className="bg-white/80 rounded-lg p-3 text-sm text-gray-700">
+                                  <strong>סיבה:</strong> {item.reason}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Deferred Tasks */}
+              {schedulingResults.deferred.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-5 w-5 text-orange-600" />
+                    <h3 className="text-lg font-semibold text-orange-900">
+                      משימות שנדחו / לא תוזמנו ({schedulingResults.deferred.length})
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {schedulingResults.deferred.map(item => {
+                      const task = tasks.find(t => t.id === item.taskId);
+                      if (!task) return null;
+                      return (
+                        <Card key={item.taskId} className="border-l-4 border-orange-500 bg-orange-50/50">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-3">
+                              {task.emoji && <span className="text-2xl">{task.emoji}</span>}
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 mb-1">{task.title}</h4>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline" className="text-orange-700 border-orange-300">
+                                    <AlertTriangle className="h-3 w-3 ml-1" />
+                                    המלצה: {item.period}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-gray-600">
+                                    <Clock className="h-3 w-3 ml-1" />
+                                    {formatDuration(task.estimatedDuration)}
+                                  </Badge>
+                                </div>
+                                <div className="bg-white/80 rounded-lg p-3 text-sm text-gray-700">
+                                  <strong>סיבה:</strong> {item.reason}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {schedulingResults.warnings.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                    <h3 className="text-lg font-semibold text-yellow-900">
+                      אזהרות וממצאים
+                    </h3>
+                  </div>
+                  <Card className="border-l-4 border-yellow-500 bg-yellow-50/50">
+                    <CardContent className="p-4">
+                      <ul className="space-y-2">
+                        {schedulingResults.warnings.map((warning, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-yellow-900">
+                            <span className="text-yellow-600 font-bold">•</span>
+                            <span>{warning}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Follow-up Dialog */}
       <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
         <DialogContent className="max-w-2xl" dir="rtl">
@@ -458,12 +759,322 @@ export default function TaskPlanning() {
   );
 }
 
+// SubtaskManager Component - Inline editing for subtasks
+interface SubtaskManagerProps {
+  taskId: string;
+  subtasks: SubTask[];
+  onToggleSubtask: (taskId: string, subtaskId: string) => void;
+}
+
+function SubtaskManager({ taskId, subtasks, onToggleSubtask }: SubtaskManagerProps) {
+  const { toast } = useToast();
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDuration, setEditedDuration] = useState(0);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskDuration, setNewSubtaskDuration] = useState(30);
+
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes}ד`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}:${mins.toString().padStart(2, '0')}ש` : `${hours}ש`;
+  };
+
+  const handleStartEdit = (subtask: SubTask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditedTitle(subtask.title);
+    setEditedDuration(subtask.estimatedDuration);
+  };
+
+  const handleSaveEdit = (subtaskId: string) => {
+    if (!editedTitle.trim()) {
+      toast({
+        title: 'שגיאה',
+        description: 'נא להזין כותרת למשימת המשנה',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const tasks = taskService.loadTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const updatedSubtasks = task.subtasks.map(st =>
+      st.id === subtaskId
+        ? { ...st, title: editedTitle, estimatedDuration: editedDuration }
+        : st
+    );
+
+    const totalDuration = updatedSubtasks.reduce((sum, st) => sum + st.estimatedDuration, 0);
+
+    taskService.updateTask(taskId, {
+      subtasks: updatedSubtasks,
+      estimatedDuration: totalDuration
+    });
+
+    setEditingSubtaskId(null);
+    toast({
+      title: '✅ משימת משנה עודכנה',
+      description: 'השינויים נשמרו בהצלחה'
+    });
+
+    // Reload page to reflect changes
+    window.location.reload();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSubtaskId(null);
+    setEditedTitle('');
+    setEditedDuration(0);
+  };
+
+  const handleDeleteSubtask = (subtaskId: string) => {
+    const tasks = taskService.loadTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
+    const totalDuration = updatedSubtasks.reduce((sum, st) => sum + st.estimatedDuration, 0);
+
+    taskService.updateTask(taskId, {
+      subtasks: updatedSubtasks,
+      estimatedDuration: totalDuration || task.estimatedDuration
+    });
+
+    toast({
+      title: '🗑️ משימת משנה נמחקה',
+      description: 'משימת המשנה הוסרה'
+    });
+
+    // Reload page to reflect changes
+    window.location.reload();
+  };
+
+  const handleAddNewSubtask = () => {
+    if (!newSubtaskTitle.trim()) {
+      toast({
+        title: 'שגיאה',
+        description: 'נא להזין כותרת למשימת המשנה',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const tasks = taskService.loadTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newSubtask: SubTask = {
+      id: `subtask-${Date.now()}`,
+      title: newSubtaskTitle,
+      estimatedDuration: newSubtaskDuration,
+      completed: false,
+      order: task.subtasks.length
+    };
+
+    const updatedSubtasks = [...task.subtasks, newSubtask];
+    const totalDuration = updatedSubtasks.reduce((sum, st) => sum + st.estimatedDuration, 0);
+
+    taskService.updateTask(taskId, {
+      subtasks: updatedSubtasks,
+      estimatedDuration: totalDuration
+    });
+
+    setIsAddingNew(false);
+    setNewSubtaskTitle('');
+    setNewSubtaskDuration(30);
+
+    toast({
+      title: '✅ משימת משנה נוספה',
+      description: 'משימת המשנה נוספה בהצלחה'
+    });
+
+    // Reload page to reflect changes
+    window.location.reload();
+  };
+
+  if (subtasks.length === 0 && !isAddingNew) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+            <ListTodo className="h-4 w-4" />
+            משימות משנה
+          </h4>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsAddingNew(true)}
+          className="w-full border-dashed"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          הוסף משימת משנה
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+          <ListTodo className="h-4 w-4" />
+          משימות משנה
+        </h4>
+        {!isAddingNew && subtasks.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsAddingNew(true)}
+            className="text-blue-600 hover:text-blue-700"
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            הוסף
+          </Button>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {subtasks.map((subtask) => (
+          <div key={subtask.id}>
+            {editingSubtaskId === subtask.id ? (
+              // Edit mode
+              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                <Input
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="flex-1 text-right h-8 text-sm"
+                  dir="rtl"
+                  placeholder="כותרת"
+                  autoFocus
+                />
+                <Input
+                  type="number"
+                  value={editedDuration}
+                  onChange={(e) => setEditedDuration(parseInt(e.target.value) || 0)}
+                  className="w-20 h-8 text-sm"
+                  placeholder="דקות"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => handleSaveEdit(subtask.id)}
+                  className="h-8 px-2 bg-green-600 hover:bg-green-700"
+                >
+                  <Save className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCancelEdit}
+                  className="h-8 px-2"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              // View mode
+              <div className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 group">
+                <Checkbox
+                  checked={subtask.completed}
+                  onCheckedChange={() => onToggleSubtask(taskId, subtask.id)}
+                  className="flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                    {subtask.title}
+                  </div>
+                  {subtask.description && (
+                    <div className="text-xs text-gray-500 mt-0.5">{subtask.description}</div>
+                  )}
+                </div>
+                <Badge variant="outline" className="text-xs flex-shrink-0">
+                  <Clock className="h-3 w-3 mr-1" />
+                  {formatDuration(subtask.estimatedDuration)}
+                </Badge>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleStartEdit(subtask)}
+                    className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDeleteSubtask(subtask.id)}
+                    className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Add New Subtask Form */}
+        {isAddingNew && (
+          <div className="flex items-center gap-2 p-2 bg-green-50 rounded border border-green-200">
+            <Input
+              value={newSubtaskTitle}
+              onChange={(e) => setNewSubtaskTitle(e.target.value)}
+              className="flex-1 text-right h-8 text-sm"
+              dir="rtl"
+              placeholder="משימת משנה חדשה..."
+              autoFocus
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddNewSubtask();
+                }
+              }}
+            />
+            <Input
+              type="number"
+              value={newSubtaskDuration}
+              onChange={(e) => setNewSubtaskDuration(parseInt(e.target.value) || 0)}
+              className="w-20 h-8 text-sm"
+              placeholder="דקות"
+            />
+            <Button
+              size="sm"
+              onClick={handleAddNewSubtask}
+              className="h-8 px-2 bg-green-600 hover:bg-green-700"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setIsAddingNew(false);
+                setNewSubtaskTitle('');
+                setNewSubtaskDuration(30);
+              }}
+              className="h-8 px-2"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Task Card Component
 interface TaskCardProps {
   task: Task;
   index: number;
   isExpanded: boolean;
+  isSelected: boolean;
   onToggleExpanded: (taskId: string) => void;
+  onToggleSelection: (taskId: string) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onDelete: (taskId: string) => void;
   familyMembers: FamilyMember[];
@@ -472,8 +1083,10 @@ interface TaskCardProps {
 function TaskCard({ 
   task, 
   index, 
-  isExpanded, 
-  onToggleExpanded, 
+  isExpanded,
+  isSelected,
+  onToggleExpanded,
+  onToggleSelection,
   onToggleSubtask, 
   onDelete,
   familyMembers 
@@ -720,11 +1333,16 @@ function TaskCard({
   }
 
   return (
-    <Card className="border-l-4 hover:shadow-md transition-shadow" style={{ borderLeftColor: getPriorityColor(task.priority).replace('bg-', '#') }}>
+    <Card className={`border-l-4 hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-green-500 shadow-lg' : ''}`} style={{ borderLeftColor: getPriorityColor(task.priority).replace('bg-', '#') }}>
       <CardContent className="p-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelection(task.id)}
+              className="mt-1.5"
+            />
             <div className={`${getPriorityColor(task.priority)} text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm flex-shrink-0`}>
               {index + 1}
             </div>
@@ -740,6 +1358,26 @@ function TaskCard({
               
               {/* Badges */}
               <div className="flex flex-wrap gap-2 mb-2">
+                {/* Status Badge */}
+                {task.status === 'scheduled' && (
+                  <Badge className="gap-1 bg-green-600 hover:bg-green-700">
+                    <CheckCircle2 className="h-3 w-3" />
+                    תוזמן ללוח שנה
+                  </Badge>
+                )}
+                {task.status === 'in-progress' && (
+                  <Badge className="gap-1 bg-blue-600 hover:bg-blue-700">
+                    <Clock className="h-3 w-3" />
+                    בביצוע
+                  </Badge>
+                )}
+                {task.status === 'cancelled' && (
+                  <Badge className="gap-1 bg-gray-600 hover:bg-gray-700">
+                    <X className="h-3 w-3" />
+                    בוטל
+                  </Badge>
+                )}
+                
                 <Badge variant="outline" className="gap-1">
                   <TrendingUp className="h-3 w-3" />
                   עדיפות: {task.priority}
@@ -812,38 +1450,12 @@ function TaskCard({
         {/* Expanded Content */}
         {isExpanded && (
           <div className="mt-4 pt-4 border-t space-y-4">
-            {/* Subtasks */}
-            {totalSubtasks > 0 && (
-              <div>
-                <h4 className="font-medium text-sm text-gray-700 mb-2 flex items-center gap-2">
-                  <ListTodo className="h-4 w-4" />
-                  משימות משנה
-                </h4>
-                <div className="space-y-2">
-                  {task.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-start gap-2 p-2 rounded hover:bg-gray-50">
-                      <Checkbox
-                        checked={subtask.completed}
-                        onCheckedChange={() => onToggleSubtask(task.id, subtask.id)}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1">
-                        <div className={`text-sm ${subtask.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                          {subtask.title}
-                        </div>
-                        {subtask.description && (
-                          <div className="text-xs text-gray-500 mt-0.5">{subtask.description}</div>
-                        )}
-                        <div className="text-xs text-gray-400 mt-1">
-                          <Clock className="h-3 w-3 inline ml-1" />
-                          {formatDuration(subtask.estimatedDuration)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Subtasks with Inline Editing */}
+            <SubtaskManager
+              taskId={task.id}
+              subtasks={task.subtasks}
+              onToggleSubtask={onToggleSubtask}
+            />
 
             {/* AI Analysis */}
             {task.aiAnalysis && (
