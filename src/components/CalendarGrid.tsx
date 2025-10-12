@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
+import { calculateEventLayouts } from "@/utils/eventLayoutUtils";
 
 interface CalendarGridProps {
   viewMode: 'day' | 'week' | 'workweek' | 'month';
@@ -145,15 +146,14 @@ export const CalendarGrid = ({
               className="pointer-events-none absolute z-30"
               style={{
                 top: `${currentTimePosition}px`,
-                left: '5rem',
+                left: '0',
                 right: '0',
               }}
             >
               <div className="relative">
-                <div className="h-px w-full bg-primary/50" />
+                <div className="absolute left-20 right-0 h-px bg-red-500" />
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-primary-foreground shadow-md"
-                  style={{ left: `${dotLeftPercent}%`, transform: 'translate(-50%, -50%)' }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm"
                 >
                   Now
                 </div>
@@ -210,28 +210,36 @@ export const CalendarGrid = ({
                   </div>
 
                     {/* Events container for this time slot */}
-                    {hour === START_HOUR && (
-                      <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
-                        {getEventsForDate(date).map((event) => {
-                          const member = familyMembers.find(m => m.id === event.memberId);
-                          return (
-                            <DraggableEventCard
-                              key={event.id}
-                              event={event}
-                              onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
-                              onMove={onEventUpdate}
-                              gridHeight={GRID_HEIGHT}
-                              columnWidth={100}
-                              timeSlotHeight={TIME_SLOT_HEIGHT}
-                              columnIndex={dateIdx}
-                              dates={dates}
-                              member={member}
-                              familyMembers={familyMembers}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
+                    {hour === START_HOUR && (() => {
+                      const dayEvents = getEventsForDate(date);
+                      const eventLayouts = calculateEventLayouts(events, date);
+                      
+                      return (
+                        <div className="absolute inset-0" style={{ height: `${GRID_HEIGHT}px` }}>
+                          {dayEvents.map((event) => {
+                            const member = familyMembers.find(m => m.id === event.memberId);
+                            const layout = eventLayouts.get(event.id);
+                            
+                            return (
+                              <DraggableEventCard
+                                key={event.id}
+                                event={event}
+                                onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
+                                onMove={onEventUpdate}
+                                gridHeight={GRID_HEIGHT}
+                                columnWidth={100}
+                                timeSlotHeight={TIME_SLOT_HEIGHT}
+                                columnIndex={dateIdx}
+                                dates={dates}
+                                member={member}
+                                familyMembers={familyMembers}
+                                layout={layout}
+                              />
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

@@ -301,7 +301,7 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
   }
 
   // Execute a tool call
-  executeToolCall(request: ToolCallRequest): { success: boolean; message: string; error?: string } {
+  executeToolCall(request: ToolCallRequest): { success: boolean; message: string; error?: string; data?: unknown } {
     try {
       switch (request.tool) {
         case 'create_meeting':
@@ -372,9 +372,16 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
 
     this.operations.createEvent(eventData);
 
+    // Create a temporary event object with a generated ID for display
+    const createdEvent: CalendarEvent = {
+      ...eventData,
+      id: `event_${Date.now()}` // Temporary ID for display
+    };
+
     return {
       success: true,
-      message: `Created meeting "${eventData.title}" from ${startDate.toLocaleString()} to ${endDate.toLocaleString()}`
+      message: `Created meeting "${eventData.title}" from ${startDate.toLocaleString()} to ${endDate.toLocaleString()}`,
+      data: createdEvent
     };
   }
 

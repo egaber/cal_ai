@@ -270,47 +270,33 @@ const Index = () => {
       const endDate = new Date(startDate);
       endDate.setHours(hour + 1, minute, 0, 0); // Default 1 hour duration
 
-      // Import llmService dynamically to avoid circular dependencies
-      const { llmService } = await import('@/services/llmService');
+      // Try AI first, fallback to local generator if AI is unavailable
+      let metadata: { emoji: string; category: CalendarEvent['category'] };
       
-      // Generate emoji and category using AI
-      const metadata = await llmService.generateEventMetadata(title, '');
-
-      // Get surrounding events for context (2 hours before and after)
-      const twoHoursBefore = new Date(startDate.getTime() - 2 * 60 * 60 * 1000);
-      const twoHoursAfter = new Date(endDate.getTime() + 2 * 60 * 60 * 1000);
-      const surroundingEvents = filteredEvents
-        .filter(e => {
-          const eStart = new Date(e.startTime);
-          return eStart >= twoHoursBefore && eStart <= twoHoursAfter;
-        })
-        .map(e => ({
-          title: e.title,
-          startTime: e.startTime,
-          endTime: e.endTime,
-          category: e.category
-        }));
-
-      // Generate AI tip
-      const aiTip = await llmService.generateEventTip(
-        title,
-        '',
-        metadata.category,
-        startDate.toISOString(),
-        endDate.toISOString(),
-        surroundingEvents
-      );
+      try {
+        const { llmService } = await import('@/services/llmService');
+        // Try to get AI-generated metadata
+        const aiMetadata = await llmService.generateEventMetadata(title, '');
+        metadata = {
+          emoji: aiMetadata.emoji,
+          category: aiMetadata.category as CalendarEvent['category']
+        };
+      } catch (error) {
+        // If AI fails, use local fallback
+        console.log('AI unavailable, using local generator');
+        const { generateEventMetadataLocal } = await import('@/utils/eventMetadataUtils');
+        metadata = generateEventMetadataLocal(title, '');
+      }
 
       const newEvent: CalendarEvent = {
         id: `event_${Date.now()}`,
         title,
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
-        category: metadata.category as CalendarEvent['category'],
+        category: metadata.category,
         priority: 'medium',
         memberId: selectedMembers[0] || '1',
         emoji: metadata.emoji,
-        aiTip: aiTip || undefined,
       };
 
       setEvents(prev => [...prev, newEvent]);
@@ -739,7 +725,7 @@ What would you like to know or do with this event?`;
   );
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(101,84,192,0.16),_transparent_60%)]">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-6 px-4 pb-10 pt-6 sm:px-8 xl:px-16">
         {/* Compact Top Bar - Date and Stats */}
         <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/80 px-6 py-3 shadow-lg backdrop-blur">
@@ -917,7 +903,10 @@ What would you like to know or do with this event?`;
       <EventDetailsDialog
         event={selectedEvent}
         isOpen={isEventDialogOpen}
-        onClose={() => setIsEventDialogOpen(false)}
+        onClose={() => {
+          setIsEventDialogOpen(false);
+          setSelectedEvent(null);
+        }}
         onSave={handleEventSave}
         onDelete={handleEventDelete}
         onDeleteRecurring={handleDeleteRecurring}

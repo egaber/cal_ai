@@ -498,7 +498,7 @@ Provide a brief, helpful scheduling tip or suggestion for this event.`;
       social: '🎉',
       finance: '💰',
       home: '🏠',
-      travel: '✈️',
+      travel: '🚗',
       fitness: '💪',
       food: '🍽️',
       shopping: '🛍️'

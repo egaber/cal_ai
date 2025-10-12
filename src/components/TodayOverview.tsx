@@ -51,9 +51,9 @@ const CATEGORY_STYLES: Record<CalendarEvent["category"], { dot: string; badge: s
     card: "border-amber-100/80 hover:border-amber-200 shadow-amber-100/70",
   },
   family: {
-    dot: "bg-fuchsia-500",
-    badge: "bg-fuchsia-100 text-fuchsia-700",
-    card: "border-fuchsia-100/80 hover:border-fuchsia-200 shadow-fuchsia-100/70",
+    dot: "bg-blue-500",
+    badge: "bg-blue-100 text-blue-700",
+    card: "border-blue-100/80 hover:border-blue-200 shadow-blue-100/70",
   },
 };
 

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
-import { 
+import { EventLayout } from "@/utils/eventLayoutUtils";
+import { useRTL } from "@/contexts/RTLContext";
+import {
   GripVertical, 
   RepeatIcon,
   Stethoscope,
@@ -45,6 +47,7 @@ interface DraggableEventCardProps {
   dates: Date[];
   member?: FamilyMember;
   familyMembers?: FamilyMember[]; // All family members to lookup multiple attendees
+  layout?: EventLayout; // Layout information for handling overlaps
 }
 
 const CATEGORY_STYLES: Record<CalendarEvent["category"], {
@@ -72,9 +75,9 @@ const CATEGORY_STYLES: Record<CalendarEvent["category"], {
     icon: User,
   },
   family: {
-    card: 'border-fuchsia-100/80 hover:border-fuchsia-200 shadow-fuchsia-100/70',
-    bar: 'bg-fuchsia-500',
-    badge: 'bg-fuchsia-100 text-fuchsia-700',
+    card: 'border-blue-100/80 hover:border-blue-200 shadow-blue-100/70',
+    bar: 'bg-blue-500',
+    badge: 'bg-blue-100 text-blue-700',
     icon: Users,
   },
   education: {
@@ -105,7 +108,7 @@ const CATEGORY_STYLES: Record<CalendarEvent["category"], {
     card: 'border-cyan-100/80 hover:border-cyan-200 shadow-cyan-100/70',
     bar: 'bg-cyan-500',
     badge: 'bg-cyan-100 text-cyan-700',
-    icon: Plane,
+    icon: Car,
   },
   fitness: {
     card: 'border-red-100/80 hover:border-red-200 shadow-red-100/70',
@@ -120,15 +123,15 @@ const CATEGORY_STYLES: Record<CalendarEvent["category"], {
     icon: UtensilsCrossed,
   },
   shopping: {
-    card: 'border-purple-100/80 hover:border-purple-200 shadow-purple-100/70',
-    bar: 'bg-purple-500',
-    badge: 'bg-purple-100 text-purple-700',
+    card: 'border-indigo-100/80 hover:border-indigo-200 shadow-indigo-100/70',
+    bar: 'bg-indigo-500',
+    badge: 'bg-indigo-100 text-indigo-700',
     icon: ShoppingBag,
   },
   entertainment: {
-    card: 'border-violet-100/80 hover:border-violet-200 shadow-violet-100/70',
-    bar: 'bg-violet-500',
-    badge: 'bg-violet-100 text-violet-700',
+    card: 'border-blue-100/80 hover:border-blue-200 shadow-blue-100/70',
+    bar: 'bg-blue-500',
+    badge: 'bg-blue-100 text-blue-700',
     icon: Film,
   },
   sports: {
@@ -195,7 +198,7 @@ const CATEGORY_STYLES: Record<CalendarEvent["category"], {
     card: 'border-gray-100/80 hover:border-gray-200 shadow-gray-100/70',
     bar: 'bg-gray-500',
     badge: 'bg-gray-100 text-gray-700',
-    icon: Car,
+    icon: Plane,
   },
   project: {
     card: 'border-sky-100/80 hover:border-sky-200 shadow-sky-100/70',
@@ -235,8 +238,13 @@ const getEventIcon = (event: CalendarEvent): LucideIcon => {
     return ShoppingBag;
   }
   
-  // Travel keywords
-  if (text.match(/\b(flight|travel|trip|vacation|hotel|airport|booking|tour|destination)\b/)) {
+  // Travel keywords (נסיעות - רכב)
+  if (text.match(/\b(travel|trip|drive|driving|road trip|car ride|vacation|hotel|tour|destination)\b/)) {
+    return Car;
+  }
+  
+  // Transport/Flight keywords (טיסות - מטוס)
+  if (text.match(/\b(flight|fly|flying|airport|plane|airline|boarding)\b/)) {
     return Plane;
   }
   
@@ -295,11 +303,14 @@ export const DraggableEventCard = ({
   dates,
   member,
   familyMembers = [],
+  layout,
 }: DraggableEventCardProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'top' | 'bottom' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [hasDragged, setHasDragged] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const { isRTL } = useRTL();
 
   const startDate = useMemo(() => new Date(event.startTime), [event.startTime]);
   const endDate = useMemo(() => new Date(event.endTime), [event.endTime]);
@@ -352,6 +363,7 @@ export const DraggableEventCard = ({
     
     e.stopPropagation();
     setIsDragging(true);
+    setHasDragged(false); // Reset drag flag on mouse down
     const rect = cardRef.current?.getBoundingClientRect();
     if (rect) {
       setDragOffset({
@@ -363,7 +375,8 @@ export const DraggableEventCard = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDragging && cardRef.current) {
+    // Only trigger onClick if we didn't actually drag
+    if (!hasDragged && cardRef.current) {
       // Pass the actual card position instead of mouse position
       const rect = cardRef.current.getBoundingClientRect();
       // Create a synthetic event with the card's right edge and vertical center
@@ -386,6 +399,8 @@ export const DraggableEventCard = ({
 
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging && cardRef.current) {
+        setHasDragged(true); // Mark that we've moved during this drag
+        
         const gridContainer = cardRef.current.closest('.calendar-grid');
         if (!gridContainer) return;
 
@@ -459,13 +474,23 @@ export const DraggableEventCard = ({
     };
   }, [isDragging, isResizing, dragOffset, event, onMove, startDate, endDate, durationMinutes, timeSlotHeight, topPosition, dates]);
 
+  // Calculate horizontal position and width based on layout
+  const horizontalStyle = layout ? {
+    left: `${layout.left}%`,
+    width: `${layout.width}%`,
+  } : {
+    left: '4px',
+    right: '4px',
+    width: 'auto',
+  };
+
   return (
     <div
       ref={cardRef}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       className={cn(
-        'absolute left-1 right-1 cursor-move select-none overflow-hidden rounded-2xl border bg-white/90 shadow-sm transition-all hover:shadow-md',
+        'absolute cursor-move select-none overflow-hidden rounded-sm border bg-white/90 shadow-sm transition-all hover:shadow-md',
         styles.card,
         isDragging && 'scale-[1.01] border-primary/40',
         isResizing && 'scale-[1.01] border-primary/40',
@@ -477,10 +502,13 @@ export const DraggableEventCard = ({
         top: `${topPosition}px`,
         height: `${height}px`,
         minHeight: '30px',
+        ...horizontalStyle,
+        paddingLeft: layout ? '6px' : undefined,
+        paddingRight: layout ? '6px' : undefined,
       }}
     >
-      {/* Vertical color bar on the left */}
-      <div className={cn('absolute left-0 top-0 h-full w-1.5', styles.bar)} />
+      {/* Vertical color bar on the left - full height and positioned slightly to the right */}
+      <div className={cn('absolute left-1.5 top-1 bottom-1 w-1', styles.bar, 'rounded-full')} />
 
       {/* Top resize handle */}
       <div
@@ -488,22 +516,23 @@ export const DraggableEventCard = ({
         onMouseDown={(e) => handleResizeMouseDown(e, 'top')}
       />
 
-      <div className="flex h-full flex-col gap-0.5 pl-5 pr-4 py-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-1">
-            {displayEmoji ? (
-              <span className="text-base flex-shrink-0">{displayEmoji}</span>
-            ) : (
-              <EventIcon className="h-3.5 w-3.5 flex-shrink-0 text-foreground/70" />
-            )}
-            {(event.recurrence || event.recurringEventId) && (
-              <RepeatIcon className="h-3 w-3 flex-shrink-0 text-primary" />
-            )}
-            <h4 className="text-sm font-semibold text-foreground leading-tight flex-1">
-              {event.title}
-            </h4>
-          </div>
-          <GripVertical className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40 pointer-events-none" />
+      <div className="flex h-full flex-col gap-0.5 pl-2 pr-2 py-0.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {displayEmoji ? (
+            <span className="text-base flex-shrink-0">{displayEmoji}</span>
+          ) : (
+            <EventIcon className="h-3.5 w-3.5 flex-shrink-0 text-foreground/70" />
+          )}
+          {(event.recurrence || event.recurringEventId) && (
+            <RepeatIcon className="h-3 w-3 flex-shrink-0 text-primary" />
+          )}
+          <h4 
+            className="text-sm font-semibold text-foreground leading-tight flex-1 truncate min-w-0" 
+            title={event.title}
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            {event.title}
+          </h4>
         </div>
 
         <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-muted-foreground">

@@ -24,6 +24,7 @@ import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { MemoryExtractionService } from "@/services/memoryExtractionService";
 import { StorageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
+import { EventCard } from "@/components/EventCard";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -33,6 +34,11 @@ interface AIAssistantProps {
   familyMembers: FamilyMember[];
   onMemoryUpdate?: () => void;
   initialMessage?: string;
+}
+
+interface MessageWithEvent extends Message {
+  event?: CalendarEvent;
+  eventMember?: FamilyMember;
 }
 
 export const AIAssistant = ({
@@ -45,7 +51,7 @@ export const AIAssistant = ({
   initialMessage,
 }: AIAssistantProps) => {
   const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  const [chatHistory, setChatHistory] = useState<MessageWithEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
@@ -222,7 +228,7 @@ INTELLIGENT FEATURES:
    - 👨‍👩‍👧‍👦 Family events, quality time
    - 🎯 Personal goals, important tasks
    - 🛒 Shopping, errands
-   - ✈️ Travel, trips
+   - 🚗 Travel, trips
    - 🎉 Celebrations, parties
    - 🎮 Entertainment, leisure
    - 💪 Sports, physical activities
@@ -315,6 +321,8 @@ When calculating times, use the current date and timezone shown above. For "toda
       if (response.toolCalls && response.toolCalls.length > 0) {
         // Execute each tool call
         const toolResults: string[] = [];
+        let createdEvent: CalendarEvent | undefined;
+        let createdEventMember: FamilyMember | undefined;
         
         for (const toolCall of response.toolCalls) {
           // If this is a create_meeting call, extract AI tip from the response
@@ -332,6 +340,13 @@ When calculating times, use the current date and timezone shown above. For "toda
           
           if (result.success) {
             toolResults.push(`✓ ${result.message}`);
+            
+            // If this was a create_meeting call, store the created event for rendering
+            if (toolCall.tool === 'create_meeting' && result.data) {
+              createdEvent = result.data as CalendarEvent;
+              createdEventMember = familyMembers.find(m => m.id === createdEvent?.memberId);
+            }
+            
             toast({
               title: "Action Completed",
               description: result.message,
@@ -346,16 +361,18 @@ When calculating times, use the current date and timezone shown above. For "toda
           }
         }
 
-        // Add assistant message with tool execution results
-        const assistantMessage: Message = {
+        // Add assistant message with event data for rendering
+        const assistantMessage: MessageWithEvent = {
           role: 'assistant',
-          content: response.content + '\n\n' + toolResults.join('\n')
+          content: response.content,
+          event: createdEvent,
+          eventMember: createdEventMember,
         };
 
         setChatHistory(prev => [...prev, assistantMessage]);
       } else {
         // No tool calls, just add the response
-        const assistantMessage: Message = {
+        const assistantMessage: MessageWithEvent = {
           role: 'assistant',
           content: response.content
         };
@@ -383,15 +400,15 @@ When calculating times, use the current date and timezone shown above. For "toda
   };
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-card">
+    <div className="flex h-full min-h-[480px] flex-col gap-3 rounded-xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/80">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent">
-            <Sparkles className="h-5 w-5 text-primary-foreground" />
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 shadow-sm">
+            <img src="/ai_circle.png" alt="AI" className="h-7 w-7 object-contain" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">AI Assistant</h3>
-            <p className="text-xs text-muted-foreground">Your personal scheduling expert</p>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Your scheduling companion</p>
           </div>
         </div>
 
@@ -467,43 +484,66 @@ When calculating times, use the current date and timezone shown above. For "toda
       </div>
 
       {/* Conversation Area */}
-      <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+      <div className="flex flex-1 flex-col gap-3 overflow-hidden">
         {chatHistory.length > 0 ? (
-          <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-secondary p-4">
+          <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-slate-50/80 p-4 dark:bg-slate-800/60" style={{ minHeight: '280px', maxHeight: '420px' }}>
             {chatHistory.map((msg, idx) => (
               <div
                 key={idx}
                 className={`rounded-lg p-3 ${
                   msg.role === 'user'
-                    ? 'bg-primary/10 ml-8'
-                    : 'bg-accent/10 mr-8'
+                    ? 'ml-8 bg-sky-100/80 dark:bg-sky-900/30'
+                    : 'mr-8 bg-white dark:bg-slate-800'
                 }`}
               >
-                <div className="mb-1 text-xs font-semibold text-muted-foreground">
+                <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {msg.role === 'user' ? 'You' : 'Assistant'}
                 </div>
-                <p className="whitespace-pre-wrap text-sm text-foreground">
-                  {msg.content}
-                </p>
+                
+                {/* Render EventCard if this message has an event */}
+                {msg.event && (
+                  <div className="mb-3">
+                    <EventCard event={msg.event} member={msg.eventMember} />
+                  </div>
+                )}
+                
+                {/* Render the text content - filter out JSON code blocks when event is shown */}
+                {(() => {
+                  let displayContent = msg.content;
+                  
+                  // If we're showing an event widget, remove JSON code blocks from the text
+                  if (msg.event) {
+                    // Remove ```json...``` blocks
+                    displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
+                    // Remove any standalone JSON objects
+                    displayContent = displayContent.replace(/\{[\s\S]*?"tool"[\s\S]*?\}/g, '').trim();
+                  }
+                  
+                  return displayContent ? (
+                    <p className="whitespace-pre-wrap text-sm text-slate-900 dark:text-slate-100">
+                      {displayContent}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-lg bg-secondary p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          <div className="rounded-lg bg-slate-50/80 p-4 dark:bg-slate-800/60">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
               <Wrench className="h-3 w-3" />
               <span>Calendar Control Enabled</span>
             </div>
-            <p className="text-sm text-foreground">
+            <p className="text-sm text-slate-900 dark:text-slate-100">
               Hi! I'm your AI calendar assistant with full calendar control. I can:
             </p>
-            <ul className="mt-2 space-y-1 text-sm text-foreground">
+            <ul className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-300">
               <li>• Create new meetings and events</li>
               <li>• Move or reschedule existing meetings</li>
               <li>• Edit meeting details (title, description, priority)</li>
               <li>• Delete or cancel meetings</li>
             </ul>
-            <p className="mt-3 text-sm text-foreground">
+            <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
               I can see your current schedule for today and this week. Just tell me what you need!
             </p>
           </div>
@@ -512,22 +552,33 @@ When calculating times, use the current date and timezone shown above. For "toda
 
       {/* Input Area */}
       <div className="flex gap-2">
-        <Input
+        <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+          }}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
           placeholder="Ask me to schedule something..."
-          className="flex-1"
+          className="flex-1 resize-none rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-sky-500 dark:focus:ring-sky-900/30"
+          style={{ minHeight: '40px', maxHeight: '120px' }}
+          rows={1}
           disabled={isLoading}
         />
         <Button
           onClick={handleSend}
           size="icon"
           disabled={!message.trim() || isLoading}
-          className="bg-primary hover:bg-primary/90"
+          className="h-10 w-10 flex-shrink-0 rounded-lg bg-sky-600 transition hover:bg-sky-700"
         >
           {isLoading ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
           ) : (
             <Send className="h-4 w-4" />
           )}
