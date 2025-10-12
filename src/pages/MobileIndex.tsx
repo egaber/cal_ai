@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { CalendarGrid } from "@/components/CalendarGrid";
+import { MobileCalendarView } from "@/components/MobileCalendarView";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
@@ -30,9 +30,13 @@ const MobileIndex = () => {
     position: { x: number; y: number };
   } | null>(null);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
+  const [isMonthViewExpanded, setIsMonthViewExpanded] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
   
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
+  const headerTouchStartY = useRef<number>(0);
+  const isHeaderDragging = useRef(false);
 
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
     { id: '1', name: 'Eyal', role: 'Parent', color: 'bg-event-blue', isYou: true },
@@ -321,45 +325,97 @@ const MobileIndex = () => {
     return filteredEvents.some(event => event.isAllDay);
   }, [filteredEvents]);
 
+  // Get all dates for current month
+  const monthDates = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const dates = [];
+    
+    // Add days from previous month to fill the first week
+    const firstDayOfWeek = firstDay.getDay();
+    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+      const date = new Date(firstDay);
+      date.setDate(date.getDate() - (i + 1));
+      dates.push(date);
+    }
+    
+    // Add all days of current month
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      dates.push(new Date(year, month, day));
+    }
+    
+    // Add days from next month to fill the last week
+    const remainingDays = 7 - (dates.length % 7);
+    if (remainingDays < 7) {
+      for (let i = 1; i <= remainingDays; i++) {
+        const date = new Date(year, month + 1, i);
+        dates.push(date);
+      }
+    }
+    
+    return dates;
+  }, [currentDate]);
+
+  const handleHeaderTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    // Only handle if touching the date picker area or notch
+    if (!target.closest('.date-picker-draggable')) return;
+    
+    headerTouchStartY.current = e.touches[0].clientY;
+    isHeaderDragging.current = true;
+    setDragOffset(0);
+  };
+
+  const handleHeaderTouchMove = (e: React.TouchEvent) => {
+    if (!isHeaderDragging.current) return;
+    
+    // Prevent default scrolling behavior
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - headerTouchStartY.current;
+    
+    // Allow dragging down to expand, or up to collapse if expanded
+    if (deltaY > 0 && !isMonthViewExpanded) {
+      // Dragging down to expand - limit to max expansion
+      setDragOffset(Math.min(deltaY, 300));
+    } else if (deltaY < 0 && isMonthViewExpanded) {
+      // Dragging up to collapse - allow negative offset
+      setDragOffset(Math.max(deltaY, -300));
+    }
+  };
+
+  const handleHeaderTouchEnd = () => {
+    if (!isHeaderDragging.current) return;
+    
+    isHeaderDragging.current = false;
+    
+    // Determine if we should expand or collapse based on drag distance
+    if (dragOffset > 100 && !isMonthViewExpanded) {
+      setIsMonthViewExpanded(true);
+      setDragOffset(0);
+    } else if (dragOffset < -100 && isMonthViewExpanded) {
+      setIsMonthViewExpanded(false);
+      setDragOffset(0);
+    } else {
+      // Snap back to current state
+      setDragOffset(0);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Compact Header with Week Dates */}
+      {/* Compact Header - Controls on Top, Week Dates Below */}
       <div className="flex-none ios-header bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200/30">
-        {/* Week Date Circles */}
-        <div className="flex items-center justify-between px-2 py-2 overflow-x-auto hide-scrollbar">
-          {weekDates.map((date) => {
-            const isSelected = date.toDateString() === currentDate.toDateString();
-            const isToday = date.toDateString() === new Date().toDateString();
-            
-            return (
-              <button
-                key={date.toISOString()}
-                onClick={() => handleNavigate(date)}
-                className={`flex flex-col items-center justify-center min-w-[44px] h-[52px] rounded-xl transition-all ${
-                  isSelected
-                    ? 'bg-primary text-white scale-105'
-                    : isToday
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <span className="text-[10px] font-medium uppercase">
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })[0]}
-                </span>
-                <span className={`text-base font-bold ${isSelected ? 'text-white' : ''}`}>
-                  {date.getDate()}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         {/* Controls Row */}
-        <div className="flex items-center justify-between px-3 pb-2">
+        <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => handleNavigate('today')} className="h-7 px-2 text-xs">
               Today
@@ -425,6 +481,101 @@ const MobileIndex = () => {
             </Button>
           </div>
         </div>
+
+        {/* Week Date Circles with Draggable Notch */}
+        <div 
+          className="relative date-picker-draggable"
+          onTouchStart={handleHeaderTouchStart}
+          onTouchMove={handleHeaderTouchMove}
+          onTouchEnd={handleHeaderTouchEnd}
+        >
+          {/* Week or Month View */}
+          <div 
+            className="px-2 pt-2 overflow-hidden"
+            style={{
+              maxHeight: isMonthViewExpanded 
+                ? `${320 + Math.max(0, dragOffset)}px` 
+                : `${64 + Math.max(0, dragOffset)}px`,
+              transition: isHeaderDragging.current ? 'none' : 'max-height 0.3s ease-out',
+            }}
+          >
+            {isMonthViewExpanded ? (
+              // Full Month Grid
+              <div>
+                <div className="text-center text-sm font-semibold text-gray-700 mb-2">
+                  {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                    <div key={i} className="text-center text-[10px] font-medium text-gray-500 mb-1">
+                      {day}
+                    </div>
+                  ))}
+                  {monthDates.map((date) => {
+                    const isSelected = date.toDateString() === currentDate.toDateString();
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+                    
+                    return (
+                      <button
+                        key={date.toISOString()}
+                        onClick={() => {
+                          handleNavigate(date);
+                          setIsMonthViewExpanded(false);
+                        }}
+                        className={`flex items-center justify-center h-10 rounded-lg transition-all text-sm ${
+                          isSelected
+                            ? 'bg-primary text-white font-bold scale-105'
+                            : isToday
+                            ? 'bg-primary/10 text-primary font-semibold'
+                            : isCurrentMonth
+                            ? 'text-gray-700 hover:bg-gray-100'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              // Week View
+              <div className="flex items-center justify-between overflow-x-auto hide-scrollbar">
+                {weekDates.map((date) => {
+                  const isSelected = date.toDateString() === currentDate.toDateString();
+                  const isToday = date.toDateString() === new Date().toDateString();
+                  
+                  return (
+                    <button
+                      key={date.toISOString()}
+                      onClick={() => handleNavigate(date)}
+                      className={`flex flex-col items-center justify-center min-w-[44px] h-[52px] rounded-xl transition-all ${
+                        isSelected
+                          ? 'bg-primary text-white scale-105'
+                          : isToday
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      <span className="text-[10px] font-medium uppercase">
+                        {date.toLocaleDateString('en-US', { weekday: 'short' })[0]}
+                      </span>
+                      <span className={`text-base font-bold ${isSelected ? 'text-white' : ''}`}>
+                        {date.getDate()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Notch indicator at bottom */}
+          <div className="flex justify-center pb-2 pt-1">
+            <div className="w-10 h-1 bg-gray-300 rounded-full" />
+          </div>
+        </div>
       </div>
 
       {/* Calendar - Fills remaining space with vertical scroll only */}
@@ -438,17 +589,15 @@ const MobileIndex = () => {
           onDelete={handleEventDelete}
           familyMembers={familyMembers}
         >
-          <div className="h-full w-full overflow-y-auto overflow-x-hidden ios-scroll hide-scrollbar">
-            <CalendarGrid
-              viewMode={viewMode}
-              currentDate={currentDate}
-              events={filteredEvents}
-              familyMembers={familyMembers}
-              onEventClick={handleEventClick}
-              onEventUpdate={handleEventUpdate}
-              onTimeSlotClick={handleTimeSlotClick}
-            />
-          </div>
+          <MobileCalendarView
+            currentDate={currentDate}
+            events={filteredEvents}
+            familyMembers={familyMembers}
+            onEventClick={handleEventClick}
+            onEventUpdate={handleEventUpdate}
+            onTimeSlotClick={handleTimeSlotClick}
+            onDateChange={(date) => setCurrentDate(date)}
+          />
         </EventPopover>
       </div>
 
