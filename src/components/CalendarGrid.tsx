@@ -109,12 +109,16 @@ export const CalendarGrid = ({
       {/* Day headers - Fixed outside scroll container */}
       <div className="z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
         <div className="w-20 flex-shrink-0 border-r border-border/60 bg-white/80" />
-        {dates.map((date, idx) => (
-          <div
-            key={idx}
-            className="flex flex-1 flex-col items-center justify-center border-r border-border/60 py-3 last:border-r-0"
-            style={{ minWidth: '200px' }}
-          >
+        {dates.map((date, idx) => {
+          const isWeekend = date.getDay() === 5 || date.getDay() === 6;
+          return (
+            <div
+              key={idx}
+              className={`flex flex-1 flex-col items-center justify-center border-r border-border/60 py-3 last:border-r-0 ${
+                isWeekend ? 'bg-slate-100/90' : ''
+              }`}
+              style={{ minWidth: '200px' }}
+            >
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {DAYS_OF_WEEK[date.getDay()]}
             </div>
@@ -129,11 +133,12 @@ export const CalendarGrid = ({
                 {date.getDate()}
               </div>
             </div>
-            <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              {date.toLocaleDateString('en-US', { month: 'short' })}
-            </p>
-          </div>
-        ))}
+              <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.25em] text-muted-foreground">
+                {date.toLocaleDateString('en-US', { month: 'short' })}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {/* All-day events bar */}
@@ -191,6 +196,8 @@ export const CalendarGrid = ({
               {dates.map((date, dateIdx) => {
                 // Define night hours (before 6 AM and after 8 PM)
                 const isNightHour = hour < 6 || hour >= 20;
+                // Check if it's a weekend (Friday=5, Saturday=6)
+                const isWeekend = date.getDay() === 5 || date.getDay() === 6;
                 
                 return (
                   <div
@@ -200,6 +207,10 @@ export const CalendarGrid = ({
                         ? isNightHour
                           ? 'bg-slate-100/90 hover:bg-slate-200/70'
                           : 'bg-primary/5 hover:bg-primary/10'
+                        : isWeekend
+                        ? isNightHour
+                          ? 'bg-slate-200/90 hover:bg-slate-300/70'
+                          : 'bg-slate-100/80 hover:bg-slate-200/60'
                         : isNightHour
                         ? 'bg-slate-50/80 hover:bg-slate-100/60'
                         : 'bg-white/70 hover:bg-secondary/30'

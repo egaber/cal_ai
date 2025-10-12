@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { RTLProvider } from "@/contexts/RTLContext";
-import AppLayout from "./components/AppLayout";
+import ResponsiveLayout from "./components/ResponsiveLayout";
 
 const queryClient = new QueryClient();
 
@@ -15,7 +15,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <AppLayout />
+          <ResponsiveLayout />
         </BrowserRouter>
       </TooltipProvider>
     </RTLProvider>

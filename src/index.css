@@ -67,6 +67,22 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  
+  /* iOS Safe Area Support */
+  :root {
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  }
+  
+  /* iOS-specific styling */
+  @supports (-webkit-touch-callout: none) {
+    body {
+      /* Prevent pull-to-refresh on iOS */
+      overscroll-behavior-y: contain;
+    }
+  }
 }
 
 /* Modern Animations */
@@ -280,4 +296,127 @@
 
 .production-input {
   @apply rounded-xl border-2 border-gray-200 bg-white/50 backdrop-blur-sm transition-all duration-300 focus:border-primary focus:ring-4 focus:ring-primary/20 dark:border-gray-700 dark:bg-gray-800/50;
+}
+
+/* iOS Touch Optimizations */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.touch-action-pan-y {
+  touch-action: pan-y;
+}
+
+.touch-action-none {
+  touch-action: none;
+}
+
+/* iOS Bottom Navigation */
+.ios-bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark .ios-bottom-nav {
+  background: rgba(17, 24, 39, 0.95);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+/* iOS Header with Safe Area */
+.ios-header {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+
+/* iOS Card Style */
+.ios-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+}
+
+.dark .ios-card {
+  background: rgba(31, 41, 55, 0.95);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* iOS Haptic Feedback Simulation */
+.ios-button-press {
+  transform: scale(0.96);
+  opacity: 0.8;
+}
+
+/* Mobile-first Breakpoints */
+@media (max-width: 640px) {
+  .mobile-only {
+    display: block;
+  }
+  
+  .desktop-only {
+    display: none;
+  }
+}
+
+@media (min-width: 641px) {
+  .mobile-only {
+    display: none;
+  }
+  
+  .desktop-only {
+    display: block;
+  }
+}
+
+/* iOS-style Animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* iOS Scroll Behavior */
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar on mobile for cleaner iOS look */
+@media (max-width: 640px) {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
