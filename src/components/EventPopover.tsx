@@ -20,7 +20,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
-import { X, GripVertical, Trash2, RepeatIcon, Sparkles, User, Lightbulb, Tag, AlertCircle, Clock, Wand2 } from "lucide-react";
+import { X, GripVertical, Trash2, RepeatIcon, Sparkles, User, Lightbulb, Tag, AlertCircle, Clock, Wand2, Cloud } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
@@ -440,6 +440,14 @@ export const EventPopover = ({
                       <Clock className="h-3 w-3 mr-1" />
                       {formatDuration(editedEvent.startTime, editedEvent.endTime)}
                     </Badge>
+                    
+                    {/* Google Calendar Source Badge */}
+                    {editedEvent.source === 'google' && editedEvent.sourceCalendarEmail && (
+                      <Badge variant="outline" className="text-xs bg-blue-50 border-blue-200 text-blue-700">
+                        <Cloud className="h-3 w-3 mr-1" />
+                        {editedEvent.sourceCalendarEmail}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <Button

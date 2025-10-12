@@ -2,12 +2,14 @@
 
 import { CalendarEvent, FamilyMember } from '@/types/calendar';
 import { MemoryData, UserMemory, FamilyMemory, Place, TravelInfo } from '@/types/memory';
+import { GoogleCalendarSettings } from '@/types/googleCalendar';
 
 const STORAGE_KEYS = {
   EVENTS: 'cal_ai_events',
   FAMILY_MEMBERS: 'cal_ai_family_members',
   MEMORY_DATA: 'cal_ai_memory_data',
   SETTINGS: 'cal_ai_settings',
+  GOOGLE_CALENDAR_SETTINGS: 'cal_ai_google_calendar_settings',
 };
 
 export interface AppSettings {
@@ -235,6 +237,25 @@ export class StorageService {
     } catch (error) {
       console.error('Failed to import data:', error);
       return false;
+    }
+  }
+
+  // Google Calendar Settings
+  static saveGoogleCalendarSettings(settings: GoogleCalendarSettings): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.GOOGLE_CALENDAR_SETTINGS, JSON.stringify(settings));
+    } catch (error) {
+      console.error('Failed to save Google Calendar settings:', error);
+    }
+  }
+
+  static loadGoogleCalendarSettings(): GoogleCalendarSettings | null {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.GOOGLE_CALENDAR_SETTINGS);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Failed to load Google Calendar settings:', error);
+      return null;
     }
   }
 

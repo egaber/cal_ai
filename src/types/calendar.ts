@@ -22,6 +22,9 @@ export interface CalendarEvent {
   aiTip?: string; // AI-generated scheduling tip or suggestion
   recurrence?: RecurrenceRule;
   recurringEventId?: string; // links to parent recurring event
+  source?: 'local' | 'google'; // Where this event came from
+  sourceCalendarId?: string; // Google Calendar ID if from Google
+  sourceCalendarEmail?: string; // Email of the Google Calendar
 }
 
 export interface FamilyMember {

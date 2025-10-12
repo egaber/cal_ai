@@ -11,6 +11,7 @@ import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { MemoryManager } from "@/components/MemoryManager";
 import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
 import { EventSuggestionCard } from "@/components/EventSuggestionCard";
+import { GoogleCalendarSync } from "@/components/GoogleCalendarSync";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { MemoryData } from "@/types/memory";
 import { EventSuggestion } from "@/types/task";
@@ -740,6 +741,11 @@ What would you like to know or do with this event?`;
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <GoogleCalendarSync
+              events={events}
+              familyMembers={familyMembers}
+              onEventsUpdated={setEvents}
+            />
             {eventSuggestions.length > 0 && (
               <Button
                 onClick={() => setShowSuggestionsPanel(!showSuggestionsPanel)}
