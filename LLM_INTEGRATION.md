@@ -5,7 +5,7 @@ This document explains how to use the AI Assistant with different LLM providers 
 ## Overview
 
 The AI Assistant can connect to two types of LLM providers:
-1. **Gemini API** - Google's Gemini Pro model (requires API key)
+1. **Gemini API** - Google's Gemini models including 2.0 Flash, 1.5 Pro, 1.5 Flash, and Pro (requires API key)
 2. **Local VS Code LM API** - Access to various models through VS Code's Language Model API
 
 ## Setup Instructions
@@ -24,8 +24,12 @@ The AI Assistant can connect to two types of LLM providers:
    - The key will be stored locally in your browser
 
 3. **Select Gemini Model**
-   - After saving the API key, "Gemini Pro (Google)" will appear in the model dropdown
-   - Select it to use Gemini for your AI interactions
+   - After saving the API key, multiple Gemini models will appear in the model dropdown:
+     - **Gemini 2.0 Flash (Experimental)** - Latest experimental model with fast responses
+     - **Gemini 1.5 Pro** - Advanced reasoning and long context capabilities
+     - **Gemini 1.5 Flash** - Fast responses with good performance
+     - **Gemini Pro** - Original Gemini model
+   - Select any Gemini model to use it for your AI interactions
 
 ### Option 2: Using Local VS Code LM API
 
@@ -74,7 +78,12 @@ The AI Assistant can connect to two types of LLM providers:
 - Chat: `POST http://localhost:3000/api/chat`
 
 **Gemini API:**
-- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`
+- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model-id}:generateContent`
+- Supported Models:
+  - `gemini-2.0-flash-exp` - Gemini 2.0 Flash (Experimental)
+  - `gemini-1.5-pro` - Gemini 1.5 Pro
+  - `gemini-1.5-flash` - Gemini 1.5 Flash
+  - `gemini-pro` - Gemini Pro
 
 ### Request Format (Local API)
 
@@ -135,13 +144,17 @@ The AI Assistant can connect to two types of LLM providers:
 ## Features
 
 ✅ Multiple LLM provider support (Gemini + Local models)
-✅ Model selection dropdown
+✅ Support for multiple Gemini models (2.0 Flash, 1.5 Pro, 1.5 Flash, Pro)
+✅ Model selection dropdown with all available models
 ✅ Chat history with message distinction
 ✅ Settings dialog for API key management
 ✅ Loading indicators during API calls
 ✅ Error handling and user notifications
 ✅ Local storage for API key persistence
 ✅ Responsive UI with accessible components
+✅ Automatic emoji generation for events using AI
+✅ Smart event categorization
+✅ Context-aware event tips and suggestions
 
 ## Security Notes
 

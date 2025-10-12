@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Work Focus
-Updated family member information throughout the application. The calendar now properly reflects the actual family structure with correct names, roles, and ages.
+Enhanced Gemini integration to support multiple models. The AI Assistant now offers users a choice of 4 different Gemini models with varying capabilities and performance characteristics.
 
 ### Family Members Configuration
 - **Parents**: 
@@ -13,9 +13,46 @@ Updated family member information throughout the application. The calendar now p
   - Alon (3 years old)
 
 ## Previous Work
-Completed LLM integration for the AI Assistant component. The chat interface connects to real LLM providers and allows users to interact with AI for scheduling assistance.
+1. **Family Member Updates**: Updated family member information throughout the application with correct names, roles, and ages (Eyal, Ella, Hilly-11, Yael-5.5, Alon-3)
+2. **Initial LLM Integration**: Completed basic LLM integration for the AI Assistant component with Gemini Pro and Local API support
 
-## Recent Changes (Latest Session)
+## Recent Changes (Current Session)
+
+### Enhanced Gemini Integration
+Updated the LLM service to support multiple Gemini models:
+
+1. **Multiple Model Support** (`src/services/llmService.ts`)
+   - Added `getAvailableModels()` method to GeminiHandler
+   - Now supports 4 Gemini models:
+     * **gemini-2.0-flash-exp** - Latest experimental model with fast responses
+     * **gemini-1.5-pro** - Advanced reasoning with 2M token context window
+     * **gemini-1.5-flash** - Fast responses with excellent performance
+     * **gemini-pro** - Original stable Gemini model
+   - Updated chat method to accept modelId parameter for dynamic model selection
+   - Enhanced error handling with detailed error messages
+
+2. **Service Architecture Updates**
+   - Modified `getAvailableModels()` to return all Gemini models when API key is set
+   - Updated `chat()` method to pass model ID to appropriate handler
+   - Maintained backward compatibility with existing code
+
+3. **Documentation**
+   - Created comprehensive **GEMINI_INTEGRATION.md** guide with:
+     * Setup instructions with Google AI Studio
+     * Detailed model comparison table
+     * Use case examples and best practices
+     * Troubleshooting guide
+     * API usage and rate limit information
+     * Privacy and security considerations
+   - Updated **LLM_INTEGRATION.md** with enhanced Gemini model information
+   - Enhanced **README.md** with AI features and quick start guide
+
+4. **Build Verification**
+   - Successfully built project with no TypeScript errors
+   - Confirmed all imports and types are correct
+   - Verified dynamic imports work correctly
+
+## Previous Changes
 
 ### 1. Created LLM Service (`src/services/llmService.ts`)
 - **Purpose**: Centralized service for managing connections to different LLM providers

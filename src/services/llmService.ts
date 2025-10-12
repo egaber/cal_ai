@@ -42,7 +42,36 @@ class GeminiHandler {
     this.apiKey = apiKey;
   }
 
-  async chat(messages: Message[], systemPrompt?: string, tools?: ChatRequest['tools']): Promise<ChatResponse> {
+  getAvailableModels(): LLMModel[] {
+    return [
+      {
+        id: 'gemini-2.0-flash-exp',
+        name: 'Gemini 2.0 Flash (Experimental)',
+        vendor: 'Google',
+        provider: 'gemini'
+      },
+      {
+        id: 'gemini-1.5-pro',
+        name: 'Gemini 1.5 Pro',
+        vendor: 'Google',
+        provider: 'gemini'
+      },
+      {
+        id: 'gemini-1.5-flash',
+        name: 'Gemini 1.5 Flash',
+        vendor: 'Google',
+        provider: 'gemini'
+      },
+      {
+        id: 'gemini-pro',
+        name: 'Gemini Pro',
+        vendor: 'Google',
+        provider: 'gemini'
+      }
+    ];
+  }
+
+  async chat(messages: Message[], modelId: string = 'gemini-2.0-flash-exp', systemPrompt?: string, tools?: ChatRequest['tools']): Promise<ChatResponse> {
     try {
       // Add system prompt as first message if provided
       const allMessages = systemPrompt
@@ -50,7 +79,7 @@ class GeminiHandler {
         : messages;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${this.apiKey}`,
         {
           method: 'POST',
           headers: {
@@ -66,7 +95,8 @@ class GeminiHandler {
       );
 
       if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Gemini API error: ${response.statusText}${errorData.error?.message ? ` - ${errorData.error.message}` : ''}`);
       }
 
       const data = await response.json();
@@ -228,14 +258,10 @@ export class LLMService {
   async getAvailableModels(): Promise<LLMModel[]> {
     const models: LLMModel[] = [];
 
-    // Add Gemini if API key is set
+    // Add Gemini models if API key is set
     if (this.geminiHandler) {
-      models.push({
-        id: 'gemini-pro',
-        name: 'Gemini Pro',
-        vendor: 'Google',
-        provider: 'gemini'
-      });
+      const geminiModels = this.geminiHandler.getAvailableModels();
+      models.push(...geminiModels);
     }
 
     // Add local models
@@ -255,7 +281,7 @@ export class LLMService {
           error: 'Gemini API key not set'
         };
       }
-      return this.geminiHandler.chat(messages, systemPrompt, tools);
+      return this.geminiHandler.chat(messages, model.id, systemPrompt, tools);
     } else {
       return this.localHandler.chat(messages, model.id, systemPrompt, tools);
     }

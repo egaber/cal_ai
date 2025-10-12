@@ -25,6 +25,7 @@ import { MemoryExtractionService } from "@/services/memoryExtractionService";
 import { StorageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
 import { EventCard } from "@/components/EventCard";
+import { getGeminiApiKey } from "@/config/gemini";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -109,10 +110,11 @@ export const AIAssistant = ({
 
   // Load API key and fetch models on mount
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-      setGeminiApiKey(savedKey);
-      llmService.setGeminiKey(savedKey);
+    // Try to get API key from config first, then localStorage
+    const configKey = getGeminiApiKey();
+    if (configKey) {
+      setGeminiApiKey(configKey);
+      llmService.setGeminiKey(configKey);
     }
     loadModels();
   }, []);
@@ -140,6 +142,8 @@ export const AIAssistant = ({
 
   const handleSaveSettings = () => {
     if (geminiApiKey) {
+      // Only save to localStorage if user manually enters a key
+      // (config file key takes precedence)
       localStorage.setItem('gemini_api_key', geminiApiKey);
       llmService.setGeminiKey(geminiApiKey);
       toast({

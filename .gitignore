@@ -95,3 +95,6 @@ logs
 
 # OS generated files
 Thumbs.db
+
+# Gemini API configuration (contains API key)
+src/config/gemini.ts
