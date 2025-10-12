@@ -259,7 +259,7 @@ const Index = () => {
     setIsInlineCreatorOpen(true);
   };
 
-  const handleInlineEventSave = async (title: string) => {
+  const handleInlineEventSave = async (title: string, isAllDay?: boolean) => {
     // Close any open popovers first
     setIsEventPopoverOpen(false);
     setSelectedEvent(null);
@@ -267,9 +267,17 @@ const Index = () => {
     if (inlineCreatorData) {
       const { date, hour, minute } = inlineCreatorData;
       const startDate = new Date(date);
-      startDate.setHours(hour, minute, 0, 0);
-      const endDate = new Date(startDate);
-      endDate.setHours(hour + 1, minute, 0, 0); // Default 1 hour duration
+      const endDate = new Date(date);
+      
+      if (isAllDay) {
+        // For all-day events, set to start and end of day
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        // For timed events, use the clicked time
+        startDate.setHours(hour, minute, 0, 0);
+        endDate.setHours(hour + 1, minute, 0, 0); // Default 1 hour duration
+      }
 
       // Try AI first, fallback to local generator if AI is unavailable
       let metadata: { emoji: string; category: CalendarEvent['category'] };
@@ -298,6 +306,7 @@ const Index = () => {
         priority: 'medium',
         memberId: selectedMembers[0] || '1',
         emoji: metadata.emoji,
+        isAllDay: isAllDay || false,
       };
 
       setEvents(prev => [...prev, newEvent]);

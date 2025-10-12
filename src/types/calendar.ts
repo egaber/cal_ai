@@ -25,6 +25,7 @@ export interface CalendarEvent {
   source?: 'local' | 'google'; // Where this event came from
   sourceCalendarId?: string; // Google Calendar ID if from Google
   sourceCalendarEmail?: string; // Email of the Google Calendar
+  isAllDay?: boolean; // Whether this is a whole-day event
 }
 
 export interface FamilyMember {

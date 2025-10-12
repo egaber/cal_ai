@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 import { calculateEventLayouts } from "@/utils/eventLayoutUtils";
+import { AllDayEventsBar } from "./AllDayEventsBar";
 
 interface CalendarGridProps {
   viewMode: 'day' | 'week' | 'workweek' | 'month';
@@ -77,6 +78,7 @@ export const CalendarGrid = ({
 
   const getEventsForDate = (date: Date) => {
     return events.filter((event) => {
+      if (event.isAllDay) return false; // Filter out all-day events
       const eventDate = new Date(event.startTime);
       return eventDate.toDateString() === date.toDateString();
     });
@@ -133,6 +135,15 @@ export const CalendarGrid = ({
           </div>
         ))}
       </div>
+
+      {/* All-day events bar */}
+      <AllDayEventsBar
+        dates={dates}
+        events={events}
+        familyMembers={familyMembers}
+        onEventClick={onEventClick}
+        onEventUpdate={onEventUpdate}
+      />
 
       {/* Time grid - Scrollable container with fixed viewport */}
       <div 

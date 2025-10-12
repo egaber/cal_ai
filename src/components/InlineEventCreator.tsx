@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { X, Check } from "lucide-react";
 
 interface InlineEventCreatorProps {
@@ -8,7 +10,7 @@ interface InlineEventCreatorProps {
   hour: number;
   minute: number;
   position: { x: number; y: number };
-  onSave: (title: string) => void;
+  onSave: (title: string, isAllDay?: boolean) => void;
   onCancel: () => void;
 }
 
@@ -21,10 +23,11 @@ export const InlineEventCreator = ({
   onCancel,
 }: InlineEventCreatorProps) => {
   const [title, setTitle] = useState("");
+  const [isAllDay, setIsAllDay] = useState(false);
 
   const handleSave = () => {
     if (title.trim()) {
-      onSave(title.trim());
+      onSave(title.trim(), isAllDay);
     }
   };
 
@@ -59,7 +62,7 @@ export const InlineEventCreator = ({
               month: "short",
               day: "numeric",
             })}{" "}
-            • {formatTime(hour, minute)}
+            {!isAllDay && `• ${formatTime(hour, minute)}`}
           </span>
           <Button
             variant="ghost"
@@ -70,6 +73,21 @@ export const InlineEventCreator = ({
             <X className="h-4 w-4" />
           </Button>
         </div>
+        
+        <div className="mb-3 flex items-center space-x-2">
+          <Checkbox
+            id="inline-allday"
+            checked={isAllDay}
+            onCheckedChange={(checked) => setIsAllDay(checked as boolean)}
+          />
+          <Label 
+            htmlFor="inline-allday" 
+            className="text-sm font-medium cursor-pointer"
+          >
+            All-day event
+          </Label>
+        </div>
+        
         <div className="flex gap-2">
           <Input
             autoFocus

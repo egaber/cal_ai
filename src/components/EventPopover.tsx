@@ -463,10 +463,53 @@ export const EventPopover = ({
 
             {/* Body */}
             <div className="px-5 pb-4 space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto">
+              {/* All-day event toggle */}
+              <div className="flex items-center space-x-2 py-2 px-3 bg-primary/5 rounded-md border border-primary/20">
+                <Checkbox
+                  id="popover-allday"
+                  checked={editedEvent.isAllDay || false}
+                  onCheckedChange={(checked) => {
+                    const isAllDay = checked as boolean;
+                    if (isAllDay) {
+                      // Set to start and end of day
+                      const start = new Date(editedEvent.startTime);
+                      start.setHours(0, 0, 0, 0);
+                      const end = new Date(editedEvent.endTime);
+                      end.setHours(23, 59, 59, 999);
+                      setEditedEvent({
+                        ...editedEvent,
+                        startTime: start.toISOString(),
+                        endTime: end.toISOString(),
+                        isAllDay: true
+                      });
+                    } else {
+                      // Set to default times
+                      const start = new Date(editedEvent.startTime);
+                      start.setHours(9, 0, 0, 0);
+                      const end = new Date(editedEvent.endTime);
+                      end.setHours(10, 0, 0, 0);
+                      setEditedEvent({
+                        ...editedEvent,
+                        startTime: start.toISOString(),
+                        endTime: end.toISOString(),
+                        isAllDay: false
+                      });
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <Label htmlFor="popover-allday" className="cursor-pointer font-medium text-sm flex items-center gap-2">
+                  <span>All-day event</span>
+                  {editedEvent.isAllDay && <Badge className="text-xs bg-primary text-primary-foreground px-2 py-0.5">Active</Badge>}
+                </Label>
+              </div>
+
               {/* Time & Date */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Date</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    {editedEvent.isAllDay ? 'Start Date' : 'Date'}
+                  </Label>
                   <Input
                     type="date"
                     value={new Date(editedEvent.startTime).toISOString().split('T')[0]}
@@ -475,58 +518,88 @@ export const EventPopover = ({
                       const currentStart = new Date(editedEvent.startTime);
                       const currentEnd = new Date(editedEvent.endTime);
                       
-                      newDate.setHours(currentStart.getHours(), currentStart.getMinutes());
-                      const duration = currentEnd.getTime() - currentStart.getTime();
-                      const newEnd = new Date(newDate.getTime() + duration);
-                      
-                      setEditedEvent({
-                        ...editedEvent,
-                        startTime: newDate.toISOString(),
-                        endTime: newEnd.toISOString()
-                      });
+                      if (editedEvent.isAllDay) {
+                        newDate.setHours(0, 0, 0, 0);
+                        const newEnd = new Date(editedEvent.endTime);
+                        newEnd.setFullYear(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+                        setEditedEvent({
+                          ...editedEvent,
+                          startTime: newDate.toISOString(),
+                          endTime: newEnd.toISOString()
+                        });
+                      } else {
+                        newDate.setHours(currentStart.getHours(), currentStart.getMinutes());
+                        const duration = currentEnd.getTime() - currentStart.getTime();
+                        const newEnd = new Date(newDate.getTime() + duration);
+                        setEditedEvent({
+                          ...editedEvent,
+                          startTime: newDate.toISOString(),
+                          endTime: newEnd.toISOString()
+                        });
+                      }
                     }}
                     className="h-8 text-xs"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Time</Label>
-                  <div className="flex gap-1">
+                {editedEvent.isAllDay ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
                     <Input
-                      type="time"
-                      value={new Date(editedEvent.startTime).toTimeString().slice(0, 5)}
+                      type="date"
+                      value={new Date(editedEvent.endTime).toISOString().split('T')[0]}
                       onChange={(e) => {
-                        const [hours, minutes] = e.target.value.split(':');
-                        const newStart = new Date(editedEvent.startTime);
-                        newStart.setHours(parseInt(hours), parseInt(minutes));
-                        const duration = new Date(editedEvent.endTime).getTime() - new Date(editedEvent.startTime).getTime();
-                        const newEnd = new Date(newStart.getTime() + duration);
-                        setEditedEvent({
-                          ...editedEvent,
-                          startTime: newStart.toISOString(),
-                          endTime: newEnd.toISOString()
-                        });
-                      }}
-                      className="h-8 text-xs flex-1"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <Input
-                      type="time"
-                      value={new Date(editedEvent.endTime).toTimeString().slice(0, 5)}
-                      onChange={(e) => {
-                        const [hours, minutes] = e.target.value.split(':');
-                        const newEnd = new Date(editedEvent.endTime);
-                        newEnd.setHours(parseInt(hours), parseInt(minutes));
+                        const newEnd = new Date(e.target.value);
+                        newEnd.setHours(23, 59, 59, 999);
                         setEditedEvent({
                           ...editedEvent,
                           endTime: newEnd.toISOString()
                         });
                       }}
-                      className="h-8 text-xs flex-1"
+                      className="h-8 text-xs"
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Time</Label>
+                    <div className="flex gap-1">
+                      <Input
+                        type="time"
+                        value={new Date(editedEvent.startTime).toTimeString().slice(0, 5)}
+                        onChange={(e) => {
+                          const [hours, minutes] = e.target.value.split(':');
+                          const newStart = new Date(editedEvent.startTime);
+                          newStart.setHours(parseInt(hours), parseInt(minutes));
+                          const duration = new Date(editedEvent.endTime).getTime() - new Date(editedEvent.startTime).getTime();
+                          const newEnd = new Date(newStart.getTime() + duration);
+                          setEditedEvent({
+                            ...editedEvent,
+                            startTime: newStart.toISOString(),
+                            endTime: newEnd.toISOString()
+                          });
+                        }}
+                        className="h-8 text-xs flex-1"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Input
+                        type="time"
+                        value={new Date(editedEvent.endTime).toTimeString().slice(0, 5)}
+                        onChange={(e) => {
+                          const [hours, minutes] = e.target.value.split(':');
+                          const newEnd = new Date(editedEvent.endTime);
+                          newEnd.setHours(parseInt(hours), parseInt(minutes));
+                          setEditedEvent({
+                            ...editedEvent,
+                            endTime: newEnd.toISOString()
+                          });
+                        }}
+                        className="h-8 text-xs flex-1"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Recurring Event Section */}

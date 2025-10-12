@@ -64,6 +64,7 @@ export const NewEventDialog = ({
     description: '',
   });
 
+  const [isAllDay, setIsAllDay] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceRule>({
     frequency: 'weekly',
@@ -97,6 +98,7 @@ export const NewEventDialog = ({
       emoji: metadata.emoji,
       category: metadata.category as CalendarEvent['category'], // Use AI-suggested category
       recurrence: isRecurring ? recurrence : undefined,
+      isAllDay: isAllDay,
     };
 
     onSave(eventData);
@@ -111,6 +113,7 @@ export const NewEventDialog = ({
       memberId: members[0]?.id || '1',
       description: '',
     });
+    setIsAllDay(false);
     setIsRecurring(false);
     setRecurrence({
       frequency: 'weekly',
@@ -150,24 +153,67 @@ export const NewEventDialog = ({
             />
           </div>
 
+          {/* All-day checkbox - prominent placement */}
+          <div className="flex items-center space-x-2 py-2 px-3 bg-primary/5 rounded-md border border-primary/20">
+            <Checkbox
+              id="allDay"
+              checked={isAllDay}
+              onCheckedChange={(checked) => {
+                setIsAllDay(checked as boolean);
+                if (checked) {
+                  // Set times to start and end of day
+                  const start = new Date(newEvent.startTime);
+                  start.setHours(0, 0, 0, 0);
+                  const end = new Date(newEvent.endTime);
+                  end.setHours(23, 59, 59, 999);
+                  setNewEvent({
+                    ...newEvent,
+                    startTime: start.toISOString().slice(0, 16),
+                    endTime: end.toISOString().slice(0, 16),
+                  });
+                }
+              }}
+            />
+            <Label htmlFor="allDay" className="cursor-pointer font-semibold text-primary flex items-center gap-2">
+              <span>All-day event</span>
+              {isAllDay && <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Active</span>}
+            </Label>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="startTime">Start Time</Label>
+              <Label htmlFor="startTime">{isAllDay ? 'Start Date' : 'Start Time'}</Label>
               <Input
                 id="startTime"
-                type="datetime-local"
-                value={newEvent.startTime}
-                onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
+                type={isAllDay ? "date" : "datetime-local"}
+                value={isAllDay ? newEvent.startTime.slice(0, 10) : newEvent.startTime}
+                onChange={(e) => {
+                  if (isAllDay) {
+                    const date = new Date(e.target.value);
+                    date.setHours(0, 0, 0, 0);
+                    setNewEvent({ ...newEvent, startTime: date.toISOString().slice(0, 16) });
+                  } else {
+                    setNewEvent({ ...newEvent, startTime: e.target.value });
+                  }
+                }}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="endTime">End Time</Label>
+              <Label htmlFor="endTime">{isAllDay ? 'End Date' : 'End Time'}</Label>
               <Input
                 id="endTime"
-                type="datetime-local"
-                value={newEvent.endTime}
-                onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
+                type={isAllDay ? "date" : "datetime-local"}
+                value={isAllDay ? newEvent.endTime.slice(0, 10) : newEvent.endTime}
+                onChange={(e) => {
+                  if (isAllDay) {
+                    const date = new Date(e.target.value);
+                    date.setHours(23, 59, 59, 999);
+                    setNewEvent({ ...newEvent, endTime: date.toISOString().slice(0, 16) });
+                  } else {
+                    setNewEvent({ ...newEvent, endTime: e.target.value });
+                  }
+                }}
               />
             </div>
           </div>
