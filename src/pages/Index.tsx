@@ -4,6 +4,7 @@ import { CalendarGrid } from "@/components/CalendarGrid";
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CapacityIndicator } from "@/components/CapacityIndicator";
 import { AIAssistant } from "@/components/AIAssistant";
+import { useAuth } from "@/contexts/AuthContext";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
@@ -27,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const Index = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -785,6 +787,7 @@ What would you like to know or do with this event?`;
               selectedMembers={selectedMembers}
               onToggleMember={handleToggleMember}
               onAvatarUpload={handleAvatarUpload}
+              currentUser={user}
             />
 
             {/* <CapacityIndicator scheduled={4.5} total={8} /> */}
@@ -885,6 +888,7 @@ What would you like to know or do with this event?`;
                 onNavigate={handleNavigate}
                 onNewEvent={handleNewEvent}
                 onAutoOptimize={handleAutoOptimize}
+                user={user}
               />
 
               <div className="mt-6 flex min-h-[600px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-white/90 shadow-inner">

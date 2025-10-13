@@ -2,12 +2,15 @@ import { useState, useRef } from 'react';
 import { FamilyMember } from '@/types/calendar';
 import { User, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserProfile } from '@/types/user';
+import { Chrome } from 'lucide-react';
 
 interface FamilyMembersSidebarProps {
   members: FamilyMember[];
   selectedMembers: string[];
   onToggleMember: (memberId: string) => void;
   onAvatarUpload: (memberId: string, avatarDataUrl: string) => void;
+  currentUser?: UserProfile;
 }
 
 export const FamilyMembersSidebar = ({
@@ -15,6 +18,7 @@ export const FamilyMembersSidebar = ({
   selectedMembers,
   onToggleMember,
   onAvatarUpload,
+  currentUser,
 }: FamilyMembersSidebarProps) => {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -72,7 +76,10 @@ export const FamilyMembersSidebar = ({
             {/* Avatar with upload button */}
             <div className="relative">
               <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
-                {member.avatar ? (
+                {/* Use Google photo if this is the current user and they're signed in with Google */}
+                {member.isYou && currentUser?.photoURL ? (
+                  <AvatarImage src={currentUser.photoURL} alt={member.name} />
+                ) : member.avatar ? (
                   <AvatarImage src={member.avatar} alt={member.name} />
                 ) : (
                   <AvatarFallback className={`text-xs ${member.color} text-white`}>
@@ -80,6 +87,13 @@ export const FamilyMembersSidebar = ({
                   </AvatarFallback>
                 )}
               </Avatar>
+              
+              {/* Google icon badge for signed-in user */}
+              {member.isYou && currentUser?.photoURL && (
+                <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
+                  <Chrome className="h-2 w-2 text-blue-600" />
+                </div>
+              )}
               
               {/* Upload button - shows on hover */}
               <button

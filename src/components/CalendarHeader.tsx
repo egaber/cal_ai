@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Sparkles, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UserProfile } from "./UserProfile";
+import { UserProfile as UserProfileType } from "@/types/user";
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -8,6 +10,7 @@ interface CalendarHeaderProps {
   onNavigate: (direction: 'prev' | 'next' | 'today') => void;
   onNewEvent: () => void;
   onAutoOptimize: () => void;
+  user?: UserProfileType;
 }
 
 export const CalendarHeader = ({
@@ -16,7 +19,8 @@ export const CalendarHeader = ({
   onViewModeChange,
   onNavigate,
   onNewEvent,
-  onAutoOptimize
+  onAutoOptimize,
+  user
 }: CalendarHeaderProps) => {
   const formatMonthLabel = () => {
     return currentDate.toLocaleDateString('en-US', {
@@ -155,6 +159,7 @@ export const CalendarHeader = ({
           >
             <Plus className="mr-2 h-4 w-4" /> New Event
           </Button>
+          {user && <UserProfile user={user} />}
         </div>
       </div>
     </header>

@@ -33,6 +33,7 @@ export interface FamilyMember {
   name: string;
   role: string;
   color: string;
-  isYou: boolean;
+  age?: number;
+  isYou?: boolean;
   avatar?: string; // Base64 encoded image or URL
 }
