@@ -23,6 +23,9 @@ import { FamilyMember } from '../types/calendar';
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/calendar');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
+googleProvider.addScope('profile');
+googleProvider.addScope('email');
 
 // Initialize default user preferences
 const getDefaultPreferences = (): UserPreferences => ({
@@ -127,6 +130,14 @@ export const signInWithGoogle = async (): Promise<UserProfile> => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
+
+    // Debug: Log user data
+    console.log('Google Sign-In User Data:', {
+      displayName: user.displayName,
+      email: user.email,
+      photoURL: user.photoURL,
+      providerId: user.providerData[0]?.providerId,
+    });
 
     // Get user profile (creates if doesn't exist)
     const profile = await getUserProfile(user);

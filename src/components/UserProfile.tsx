@@ -23,6 +23,13 @@ export function UserProfile({ user }: UserProfileProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
 
+  // Debug: Log user data in component
+  console.log('UserProfile component received:', {
+    displayName: user.displayName,
+    email: user.email,
+    photoURL: user.photoURL,
+  });
+
   const handleSignOut = async () => {
     setLoading(true);
     try {
@@ -57,7 +64,16 @@ export function UserProfile({ user }: UserProfileProps) {
         <DropdownMenuTrigger asChild>
           <button className="flex items-center gap-3 rounded-full border border-slate-200/80 bg-white p-1 pr-3 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user.photoURL} alt={user.displayName} />
+              {user.photoURL ? (
+                <AvatarImage 
+                  src={user.photoURL} 
+                  alt={user.displayName}
+                  onError={(e) => {
+                    console.error('Avatar image failed to load:', user.photoURL);
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : null}
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-xs font-semibold text-white">
                 {getInitials(user.displayName)}
               </AvatarFallback>
