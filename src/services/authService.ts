@@ -36,22 +36,8 @@ const getDefaultPreferences = (): UserPreferences => ({
   notifications: true,
 });
 
-// Initialize default family members (from project brief)
-const getDefaultFamilyMembers = (): FamilyMember[] => [
-  { id: 'eyal', name: 'Eyal', role: 'parent', color: '#3b82f6' },
-  { id: 'ella', name: 'Ella', role: 'parent', color: '#ec4899' },
-  { id: 'hilly', name: 'Hilly', role: 'child', color: '#8b5cf6', age: 11 },
-  { id: 'yael', name: 'Yael', role: 'child', color: '#f59e0b', age: 5.5 },
-  { id: 'alon', name: 'Alon', role: 'child', color: '#10b981', age: 3 },
-];
-
-// Initialize default memory data
-const getDefaultMemoryData = (): MemoryData => ({
-  userMemories: [],
-  familyMemories: [],
-  places: [],
-  travelInfo: [],
-});
+// REMOVED: Default family members are now managed through family system
+// REMOVED: Default memory data is now managed through family system
 
 // Create user profile in Firestore
 const createUserProfile = async (user: User): Promise<UserProfile> => {
@@ -63,14 +49,8 @@ const createUserProfile = async (user: User): Promise<UserProfile> => {
     phoneNumber: user.phoneNumber || undefined,
     createdAt: new Date(),
     lastLoginAt: new Date(),
-    familyMembers: getDefaultFamilyMembers(),
     preferences: getDefaultPreferences(),
-  };
-
-  const userData: Omit<UserData, 'profile'> = {
-    memories: getDefaultMemoryData(),
-    events: [],
-    credentials: {},
+    // familyId will be set when user creates or joins a family
   };
 
   // Prepare data for Firestore (remove undefined values)
@@ -78,7 +58,6 @@ const createUserProfile = async (user: User): Promise<UserProfile> => {
     uid: user.uid,
     email: user.email || '',
     displayName: user.displayName || user.email?.split('@')[0] || 'User',
-    familyMembers: getDefaultFamilyMembers(),
     preferences: getDefaultPreferences(),
     createdAt: serverTimestamp(),
     lastLoginAt: serverTimestamp(),
@@ -95,10 +74,8 @@ const createUserProfile = async (user: User): Promise<UserProfile> => {
   // Create user document
   await setDoc(doc(db, 'users', user.uid), firestoreData);
 
-  // Create user data subcollections
-  await setDoc(doc(db, 'users', user.uid, 'data', 'memories'), userData.memories);
-  await setDoc(doc(db, 'users', user.uid, 'data', 'events'), { events: [] });
-  await setDoc(doc(db, 'users', user.uid, 'data', 'credentials'), userData.credentials);
+  // Create empty credentials document
+  await setDoc(doc(db, 'users', user.uid, 'data', 'credentials'), {});
 
   return userProfile;
 };

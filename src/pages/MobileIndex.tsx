@@ -39,11 +39,11 @@ const MobileIndex = () => {
   const isHeaderDragging = useRef(false);
 
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
-    { id: '1', name: 'Eyal', role: 'Parent', color: 'bg-event-blue', isYou: true },
-    { id: '2', name: 'Ella', role: 'Parent', color: 'bg-event-purple', isYou: false },
-    { id: '3', name: 'Hilly', role: 'Child', color: 'bg-event-green', isYou: false },
-    { id: '4', name: 'Yael', role: 'Child', color: 'bg-event-orange', isYou: false },
-    { id: '5', name: 'Alon', role: 'Child', color: 'bg-event-pink', isYou: false },
+    { id: '1', name: 'Eyal', role: 'parent', color: 'bg-event-blue', age: 35, isMobile: true, isYou: true },
+    { id: '2', name: 'Ella', role: 'parent', color: 'bg-event-purple', age: 33, isMobile: true, isYou: false },
+    { id: '3', name: 'Hilly', role: 'child', color: 'bg-event-green', age: 11, isMobile: false, isYou: false },
+    { id: '4', name: 'Yael', role: 'child', color: 'bg-event-orange', age: 5.5, isMobile: false, isYou: false },
+    { id: '5', name: 'Alon', role: 'child', color: 'bg-event-pink', age: 3, isMobile: false, isYou: false },
   ]);
 
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);

@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { FamilyMember } from '@/types/calendar';
-import { User, Upload } from 'lucide-react';
+import { User, Upload, Settings } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { UserProfile } from '@/types/user';
 import { Chrome } from 'lucide-react';
 
@@ -10,6 +11,7 @@ interface FamilyMembersSidebarProps {
   selectedMembers: string[];
   onToggleMember: (memberId: string) => void;
   onAvatarUpload: (memberId: string, avatarDataUrl: string) => void;
+  onManageFamily?: () => void;
   currentUser?: UserProfile;
 }
 
@@ -18,6 +20,7 @@ export const FamilyMembersSidebar = ({
   selectedMembers,
   onToggleMember,
   onAvatarUpload,
+  onManageFamily,
   currentUser,
 }: FamilyMembersSidebarProps) => {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
@@ -137,6 +140,21 @@ export const FamilyMembersSidebar = ({
           </div>
         ))}
       </div>
+      
+      {/* Manage Family Button */}
+      {onManageFamily && (
+        <div className="mt-3 pt-3 border-t border-white/40">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onManageFamily}
+            className="w-full gap-2 bg-white/50 hover:bg-white/80"
+          >
+            <Settings className="h-4 w-4" />
+            Manage Family
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

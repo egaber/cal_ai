@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserProfile as UserProfileType } from '@/types/user';
+import { FamilyMember } from '@/types/calendar';
 import { signOut } from '@/services/authService';
 import { LogOut, Settings, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -16,9 +17,12 @@ import { AccountSettingsDialog } from './AccountSettingsDialog';
 
 interface UserProfileProps {
   user: UserProfileType;
+  familyMembers?: FamilyMember[];
+  onAddMember?: (member: Omit<FamilyMember, 'id'>) => void;
+  onRemoveMember?: (memberId: string) => void;
 }
 
-export function UserProfile({ user }: UserProfileProps) {
+export function UserProfile({ user, familyMembers, onAddMember, onRemoveMember }: UserProfileProps) {
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
@@ -107,6 +111,9 @@ export function UserProfile({ user }: UserProfileProps) {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         user={user}
+        familyMembers={familyMembers}
+        onAddMember={onAddMember}
+        onRemoveMember={onRemoveMember}
       />
     </>
   );

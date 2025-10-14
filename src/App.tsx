@@ -6,10 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { RTLProvider } from "@/contexts/RTLContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { FamilyProvider } from "@/contexts/FamilyContext";
+import { EventProvider } from "@/contexts/EventContext";
 import ResponsiveLayout from "./components/ResponsiveLayout";
 import Welcome from "./pages/Welcome";
+import { FamilySetupDialog } from "./components/FamilySetupDialog";
 import { UserProfile } from "./types/user";
-import { onAuthStateChange } from "./services/authService";
+import { onAuthStateChange, updateUserProfile } from "./services/authService";
+import { Family } from "./services/familyService";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -17,16 +21,33 @@ const queryClient = new QueryClient();
 const App = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showFamilySetup, setShowFamilySetup] = useState(false);
 
   useEffect(() => {
     // Listen to auth state changes
     const unsubscribe = onAuthStateChange((user) => {
       setUser(user);
       setLoading(false);
+      
+      // Show family setup if user is authenticated but has no familyId
+      if (user && !user.familyId) {
+        setShowFamilySetup(true);
+      }
     });
 
     return () => unsubscribe();
   }, []);
+
+  const handleFamilySetupComplete = async (family: Family) => {
+    if (user) {
+      // Update user profile with familyId
+      await updateUserProfile(user.uid, { familyId: family.id });
+      
+      // Update local user state
+      setUser({ ...user, familyId: family.id });
+      setShowFamilySetup(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,13 +75,24 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <RTLProvider>
         <AuthProvider user={user}>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <ResponsiveLayout />
-            </BrowserRouter>
-          </TooltipProvider>
+          <FamilyProvider>
+            <EventProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                {showFamilySetup && (
+                  <FamilySetupDialog
+                    open={showFamilySetup}
+                    user={user}
+                    onComplete={handleFamilySetupComplete}
+                  />
+                )}
+                <BrowserRouter>
+                  <ResponsiveLayout />
+                </BrowserRouter>
+              </TooltipProvider>
+            </EventProvider>
+          </FamilyProvider>
         </AuthProvider>
       </RTLProvider>
     </QueryClientProvider>

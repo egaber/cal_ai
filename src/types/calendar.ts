@@ -31,9 +31,10 @@ export interface CalendarEvent {
 export interface FamilyMember {
   id: string;
   name: string;
-  role: string;
+  role: 'parent' | 'child';
   color: string;
-  age?: number;
+  age: number;
+  isMobile: boolean; // false for children under 18
   isYou?: boolean;
   avatar?: string; // Base64 encoded image or URL
 }

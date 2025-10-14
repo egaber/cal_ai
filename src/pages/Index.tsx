@@ -5,6 +5,7 @@ import { MiniCalendar } from "@/components/MiniCalendar";
 import { CapacityIndicator } from "@/components/CapacityIndicator";
 import { AIAssistant } from "@/components/AIAssistant";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEvents } from "@/contexts/EventContext";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
@@ -57,42 +58,54 @@ const Index = () => {
     {
       id: '1',
       name: 'Eyal',
-      role: 'Parent',
+      role: 'parent',
       color: 'bg-event-blue',
+      age: 35,
+      isMobile: true,
       isYou: true,
     },
     {
       id: '2',
       name: 'Ella',
-      role: 'Parent',
+      role: 'parent',
       color: 'bg-event-purple',
+      age: 33,
+      isMobile: true,
       isYou: false,
     },
     {
       id: '3',
       name: 'Hilly (11)',
-      role: 'Child',
+      role: 'child',
       color: 'bg-event-green',
+      age: 11,
+      isMobile: false,
       isYou: false,
     },
     {
       id: '4',
       name: 'Yael (5.5)',
-      role: 'Child',
+      role: 'child',
       color: 'bg-event-orange',
+      age: 5.5,
+      isMobile: false,
       isYou: false,
     },
     {
       id: '5',
       name: 'Alon (3)',
-      role: 'Child',
+      role: 'child',
       color: 'bg-event-pink',
+      age: 3,
+      isMobile: false,
       isYou: false,
     },
   ]);
 
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent, loading: eventsLoading } = useEvents();
+  // Use cloud events directly
+  const events = cloudEvents;
   const [memoryData, setMemoryData] = useState<MemoryData>({
     userMemories: [],
     familyMemories: [],
@@ -121,44 +134,8 @@ const Index = () => {
       setFamilyMembers(loadedFamilyMembers);
     }
 
-    if (loadedEvents.length > 0) {
-      setEvents(loadedEvents);
-    } else {
-      // Initialize with default events if none exist
-      const defaultEvents: CalendarEvent[] = [
-        {
-          id: '1',
-          title: 'Hip Hop Class',
-          startTime: new Date(2025, 9, 8, 10, 30).toISOString(),
-          endTime: new Date(2025, 9, 8, 13, 45).toISOString(),
-          category: 'health',
-          priority: 'high',
-          memberId: '3',
-          description: 'Weekly hip hop class for Hilly',
-        },
-        {
-          id: '2',
-          title: 'Team Meeting',
-          startTime: new Date(2025, 9, 8, 14, 0).toISOString(),
-          endTime: new Date(2025, 9, 8, 15, 0).toISOString(),
-          category: 'work',
-          priority: 'medium',
-          memberId: '1',
-          description: 'Weekly team sync',
-        },
-        {
-          id: '3',
-          title: 'Grocery Shopping',
-          startTime: new Date(2025, 9, 9, 16, 0).toISOString(),
-          endTime: new Date(2025, 9, 9, 17, 0).toISOString(),
-          category: 'personal',
-          priority: 'medium',
-          memberId: '1',
-        },
-      ];
-      setEvents(defaultEvents);
-      StorageService.saveEvents(defaultEvents);
-    }
+    // Events are now loaded from cloud via EventContext
+    // No need to load from localStorage
 
     if (loadedSettings) {
       setSelectedMembers(loadedSettings.selectedMembers);
@@ -215,6 +192,18 @@ const Index = () => {
       description: "Profile picture has been updated successfully",
     });
   }, [toast]);
+
+  const handleAddMember = useCallback((memberData: Omit<FamilyMember, 'id'>) => {
+    const newMember: FamilyMember = {
+      ...memberData,
+      id: `member_${Date.now()}`,
+    };
+    setFamilyMembers(prev => [...prev, newMember]);
+  }, []);
+
+  const handleRemoveMember = useCallback((memberId: string) => {
+    setFamilyMembers(prev => prev.filter(member => member.id !== memberId));
+  }, []);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     const newDate = new Date(currentDate);
@@ -299,8 +288,7 @@ const Index = () => {
         metadata = generateEventMetadataLocal(title, '');
       }
 
-      const newEvent: CalendarEvent = {
-        id: `event_${Date.now()}`,
+      await createCloudEvent({
         title,
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
@@ -309,9 +297,8 @@ const Index = () => {
         memberId: selectedMembers[0] || '1',
         emoji: metadata.emoji,
         isAllDay: isAllDay || false,
-      };
+      });
 
-      setEvents(prev => [...prev, newEvent]);
       setIsInlineCreatorOpen(false);
       setInlineCreatorData(null);
       
@@ -327,97 +314,53 @@ const Index = () => {
     setInlineCreatorData(null);
   };
 
-  const handleCreateEvent = useCallback((eventData: Omit<CalendarEvent, 'id'>) => {
-    const newEvent: CalendarEvent = {
-      ...eventData,
-      id: `event_${Date.now()}`,
-    };
-    setEvents(prev => [...prev, newEvent]);
+  const handleCreateEvent = useCallback(async (eventData: Omit<CalendarEvent, 'id'>) => {
+    await createCloudEvent(eventData);
     toast({
       title: "Event Created",
-      description: `"${newEvent.title}" has been added to your calendar`,
+      description: `"${eventData.title}" has been added to your calendar`,
     });
-  }, [toast]);
+  }, [createCloudEvent, toast]);
 
-  const handleEventUpdate = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
-    setEvents(prev => {
-      // Find the event being updated
-      const eventToUpdate = prev.find(e => e.id === eventId);
-      
-      // Check if this is a recurring event instance (has recurringEventId)
-      if (eventToUpdate?.recurringEventId) {
-        // This is an instance of a recurring event
-        // Create a new standalone event for this specific occurrence
-        const newEvent: CalendarEvent = {
-          ...eventToUpdate,
-          id: `event_${Date.now()}_exception`,
-          startTime: newStartTime,
-          endTime: newEndTime,
-          recurringEventId: undefined, // Remove the recurring link
-          recurrence: undefined, // This is now a one-time event
-        };
-        
-        // Add the new event (the moved instance becomes independent)
-        return [...prev, newEvent];
-      }
-      
-      // For regular events or parent recurring events, update normally
-      return prev.map(event =>
-        event.id === eventId
-          ? { ...event, startTime: newStartTime, endTime: newEndTime }
-          : event
-      );
-    });
-  }, []);
+  const handleEventUpdate = useCallback(async (eventId: string, newStartTime: string, newEndTime: string) => {
+    await moveCloudEvent(eventId, newStartTime, newEndTime);
+  }, [moveCloudEvent]);
 
-  const handleEventUpdatePartial = useCallback((eventId: string, updates: Partial<CalendarEvent>) => {
-    setEvents(prev =>
-      prev.map(event =>
-        event.id === eventId
-          ? { ...event, ...updates }
-          : event
-      )
-    );
-  }, []);
+  const handleEventUpdatePartial = useCallback(async (eventId: string, updates: Partial<CalendarEvent>) => {
+    await updateCloudEvent(eventId, updates);
+  }, [updateCloudEvent]);
 
-  const handleMoveEvent = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
-    handleEventUpdate(eventId, newStartTime, newEndTime);
+  const handleMoveEvent = useCallback(async (eventId: string, newStartTime: string, newEndTime: string) => {
+    await moveCloudEvent(eventId, newStartTime, newEndTime);
     toast({
       title: "Event Moved",
       description: "The event has been rescheduled",
     });
-  }, [handleEventUpdate, toast]);
+  }, [moveCloudEvent, toast]);
 
-  const handleEventSave = useCallback((updatedEvent: CalendarEvent) => {
-    setEvents(prev => prev.map(event =>
-      event.id === updatedEvent.id ? updatedEvent : event
-    ));
+  const handleEventSave = useCallback(async (updatedEvent: CalendarEvent) => {
+    await updateCloudEvent(updatedEvent.id, updatedEvent);
     toast({
       title: "Event Updated",
       description: `"${updatedEvent.title}" has been updated`,
     });
-  }, [toast]);
+  }, [updateCloudEvent, toast]);
 
-  const handleEventDelete = useCallback((eventId: string) => {
-    let deletedTitle: string | null = null;
-    setEvents(prev => {
-      const deletedEvent = prev.find(e => e.id === eventId);
-      if (deletedEvent) {
-        deletedTitle = deletedEvent.title;
-      }
-      return prev.filter(event => event.id !== eventId);
-    });
+  const handleEventDelete = useCallback(async (eventId: string) => {
+    const deletedEvent = events.find(e => e.id === eventId);
+    const deletedTitle = deletedEvent?.title;
+    
+    await deleteCloudEvent(eventId);
 
     toast({
       title: "Event Deleted",
       description: deletedTitle ? `"${deletedTitle}" has been removed` : "Event removed",
     });
-  }, [toast]);
+  }, [deleteCloudEvent, events, toast]);
 
-  const handleAcceptSuggestion = useCallback((suggestion: EventSuggestion) => {
+  const handleAcceptSuggestion = useCallback(async (suggestion: EventSuggestion) => {
     // Create calendar event from suggestion
-    const newEvent: CalendarEvent = {
-      id: `event_${Date.now()}`,
+    await createCloudEvent({
       title: suggestion.taskTitle,
       startTime: suggestion.suggestedStartTime,
       endTime: suggestion.suggestedEndTime,
@@ -425,9 +368,7 @@ const Index = () => {
       priority: 'medium',
       memberId: selectedMembers[0] || '1',
       emoji: suggestion.taskEmoji,
-    };
-
-    setEvents(prev => [...prev, newEvent]);
+    });
 
     // Update suggestion status
     setEventSuggestions(prev =>
@@ -441,13 +382,13 @@ const Index = () => {
     );
     localStorage.setItem('event_suggestions', JSON.stringify(updated));
 
-    // Update task status
+    // Update task status  
     const tasks = taskService.loadTasks();
     const task = tasks.find(t => t.id === suggestion.taskId);
     if (task) {
       taskService.updateTask(suggestion.taskId, {
         status: 'scheduled',
-        scheduledEventId: newEvent.id,
+        scheduledEventId: suggestion.id,
       });
     }
 
@@ -492,37 +433,30 @@ const Index = () => {
     setShowSuggestionsPanel(false);
   }, [eventSuggestions, handleRejectSuggestion]);
 
-  const handleDeleteRecurring = useCallback((recurringEventId: string, deleteAll: boolean) => {
-    let deletedTitle: string | null = null;
-    
-    setEvents(prev => {
-      if (deleteAll) {
-        // Delete the parent recurring event (which will remove all instances when expanded)
-        const parentEvent = prev.find(e => e.id === recurringEventId);
-        if (parentEvent) {
-          deletedTitle = parentEvent.title;
-        }
-        return prev.filter(event => event.id !== recurringEventId);
-      } else {
-        // For "delete this occurrence only", we need to handle it differently
-        // We can't actually delete a single occurrence of a recurring event pattern
-        // Instead, we would need to add an "exception" system or modify the recurrence rule
-        // For now, just show a message that this feature needs more work
+  const handleDeleteRecurring = useCallback(async (recurringEventId: string, deleteAll: boolean) => {
+    if (deleteAll) {
+      const parentEvent = events.find(e => e.id === recurringEventId);
+      const deletedTitle = parentEvent?.title;
+      
+      await deleteCloudEvent(recurringEventId);
+      
+      if (deletedTitle) {
         toast({
-          title: "Not Yet Implemented",
-          description: "Deleting single occurrences requires exception handling. Please delete the entire series for now.",
+          title: "Recurring Event Deleted",
+          description: `All occurrences of "${deletedTitle}" have been removed`,
         });
-        return prev;
       }
-    });
-
-    if (deleteAll && deletedTitle) {
+    } else {
+      // For "delete this occurrence only", we need to handle it differently
+      // We can't actually delete a single occurrence of a recurring event pattern
+      // Instead, we would need to add an "exception" system or modify the recurrence rule
+      // For now, just show a message that this feature needs more work
       toast({
-        title: "Recurring Event Deleted",
-        description: `All occurrences of "${deletedTitle}" have been removed`,
+        title: "Not Yet Implemented",
+        description: "Deleting single occurrences requires exception handling. Please delete the entire series for now.",
       });
     }
-  }, [toast]);
+  }, [events, deleteCloudEvent, toast]);
 
   const handleAutoOptimize = () => {
     toast({
@@ -755,7 +689,7 @@ What would you like to know or do with this event?`;
             <GoogleCalendarSync
               events={events}
               familyMembers={familyMembers}
-              onEventsUpdated={setEvents}
+              onEventsUpdated={() => {}} // Events now managed by cloud context
             />
             {eventSuggestions.length > 0 && (
               <Button
@@ -889,6 +823,9 @@ What would you like to know or do with this event?`;
                 onNewEvent={handleNewEvent}
                 onAutoOptimize={handleAutoOptimize}
                 user={user}
+                familyMembers={familyMembers}
+                onAddMember={handleAddMember}
+                onRemoveMember={handleRemoveMember}
               />
 
               <div className="mt-6 flex min-h-[600px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-white/90 shadow-inner">

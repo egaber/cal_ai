@@ -9,22 +9,31 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserProfile } from '@/types/user';
+import { FamilyMember } from '@/types/calendar';
 import { signOut } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
-import { Chrome, Mail, User, LogOut, Calendar, Shield } from 'lucide-react';
+import { Chrome, Mail, User, LogOut, Calendar, Shield, Users } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { FamilyManagement } from './FamilyManagement';
 
 interface AccountSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: UserProfile;
+  familyMembers?: FamilyMember[];
+  onAddMember?: (member: Omit<FamilyMember, 'id'>) => void;
+  onRemoveMember?: (memberId: string) => void;
 }
 
 export function AccountSettingsDialog({
   open,
   onOpenChange,
   user,
+  familyMembers = [],
+  onAddMember,
+  onRemoveMember,
 }: AccountSettingsDialogProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -62,15 +71,27 @@ export function AccountSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Account Settings</DialogTitle>
           <DialogDescription>
-            Manage your account details and preferences
+            Manage your account details, family members, and preferences
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <Tabs defaultValue="account" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="account">
+              <User className="h-4 w-4 mr-2" />
+              Account
+            </TabsTrigger>
+            <TabsTrigger value="family">
+              <Users className="h-4 w-4 mr-2" />
+              Family
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="account" className="space-y-6 mt-6">
           {/* Profile Photo */}
           <div className="flex flex-col items-center gap-4">
             <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
@@ -178,25 +199,41 @@ export function AccountSettingsDialog({
 
           <Separator />
 
-          {/* Actions */}
-          <div className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => {
-                toast({
-                  title: 'Coming soon',
-                  description: 'Profile editing will be available soon',
-                });
-              }}
-            >
-              <User className="mr-2 h-4 w-4" />
-              Edit Profile
-            </Button>
-          </div>
-        </div>
+            {/* Actions */}
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  toast({
+                    title: 'Coming soon',
+                    description: 'Profile editing will be available soon',
+                  });
+                }}
+              >
+                <User className="mr-2 h-4 w-4" />
+                Edit Profile
+              </Button>
+            </div>
+          </TabsContent>
 
-        <DialogFooter>
+          <TabsContent value="family" className="mt-6">
+            {onAddMember && onRemoveMember ? (
+              <FamilyManagement
+                members={familyMembers}
+                onAddMember={onAddMember}
+                onRemoveMember={onRemoveMember}
+                currentUser={user}
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Family management not available
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter className="mt-6">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

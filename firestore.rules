@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is owner of document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+      
+      // User subcollections (data, credentials, etc.)
+      match /data/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Families collection
+    match /families/{familyId} {
+      // Anyone authenticated can create a family
+      allow create: if isAuthenticated();
+      
+      // Family members can read the family
+      allow read: if isAuthenticated() && 
+                     request.auth.uid in resource.data.memberUserIds;
+      
+      // Family admins can update the family
+      allow update: if isAuthenticated() && 
+                       request.auth.uid in resource.data.adminUserIds;
+      
+      // Family admins can delete the family
+      allow delete: if isAuthenticated() && 
+                       request.auth.uid in resource.data.adminUserIds;
+      
+      // Family events subcollection
+      match /events/{eventId} {
+        // Family members can read all events
+        allow read: if isAuthenticated() && 
+                       request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+        
+        // Family members can create, update, and delete events
+        allow create, update, delete: if isAuthenticated() && 
+                                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+      }
+      
+      // Family memories subcollection (for future use)
+      match /memories/{memoryId} {
+        allow read, write: if isAuthenticated() && 
+                             request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+      }
+    }
+    
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

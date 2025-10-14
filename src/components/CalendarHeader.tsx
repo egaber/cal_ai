@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Sparkles, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserProfile } from "./UserProfile";
 import { UserProfile as UserProfileType } from "@/types/user";
+import { FamilyMember } from "@/types/calendar";
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -11,6 +12,9 @@ interface CalendarHeaderProps {
   onNewEvent: () => void;
   onAutoOptimize: () => void;
   user?: UserProfileType;
+  familyMembers?: FamilyMember[];
+  onAddMember?: (member: Omit<FamilyMember, 'id'>) => void;
+  onRemoveMember?: (memberId: string) => void;
 }
 
 export const CalendarHeader = ({
@@ -20,7 +24,10 @@ export const CalendarHeader = ({
   onNavigate,
   onNewEvent,
   onAutoOptimize,
-  user
+  user,
+  familyMembers,
+  onAddMember,
+  onRemoveMember
 }: CalendarHeaderProps) => {
   const formatMonthLabel = () => {
     return currentDate.toLocaleDateString('en-US', {
@@ -159,7 +166,14 @@ export const CalendarHeader = ({
           >
             <Plus className="mr-2 h-4 w-4" /> New Event
           </Button>
-          {user && <UserProfile user={user} />}
+          {user && (
+            <UserProfile 
+              user={user}
+              familyMembers={familyMembers}
+              onAddMember={onAddMember}
+              onRemoveMember={onRemoveMember}
+            />
+          )}
         </div>
       </div>
     </header>

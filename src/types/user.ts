@@ -1,6 +1,9 @@
 import { FamilyMember } from './calendar';
-import { MemoryData } from './memory';
 import { CalendarEvent } from './calendar';
+import { MemoryData } from './memory';
+
+// Re-export MemoryData for convenience
+export type { MemoryData };
 
 export interface UserProfile {
   uid: string;
@@ -11,12 +14,15 @@ export interface UserProfile {
   createdAt: Date;
   lastLoginAt: Date;
   
+  // Family reference
+  familyId?: string;
+  
   // Face recognition data
   faceDescriptor?: number[];
   faceDescriptorUpdatedAt?: Date;
   
-  // Family members
-  familyMembers: FamilyMember[];
+  // DEPRECATED: Family members (now stored in family document)
+  familyMembers?: FamilyMember[];
   
   // User preferences
   preferences: UserPreferences;
