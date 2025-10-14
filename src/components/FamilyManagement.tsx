@@ -1,4 +1,4 @@
-Eimport { useState } from 'react';
+import { useState } from 'react';
 import { FamilyMember } from '@/types/calendar';
 import { UserProfile } from '@/types/user';
 import { UserPlus, Copy, Check, Users, Smartphone, X } from 'lucide-react';
