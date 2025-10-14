@@ -6,12 +6,14 @@ import { CapacityIndicator } from "@/components/CapacityIndicator";
 import { AIAssistant } from "@/components/AIAssistant";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEvents } from "@/contexts/EventContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
 import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { MemoryManager } from "@/components/MemoryManager";
 import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
+import { FamilyManagement } from "@/components/FamilyManagement";
 import { EventSuggestionCard } from "@/components/EventSuggestionCard";
 import { GoogleCalendarSync } from "@/components/GoogleCalendarSync";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
@@ -30,6 +32,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 const Index = () => {
   const { user } = useAuth();
+  const { family } = useFamily();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,54 +56,8 @@ const Index = () => {
     minute?: number;
   }>({});
 
-  // Family members with persistence
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
-    {
-      id: '1',
-      name: 'Eyal',
-      role: 'parent',
-      color: 'bg-event-blue',
-      age: 35,
-      isMobile: true,
-      isYou: true,
-    },
-    {
-      id: '2',
-      name: 'Ella',
-      role: 'parent',
-      color: 'bg-event-purple',
-      age: 33,
-      isMobile: true,
-      isYou: false,
-    },
-    {
-      id: '3',
-      name: 'Hilly (11)',
-      role: 'child',
-      color: 'bg-event-green',
-      age: 11,
-      isMobile: false,
-      isYou: false,
-    },
-    {
-      id: '4',
-      name: 'Yael (5.5)',
-      role: 'child',
-      color: 'bg-event-orange',
-      age: 5.5,
-      isMobile: false,
-      isYou: false,
-    },
-    {
-      id: '5',
-      name: 'Alon (3)',
-      role: 'child',
-      color: 'bg-event-pink',
-      age: 3,
-      isMobile: false,
-      isYou: false,
-    },
-  ]);
+  // Use family members from FamilyContext
+  const familyMembers = family?.members || [];
 
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
   const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent, loading: eventsLoading } = useEvents();
@@ -113,6 +70,7 @@ const Index = () => {
     travelInfo: [],
   });
   const [isMemoryDialogOpen, setIsMemoryDialogOpen] = useState(false);
+  const [isFamilyManagementOpen, setIsFamilyManagementOpen] = useState(false);
   const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
   const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
   const [showSuggestionsPanel, setShowSuggestionsPanel] = useState(false);
@@ -123,19 +81,9 @@ const Index = () => {
 
   // Load data from storage on mount
   useEffect(() => {
-    const loadedEvents = StorageService.loadEvents();
     const loadedSettings = StorageService.loadSettings();
     const loadedMemory = StorageService.loadMemoryData();
-    const loadedFamilyMembers = StorageService.loadFamilyMembers();
     const loadedSuggestions = localStorage.getItem('event_suggestions');
-
-    // Load family members or use defaults
-    if (loadedFamilyMembers && loadedFamilyMembers.length > 0) {
-      setFamilyMembers(loadedFamilyMembers);
-    }
-
-    // Events are now loaded from cloud via EventContext
-    // No need to load from localStorage
 
     if (loadedSettings) {
       setSelectedMembers(loadedSettings.selectedMembers);
@@ -168,10 +116,6 @@ const Index = () => {
     }
   }, [events]);
 
-  // Save family members whenever they change
-  useEffect(() => {
-    StorageService.saveFamilyMembers(familyMembers);
-  }, [familyMembers]);
 
   // Save settings whenever they change
   useEffect(() => {
@@ -180,13 +124,7 @@ const Index = () => {
 
   // Handler to update family member avatar
   const handleAvatarUpload = useCallback((memberId: string, avatarDataUrl: string) => {
-    setFamilyMembers(prev =>
-      prev.map(member =>
-        member.id === memberId
-          ? { ...member, avatar: avatarDataUrl }
-          : member
-      )
-    );
+    // TODO: Implement avatar upload through FamilyContext
     toast({
       title: "Avatar Updated",
       description: "Profile picture has been updated successfully",
@@ -194,16 +132,20 @@ const Index = () => {
   }, [toast]);
 
   const handleAddMember = useCallback((memberData: Omit<FamilyMember, 'id'>) => {
-    const newMember: FamilyMember = {
-      ...memberData,
-      id: `member_${Date.now()}`,
-    };
-    setFamilyMembers(prev => [...prev, newMember]);
-  }, []);
+    // TODO: Implement add member through FamilyContext
+    toast({
+      title: "Coming Soon",
+      description: "Family member management will be available soon",
+    });
+  }, [toast]);
 
   const handleRemoveMember = useCallback((memberId: string) => {
-    setFamilyMembers(prev => prev.filter(member => member.id !== memberId));
-  }, []);
+    // TODO: Implement remove member through FamilyContext
+    toast({
+      title: "Coming Soon",
+      description: "Family member management will be available soon",
+    });
+  }, [toast]);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     const newDate = new Date(currentDate);
@@ -721,6 +663,7 @@ What would you like to know or do with this event?`;
               selectedMembers={selectedMembers}
               onToggleMember={handleToggleMember}
               onAvatarUpload={handleAvatarUpload}
+              onManageFamily={() => setIsFamilyManagementOpen(true)}
               currentUser={user}
             />
 
@@ -888,6 +831,21 @@ What would you like to know or do with this event?`;
           onCancel={handleInlineCreatorCancel}
         />
       )}
+
+      {/* Family Management Dialog */}
+      <Dialog open={isFamilyManagementOpen} onOpenChange={setIsFamilyManagementOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Family Management</DialogTitle>
+          </DialogHeader>
+          <FamilyManagement
+            members={familyMembers}
+            onAddMember={handleAddMember}
+            onRemoveMember={handleRemoveMember}
+            currentUser={user}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

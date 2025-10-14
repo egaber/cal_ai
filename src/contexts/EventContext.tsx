@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { CalendarEvent } from '@/types/calendar';
 import { EventService, createEventService } from '@/services/eventService';
 import { useFamily } from './FamilyContext';
+import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface EventContextType {
@@ -31,21 +32,22 @@ interface EventProviderProps {
 
 export const EventProvider = ({ children }: EventProviderProps) => {
   const { family } = useFamily();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventService, setEventService] = useState<EventService | null>(null);
 
-  // Initialize event service when family is available
+  // Initialize event service when family and user are available
   useEffect(() => {
-    if (family?.id) {
-      const service = createEventService(family.id);
+    if (family?.id && user?.uid) {
+      const service = createEventService(family.id, user.uid, 'cal_ai');
       setEventService(service);
     } else {
       setEventService(null);
       setEvents([]);
     }
-  }, [family?.id]);
+  }, [family?.id, user?.uid]);
 
   // Load and subscribe to events
   useEffect(() => {

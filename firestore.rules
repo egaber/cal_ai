@@ -13,6 +13,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    // Helper function to check if user is a family member
+    function isFamilyMember(familyId) {
+      return isAuthenticated() && 
+             request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+    }
+    
     // Users collection - users can read/write their own data
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -31,31 +37,52 @@ service cloud.firestore {
       
       // Family members can read the family
       allow read: if isAuthenticated() && 
-                     request.auth.uid in resource.data.memberUserIds;
+                     (request.auth.uid in resource.data.memberUserIds ||
+                      request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds);
       
       // Family admins can update the family
       allow update: if isAuthenticated() && 
-                       request.auth.uid in resource.data.adminUserIds;
+                       (request.auth.uid in resource.data.adminUserIds ||
+                        request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.adminUserIds);
       
       // Family admins can delete the family
       allow delete: if isAuthenticated() && 
-                       request.auth.uid in resource.data.adminUserIds;
+                       (request.auth.uid in resource.data.adminUserIds ||
+                        request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.adminUserIds);
       
-      // Family events subcollection
-      match /events/{eventId} {
-        // Family members can read all events
-        allow read: if isAuthenticated() && 
-                       request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
-        
-        // Family members can create, update, and delete events
-        allow create, update, delete: if isAuthenticated() && 
-                                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+      // Family-level memories (shared across family)
+      match /memories/{document=**} {
+        allow read, write: if isFamilyMember(familyId);
       }
       
-      // Family memories subcollection (for future use)
-      match /memories/{memoryId} {
-        allow read, write: if isAuthenticated() && 
-                             request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUserIds;
+      // Family members subcollection
+      match /members/{userId} {
+        // User can read/write their own member document
+        allow read, write: if isOwner(userId);
+        
+        // Other family members can read this member document
+        allow read: if isFamilyMember(familyId);
+        
+        // User's calendars
+        match /calendars/{calendarSource}/events/{eventId} {
+          // User can manage their own calendar events
+          allow read, write: if isOwner(userId);
+          
+          // Family members can read each other's events (for family calendar view)
+          allow read: if isFamilyMember(familyId);
+        }
+        
+        // User's calendar metadata (sync info, etc.)
+        match /calendars/{calendarSource}/metadata/{document=**} {
+          // Only the user can access their calendar metadata
+          allow read, write: if isOwner(userId);
+        }
+        
+        // User-personal memories (private to user)
+        match /memories/{document=**} {
+          // Only the user can access their personal memories
+          allow read, write: if isOwner(userId);
+        }
       }
     }
     

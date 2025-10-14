@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FamilyMember } from '@/types/calendar';
 import { UserProfile } from '@/types/user';
-import { UserPlus, Copy, Check, Users, Smartphone, X } from 'lucide-react';
+import { UserPlus, Copy, Check, Users, Smartphone, X, Link2, Baby } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,8 @@ export const FamilyManagement = ({
   const [newMemberRole, setNewMemberRole] = useState<'parent' | 'child'>('parent');
   const [newMemberAge, setNewMemberAge] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedParentLink, setCopiedParentLink] = useState(false);
+  const [copiedChildLink, setCopiedChildLink] = useState(false);
 
   const handleCopyCode = () => {
     if (family?.inviteCode) {
@@ -43,6 +45,32 @@ export const FamilyManagement = ({
         description: "Family invite code copied to clipboard",
       });
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleCopyParentLink = () => {
+    if (family?.inviteCode) {
+      const link = `${window.location.origin}/?invite=${family.inviteCode}&role=parent`;
+      navigator.clipboard.writeText(link);
+      setCopiedParentLink(true);
+      toast({
+        title: "Parent Link Copied!",
+        description: "Share this link with adults",
+      });
+      setTimeout(() => setCopiedParentLink(false), 2000);
+    }
+  };
+
+  const handleCopyChildLink = () => {
+    if (family?.inviteCode) {
+      const link = `${window.location.origin}/?invite=${family.inviteCode}&role=child`;
+      navigator.clipboard.writeText(link);
+      setCopiedChildLink(true);
+      toast({
+        title: "Child Link Copied!",
+        description: "Share this link with children",
+      });
+      setTimeout(() => setCopiedChildLink(false), 2000);
     }
   };
 
@@ -148,6 +176,74 @@ export const FamilyManagement = ({
               </div>
               <p className="text-xs text-muted-foreground">
                 New members can join by entering this code when they sign in
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Shareable Links */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Shareable Invite Links
+              </Label>
+              
+              {/* Parent Link */}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium">Parent / Adult</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={`${window.location.origin}/?invite=${family.inviteCode}&role=parent`}
+                    readOnly
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyParentLink}
+                  >
+                    {copiedParentLink ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Child Link */}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Baby className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-medium">Child</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={`${window.location.origin}/?invite=${family.inviteCode}&role=child`}
+                    readOnly
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyChildLink}
+                  >
+                    {copiedChildLink ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Share these links and they'll automatically join with the correct role
               </p>
             </div>
           </div>

@@ -82,20 +82,6 @@ export const createFamily = async (
       updatedAt: serverTimestamp(),
     });
 
-    // Initialize family data
-    const familyData: FamilyData = {
-      events: [],
-      memories: {
-        userMemories: [],
-        familyMemories: [],
-        places: [],
-        travelInfo: [],
-      },
-    };
-
-    await setDoc(doc(db, 'families', familyRef.id, 'data', 'events'), { events: [] });
-    await setDoc(doc(db, 'families', familyRef.id, 'data', 'memories'), familyData.memories);
-
     // Link user to family
     await setDoc(doc(db, 'users', creatorUserId), {
       familyId: familyRef.id,

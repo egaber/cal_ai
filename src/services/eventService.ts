@@ -19,11 +19,15 @@ import { CalendarEvent } from '../types/calendar';
 // Event Service - Manages events in Firestore with optimistic UI updates
 export class EventService {
   private familyId: string;
+  private userId: string;
+  private calendarSource: string;
   private eventsCollection: string;
 
-  constructor(familyId: string) {
+  constructor(familyId: string, userId: string, calendarSource: string = 'cal_ai') {
     this.familyId = familyId;
-    this.eventsCollection = `families/${familyId}/events`;
+    this.userId = userId;
+    this.calendarSource = calendarSource;
+    this.eventsCollection = `families/${familyId}/members/${userId}/calendars/${calendarSource}/events`;
   }
 
   // Generate unique event ID
@@ -219,6 +223,6 @@ export class EventService {
 }
 
 // Factory function to create EventService instance
-export const createEventService = (familyId: string): EventService => {
-  return new EventService(familyId);
+export const createEventService = (familyId: string, userId: string, calendarSource: string = 'cal_ai'): EventService => {
+  return new EventService(familyId, userId, calendarSource);
 };

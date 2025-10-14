@@ -22,6 +22,20 @@ const App = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showFamilySetup, setShowFamilySetup] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | undefined>(undefined);
+  const [inviteRole, setInviteRole] = useState<'parent' | 'child' | undefined>(undefined);
+
+  useEffect(() => {
+    // Read URL parameters for invite code
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    const role = params.get('role');
+    
+    if (invite) {
+      setInviteCode(invite.toUpperCase());
+      setInviteRole(role === 'child' ? 'child' : 'parent');
+    }
+  }, []);
 
   useEffect(() => {
     // Listen to auth state changes
@@ -85,6 +99,8 @@ const App = () => {
                     open={showFamilySetup}
                     user={user}
                     onComplete={handleFamilySetupComplete}
+                    initialInviteCode={inviteCode}
+                    initialRole={inviteRole}
                   />
                 )}
                 <BrowserRouter>

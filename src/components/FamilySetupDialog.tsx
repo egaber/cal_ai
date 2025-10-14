@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, Check, Loader2 } from 'lucide-react';
+import { Copy, Check, Loader2, Link2, Users, Baby } from 'lucide-react';
 import { createFamily, joinFamily, Family } from '@/services/familyService';
 import { UserProfile } from '@/types/user';
 
@@ -13,16 +13,31 @@ interface FamilySetupDialogProps {
   open: boolean;
   user: UserProfile;
   onComplete: (family: Family) => void;
+  initialInviteCode?: string;
+  initialRole?: 'parent' | 'child';
 }
 
-export const FamilySetupDialog = ({ open, user, onComplete }: FamilySetupDialogProps) => {
-  const [tab, setTab] = useState<'create' | 'join'>('create');
+export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, initialRole }: FamilySetupDialogProps) => {
+  const [tab, setTab] = useState<'create' | 'join'>(initialInviteCode ? 'join' : 'create');
   const [familyName, setFamilyName] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(initialInviteCode || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdFamily, setCreatedFamily] = useState<Family | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedParentLink, setCopiedParentLink] = useState(false);
+  const [copiedChildLink, setCopiedChildLink] = useState(false);
+
+  // Auto-join if invite code is provided in URL
+  useEffect(() => {
+    if (initialInviteCode && open && !loading) {
+      // Small delay to ensure UI is ready
+      const timer = setTimeout(() => {
+        handleJoinFamily();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [initialInviteCode, open]);
 
   const handleCreateFamily = async () => {
     if (!familyName.trim()) {
@@ -80,6 +95,24 @@ export const FamilySetupDialog = ({ open, user, onComplete }: FamilySetupDialogP
     }
   };
 
+  const handleCopyParentLink = () => {
+    if (createdFamily?.inviteCode) {
+      const link = `${window.location.origin}/?invite=${createdFamily.inviteCode}&role=parent`;
+      navigator.clipboard.writeText(link);
+      setCopiedParentLink(true);
+      setTimeout(() => setCopiedParentLink(false), 2000);
+    }
+  };
+
+  const handleCopyChildLink = () => {
+    if (createdFamily?.inviteCode) {
+      const link = `${window.location.origin}/?invite=${createdFamily.inviteCode}&role=child`;
+      navigator.clipboard.writeText(link);
+      setCopiedChildLink(true);
+      setTimeout(() => setCopiedChildLink(false), 2000);
+    }
+  };
+
   const handleCompleteSetup = () => {
     if (createdFamily) {
       onComplete(createdFamily);
@@ -126,10 +159,68 @@ export const FamilySetupDialog = ({ open, user, onComplete }: FamilySetupDialogP
               </div>
             </div>
 
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Shareable Invite Links</Label>
+              
+              {/* Parent Link */}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium">Parent / Adult</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={`${window.location.origin}/?invite=${createdFamily.inviteCode}&role=parent`}
+                    readOnly
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyParentLink}
+                  >
+                    {copiedParentLink ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Child Link */}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Baby className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-medium">Child</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={`${window.location.origin}/?invite=${createdFamily.inviteCode}&role=child`}
+                    readOnly
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyChildLink}
+                  >
+                    {copiedChildLink ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <Alert>
+              <Link2 className="h-4 w-4" />
               <AlertDescription>
-                Family members can join by signing in and entering this code when prompted.
-                You can find this code later in Family Settings.
+                Share these links with family members. They'll be prompted to sign in and automatically join with the correct role.
               </AlertDescription>
             </Alert>
           </div>
