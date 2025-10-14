@@ -82,8 +82,8 @@ export const CalendarHeader = ({
     <header className="rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/80">
       <div className="grid w-full gap-3 md:grid-cols-[auto_1fr_auto_auto] md:items-center">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
-            <img src="/cal_ai.png" alt="cal.ai" className="h-6 w-6 object-contain" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-sm ring-1 ring-slate-200/70 dark:from-blue-600 dark:to-purple-700 dark:ring-slate-700">
+            <span className="text-2xl">🐼</span>
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.45em] text-slate-400 dark:text-slate-500">Schedule</p>

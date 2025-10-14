@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, Check, Loader2, Link2, Users, Baby } from 'lucide-react';
-import { createFamily, joinFamily, Family } from '@/services/familyService';
+import { Copy, Check, Loader2, Link2, Users, Baby, UserCircle } from 'lucide-react';
+import { createFamily, joinFamily, Family, getFamilyByInviteCode } from '@/services/familyService';
 import { UserProfile } from '@/types/user';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface FamilySetupDialogProps {
   open: boolean;
@@ -27,6 +28,28 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
   const [copied, setCopied] = useState(false);
   const [copiedParentLink, setCopiedParentLink] = useState(false);
   const [copiedChildLink, setCopiedChildLink] = useState(false);
+  const [previewFamily, setPreviewFamily] = useState<Family | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // Load family preview when invite code changes
+  useEffect(() => {
+    const loadPreview = async () => {
+      if (inviteCode && inviteCode.length === 6) {
+        setLoadingPreview(true);
+        try {
+          const family = await getFamilyByInviteCode(inviteCode);
+          setPreviewFamily(family);
+        } catch (err) {
+          setPreviewFamily(null);
+        } finally {
+          setLoadingPreview(false);
+        }
+      } else {
+        setPreviewFamily(null);
+      }
+    };
+    loadPreview();
+  }, [inviteCode]);
 
   // Auto-join if invite code is provided in URL
   useEffect(() => {
@@ -290,7 +313,7 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
                 placeholder="ABC123"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                onKeyPress={(e) => e.key === 'Enter' && handleJoinFamily()}
+                onKeyPress={(e) => e.key === 'Enter' && !loadingPreview && previewFamily && handleJoinFamily()}
                 className="text-center text-lg font-mono tracking-widest uppercase"
                 maxLength={6}
               />
@@ -298,6 +321,45 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
                 Ask a family member for the 6-character code
               </p>
             </div>
+
+            {/* Family Preview */}
+            {loadingPreview && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
+            {previewFamily && !loadingPreview && (
+              <div className="rounded-lg border bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12 border-2 border-white shadow-md">
+                    {previewFamily.members[0]?.avatar ? (
+                      <AvatarImage src={previewFamily.members[0].avatar} alt={previewFamily.members[0].name} />
+                    ) : (
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        <UserCircle className="h-6 w-6" />
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-foreground">{previewFamily.members[0]?.name}</span> is inviting you to join
+                    </p>
+                    <p className="text-lg font-bold text-primary">{previewFamily.name}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Users className="h-3 w-3" />
+                  <span>{previewFamily.members.length} {previewFamily.members.length === 1 ? 'member' : 'members'}</span>
+                </div>
+              </div>
+            )}
+
+            {inviteCode.length === 6 && !previewFamily && !loadingPreview && (
+              <Alert variant="destructive">
+                <AlertDescription>Family not found. Please check the invite code.</AlertDescription>
+              </Alert>
+            )}
 
             {error && (
               <Alert variant="destructive">
@@ -307,11 +369,11 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
 
             <Button
               onClick={handleJoinFamily}
-              disabled={loading}
+              disabled={loading || !previewFamily}
               className="w-full"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Join Family
+              {previewFamily ? `Join ${previewFamily.name}` : 'Join Family'}
             </Button>
           </TabsContent>
         </Tabs>

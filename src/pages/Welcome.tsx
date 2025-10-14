@@ -37,6 +37,16 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+
+  // Check for invite code in URL and default to signup tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('invite');
+    if (inviteCode) {
+      setActiveTab('signup');
+    }
+  }, []);
 
   // Load face recognition models on mount
   useEffect(() => {
@@ -87,11 +97,20 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
       });
       onAuthenticated(user);
     } catch (error: any) {
-      toast({
-        title: 'Sign in failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Check if error is user-not-found or invalid-credential
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        toast({
+          title: 'Account not found',
+          description: 'Switching to Sign Up. Please create an account.',
+        });
+        setActiveTab('signup');
+      } else {
+        toast({
+          title: 'Sign in failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -283,8 +302,8 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4">
-            <img src="/cal_ai.png" alt="Calendar AI" className="h-16 w-16 mx-auto" />
+          <div className="mx-auto mb-4 text-6xl">
+            🐼
           </div>
           <CardTitle className="text-2xl">Welcome to Calendar AI</CardTitle>
           <CardDescription>
@@ -292,7 +311,7 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
