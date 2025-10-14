@@ -30,14 +30,14 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
 
   // Auto-join if invite code is provided in URL
   useEffect(() => {
-    if (initialInviteCode && open && !loading) {
+    if (initialInviteCode && open && !loading && !createdFamily) {
       // Small delay to ensure UI is ready
       const timer = setTimeout(() => {
         handleJoinFamily();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [initialInviteCode, open]);
+  }, [initialInviteCode, open, createdFamily]);
 
   const handleCreateFamily = async () => {
     if (!familyName.trim()) {
@@ -73,14 +73,17 @@ export const FamilySetupDialog = ({ open, user, onComplete, initialInviteCode, i
     setError('');
 
     try {
+      console.log('Attempting to join with code:', inviteCode.trim().toUpperCase());
       const family = await joinFamily(
         inviteCode.trim().toUpperCase(),
         user.uid,
         user.displayName,
         user.photoURL
       );
+      console.log('Successfully joined family:', family);
       onComplete(family);
     } catch (err: any) {
+      console.error('Error joining family:', err);
       setError(err.message || 'Failed to join family');
     } finally {
       setLoading(false);

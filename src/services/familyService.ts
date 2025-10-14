@@ -173,7 +173,7 @@ export const joinFamily = async (
       age: 0, // Age will be set by user in settings
       isYou: true,
       isMobile: true,
-      avatar: photoURL,
+      ...(photoURL && { avatar: photoURL }), // Only include avatar if photoURL exists
     };
     
     // Update family document
