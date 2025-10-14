@@ -20,6 +20,7 @@ import {
 } from '@/services/faceRecognitionService';
 import { UserProfile } from '@/types/user';
 import { Loader2, Camera, Chrome, Mail, User } from 'lucide-react';
+import { APP_ICON, APP_NAME, APP_TAGLINE } from '@/config/branding';
 
 interface WelcomeProps {
   onAuthenticated: (user: UserProfile) => void;
@@ -302,12 +303,12 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 text-6xl">
-            🐼
+          <div className="mx-auto mb-4">
+            <img src="pandai.png" alt="Panda AI" className="h-32 w-32 mx-auto object-contain" />
           </div>
-          <CardTitle className="text-2xl">Welcome to Calendar AI</CardTitle>
+          <CardTitle className="text-2xl">Welcome to {APP_NAME}</CardTitle>
           <CardDescription>
-            Your intelligent family calendar assistant
+            {APP_TAGLINE}
           </CardDescription>
         </CardHeader>
         <CardContent>

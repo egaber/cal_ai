@@ -107,7 +107,7 @@ export const CalendarGrid = ({
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-secondary/40 select-none">
       {/* Day headers - Fixed outside scroll container */}
-      <div className="z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
+      <div className="sticky top-0 z-20 flex border-b border-border/60 bg-white/80 backdrop-blur">
         <div className="w-20 flex-shrink-0 border-r border-border/60 bg-white/80" />
         {dates.map((date, idx) => {
           const isWeekend = date.getDay() === 5 || date.getDay() === 6;

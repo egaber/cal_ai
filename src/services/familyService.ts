@@ -57,7 +57,7 @@ export const createFamily = async (
       id: creatorUserId,
       name: creatorDisplayName,
       role: 'parent',
-      color: '#3b82f6',
+      color: getNextMemberColor(0), // First member gets first color
       age: 0, // Age will be set by user in settings
       isYou: true,
       isMobile: true,
@@ -202,13 +202,17 @@ export const joinFamily = async (
 // Add a child/non-user family member
 export const addFamilyMember = async (
   familyId: string,
-  member: Omit<FamilyMember, 'id'>
+  member: Omit<FamilyMember, 'id' | 'color'>
 ): Promise<void> => {
   try {
+    const family = await getFamily(familyId);
+    if (!family) throw new Error('Family not found');
+    
     const memberId = `member_${Date.now()}`;
     const newMember: FamilyMember = {
       ...member,
       id: memberId,
+      color: getNextMemberColor(family.members.length), // Assign next color based on current member count
     };
     
     await updateDoc(doc(db, 'families', familyId), {

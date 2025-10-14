@@ -1,11 +1,13 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { MobileCalendarView } from "@/components/MobileCalendarView";
-import { EventDetailsDialog } from "@/components/EventDetailsDialog";
+import { MobileEventDetails } from "@/components/MobileEventDetails";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
 import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
+import { useEvents } from "@/contexts/EventContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { StorageService } from "@/services/storageService";
 import { generateRecurringEvents } from "@/utils/recurrenceUtils";
 import { Plus, Users } from "lucide-react";
@@ -15,6 +17,9 @@ import { Badge } from "@/components/ui/badge";
 
 const MobileIndex = () => {
   const { toast } = useToast();
+  const { family } = useFamily();
+  const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent } = useEvents();
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'workweek'>('day');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -38,29 +43,14 @@ const MobileIndex = () => {
   const headerTouchStartY = useRef<number>(0);
   const isHeaderDragging = useRef(false);
 
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
-    // { id: '1', name: 'Eyal', role: 'parent', color: 'bg-event-blue', age: 35, isMobile: true, isYou: true },
-    // { id: '2', name: 'Ella', role: 'parent', color: 'bg-event-purple', age: 33, isMobile: true, isYou: false },
-    // { id: '3', name: 'Hilly', role: 'child', color: 'bg-event-green', age: 11, isMobile: false, isYou: false },
-    // { id: '4', name: 'Yael', role: 'child', color: 'bg-event-orange', age: 5.5, isMobile: false, isYou: false },
-    // { id: '5', name: 'Alon', role: 'child', color: 'bg-event-pink', age: 3, isMobile: false, isYou: false },
-  ]);
+  // Use family members from FamilyContext
+  const familyMembers = family?.members || [];
+  const events = cloudEvents;
 
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    const loadedEvents = StorageService.loadEvents();
     const loadedSettings = StorageService.loadSettings();
-    const loadedFamilyMembers = StorageService.loadFamilyMembers();
-
-    if (loadedFamilyMembers && loadedFamilyMembers.length > 0) {
-      setFamilyMembers(loadedFamilyMembers);
-    }
-
-    if (loadedEvents.length > 0) {
-      setEvents(loadedEvents);
-    }
 
     if (loadedSettings) {
       setSelectedMembers(loadedSettings.selectedMembers);
@@ -69,16 +59,6 @@ const MobileIndex = () => {
       }
     }
   }, []);
-
-  useEffect(() => {
-    if (events.length > 0) {
-      StorageService.saveEvents(events);
-    }
-  }, [events]);
-
-  useEffect(() => {
-    StorageService.saveFamilyMembers(familyMembers);
-  }, [familyMembers]);
 
   useEffect(() => {
     StorageService.saveSettings({ selectedMembers, viewMode });
@@ -152,8 +132,7 @@ const MobileIndex = () => {
         metadata = generateEventMetadataLocal(title, '');
       }
 
-      const newEvent: CalendarEvent = {
-        id: `event_${Date.now()}`,
+      await createCloudEvent({
         title,
         startTime: startDate.toISOString(),
         endTime: endDate.toISOString(),
@@ -162,9 +141,8 @@ const MobileIndex = () => {
         memberId: selectedMembers[0] || '1',
         emoji: metadata.emoji,
         isAllDay: isAllDay || false,
-      };
+      });
 
-      setEvents(prev => [...prev, newEvent]);
       setIsInlineCreatorOpen(false);
       setInlineCreatorData(null);
       
@@ -175,63 +153,49 @@ const MobileIndex = () => {
     }
   };
 
-  const handleCreateEvent = useCallback((eventData: Omit<CalendarEvent, 'id'>) => {
-    const newEvent: CalendarEvent = {
-      ...eventData,
-      id: `event_${Date.now()}`,
-    };
-    setEvents(prev => [...prev, newEvent]);
+  const handleCreateEvent = useCallback(async (eventData: Omit<CalendarEvent, 'id'>) => {
+    await createCloudEvent(eventData);
     toast({
       title: "Event Created",
-      description: `"${newEvent.title}" added`,
+      description: `"${eventData.title}" added`,
     });
-  }, [toast]);
+  }, [createCloudEvent, toast]);
 
-  const handleEventUpdate = useCallback((eventId: string, newStartTime: string, newEndTime: string) => {
-    setEvents(prev =>
-      prev.map(event =>
-        event.id === eventId
-          ? { ...event, startTime: newStartTime, endTime: newEndTime }
-          : event
-      )
-    );
-  }, []);
+  const handleEventUpdate = useCallback(async (eventId: string, newStartTime: string, newEndTime: string) => {
+    await moveCloudEvent(eventId, newStartTime, newEndTime);
+  }, [moveCloudEvent]);
 
-  const handleEventSave = useCallback((updatedEvent: CalendarEvent) => {
-    setEvents(prev => prev.map(event =>
-      event.id === updatedEvent.id ? updatedEvent : event
-    ));
+  const handleEventSave = useCallback(async (updatedEvent: CalendarEvent) => {
+    await updateCloudEvent(updatedEvent.id, updatedEvent);
     toast({
       title: "Event Updated",
       description: `"${updatedEvent.title}" updated`,
     });
-  }, [toast]);
+  }, [updateCloudEvent, toast]);
 
-  const handleEventDelete = useCallback((eventId: string) => {
-    let deletedTitle: string | null = null;
-    setEvents(prev => {
-      const deletedEvent = prev.find(e => e.id === eventId);
-      if (deletedEvent) deletedTitle = deletedEvent.title;
-      return prev.filter(event => event.id !== eventId);
-    });
+  const handleEventDelete = useCallback(async (eventId: string) => {
+    const deletedEvent = events.find(e => e.id === eventId);
+    const deletedTitle = deletedEvent?.title;
+    
+    await deleteCloudEvent(eventId);
 
     toast({
       title: "Event Deleted",
       description: deletedTitle ? `"${deletedTitle}" removed` : "Event removed",
     });
-  }, [toast]);
+  }, [deleteCloudEvent, events, toast]);
 
-  const handleDeleteRecurring = useCallback((recurringEventId: string, deleteAll: boolean) => {
+  const handleDeleteRecurring = useCallback(async (recurringEventId: string, deleteAll: boolean) => {
     if (deleteAll) {
-      setEvents(prev => prev.filter(event => event.id !== recurringEventId));
+      await deleteCloudEvent(recurringEventId);
       toast({ title: "Recurring Event Deleted", description: "All occurrences removed" });
     }
-  }, [toast]);
+  }, [deleteCloudEvent, toast]);
 
   const handleEventClick = (event: CalendarEvent, clickX: number, clickY: number) => {
+    // On mobile, directly open the event details view (no popover)
     setSelectedEvent(event);
-    setEventPopoverPosition({ x: clickX, y: clickY });
-    setIsEventPopoverOpen(true);
+    setIsEventDialogOpen(true);
   };
 
   const handleEditFromPopover = (event: CalendarEvent) => {
@@ -580,28 +544,18 @@ const MobileIndex = () => {
 
       {/* Calendar - Fills remaining space with vertical scroll only */}
       <div className="flex-1 overflow-hidden">
-        <EventPopover
-          event={selectedEvent}
-          isOpen={isEventPopoverOpen}
-          position={eventPopoverPosition}
-          onClose={() => setIsEventPopoverOpen(false)}
-          onEdit={handleEditFromPopover}
-          onDelete={handleEventDelete}
+        <MobileCalendarView
+          currentDate={currentDate}
+          events={filteredEvents}
           familyMembers={familyMembers}
-        >
-          <MobileCalendarView
-            currentDate={currentDate}
-            events={filteredEvents}
-            familyMembers={familyMembers}
-            onEventClick={handleEventClick}
-            onEventUpdate={handleEventUpdate}
-            onTimeSlotClick={handleTimeSlotClick}
-            onDateChange={(date) => setCurrentDate(date)}
-          />
-        </EventPopover>
+          onEventClick={handleEventClick}
+          onEventUpdate={handleEventUpdate}
+          onTimeSlotClick={handleTimeSlotClick}
+          onDateChange={(date) => setCurrentDate(date)}
+        />
       </div>
 
-      <EventDetailsDialog
+      <MobileEventDetails
         event={selectedEvent}
         isOpen={isEventDialogOpen}
         onClose={() => {
@@ -611,6 +565,7 @@ const MobileIndex = () => {
         onSave={handleEventSave}
         onDelete={handleEventDelete}
         onDeleteRecurring={handleDeleteRecurring}
+        familyMembers={familyMembers}
       />
 
       <NewEventDialog

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { PRIMARY_COLOR } from "@/config/branding";
 
 interface MiniCalendarProps {
   currentDate: Date;
@@ -98,11 +99,18 @@ export const MiniCalendar = ({ currentDate, onDateSelect }: MiniCalendarProps) =
               !date
                 ? 'cursor-default text-transparent'
                 : isSelected(date)
-                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                ? 'text-white shadow-lg'
                 : isToday(date)
-                ? 'border border-primary/40 bg-primary/10 text-foreground'
+                ? 'border text-foreground'
                 : 'text-foreground hover:border hover:border-border/60 hover:bg-secondary/30'
             }`}
+            style={
+              date && isSelected(date)
+                ? { backgroundColor: PRIMARY_COLOR, boxShadow: `0 10px 15px -3px ${PRIMARY_COLOR}30` }
+                : date && isToday(date)
+                ? { borderColor: `${PRIMARY_COLOR}66`, backgroundColor: `${PRIMARY_COLOR}1a` }
+                : {}
+            }
           >
             {date?.getDate()}
           </button>

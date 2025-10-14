@@ -7,6 +7,7 @@ import { AIAssistant } from "@/components/AIAssistant";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEvents } from "@/contexts/EventContext";
 import { useFamily } from "@/contexts/FamilyContext";
+import { PRIMARY_COLOR } from "@/config/branding";
 import { EventDetailsDialog } from "@/components/EventDetailsDialog";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
@@ -30,9 +31,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useLocation } from "react-router-dom";
 
-const Index = () => {
+interface IndexProps {
+  activeTab?: 'calendar' | 'tasks';
+  onTabChange?: (tab: 'calendar' | 'tasks') => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
+}
+
+const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexProps = {}) => {
   const { user } = useAuth();
-  const { family } = useFamily();
+  const { family, refreshFamily } = useFamily();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -131,21 +139,65 @@ const Index = () => {
     });
   }, [toast]);
 
-  const handleAddMember = useCallback((memberData: Omit<FamilyMember, 'id'>) => {
-    // TODO: Implement add member through FamilyContext
-    toast({
-      title: "Coming Soon",
-      description: "Family member management will be available soon",
-    });
-  }, [toast]);
+  const handleAddMember = useCallback(async (memberData: Omit<FamilyMember, 'id' | 'color'>) => {
+    if (!family?.id) {
+      toast({
+        title: "Error",
+        description: "No family found",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { addFamilyMember } = await import('@/services/familyService');
+      await addFamilyMember(family.id, memberData);
+      
+      // Refresh family data
+      await refreshFamily();
+      
+      toast({
+        title: "Member Added",
+        description: `${memberData.name} has been added to the family`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add family member",
+        variant: "destructive",
+      });
+    }
+  }, [family, toast]);
 
-  const handleRemoveMember = useCallback((memberId: string) => {
-    // TODO: Implement remove member through FamilyContext
-    toast({
-      title: "Coming Soon",
-      description: "Family member management will be available soon",
-    });
-  }, [toast]);
+  const handleRemoveMember = useCallback(async (memberId: string) => {
+    if (!family?.id) {
+      toast({
+        title: "Error",
+        description: "No family found",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { removeFamilyMember } = await import('@/services/familyService');
+      await removeFamilyMember(family.id, memberId);
+      
+      // Refresh family data
+      await refreshFamily();
+      
+      toast({
+        title: "Member Removed",
+        description: "Family member has been removed",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to remove family member",
+        variant: "destructive",
+      });
+    }
+  }, [family, refreshFamily, toast]);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today') => {
     const newDate = new Date(currentDate);
@@ -636,7 +688,8 @@ What would you like to know or do with this event?`;
             {eventSuggestions.length > 0 && (
               <Button
                 onClick={() => setShowSuggestionsPanel(!showSuggestionsPanel)}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="hover:opacity-90 transition-opacity"
+                style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}
               >
                 <Sparkles className="h-4 w-4 mr-2" />
                 {eventSuggestions.length} הצעות AI
@@ -672,7 +725,8 @@ What would you like to know or do with this event?`;
             {/* Task Planning Button */}
             <Button 
               onClick={() => navigate('/tasks')}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              className="w-full hover:opacity-90 transition-opacity"
+              style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}
             >
               <ListTodo className="h-4 w-4 mr-2" />
               תכנון משימות שבועי
@@ -769,6 +823,10 @@ What would you like to know or do with this event?`;
                 familyMembers={familyMembers}
                 onAddMember={handleAddMember}
                 onRemoveMember={handleRemoveMember}
+                activeTab={activeTab}
+                onTabChange={onTabChange}
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={onToggleDarkMode}
               />
 
               <div className="mt-6 flex min-h-[600px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-white/90 shadow-inner">

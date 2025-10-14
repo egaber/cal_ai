@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { PRIMARY_COLOR } from '@/config/branding';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,7 +44,14 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { SubTask } from '@/types/task';
 
-export default function TaskPlanning() {
+interface TaskPlanningProps {
+  activeTab?: 'calendar' | 'tasks';
+  onTabChange?: (tab: 'calendar' | 'tasks') => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
+}
+
+export default function TaskPlanning({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: TaskPlanningProps = {}) {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -372,7 +380,7 @@ export default function TaskPlanning() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
+              <div className="p-2 rounded-lg" style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}>
                 <ListTodo className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -406,7 +414,7 @@ export default function TaskPlanning() {
               )}
               <div className="text-right">
                 <div className="text-sm text-gray-600">סה"כ משימות</div>
-                <div className="text-2xl font-bold text-purple-600">{totalTasksCount}</div>
+                <div className="text-2xl font-bold" style={{ color: PRIMARY_COLOR }}>{totalTasksCount}</div>
               </div>
               <Separator orientation="vertical" className="h-12" />
               <div className="text-right">
@@ -424,17 +432,17 @@ export default function TaskPlanning() {
             {/* Left: Task List */}
             <div className="lg:col-span-2">
               <Card className="h-full flex flex-col shadow-lg border-2">
-                <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                <CardHeader className="text-white" style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}>
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
                       משימות לפי עדיפות
                     </span>
-                    <Badge variant="secondary" className="bg-white text-purple-700">
+                    <Badge variant="secondary" className="bg-white" style={{ color: PRIMARY_COLOR }}>
                       {totalTasksCount} פעילות
                     </Badge>
                   </CardTitle>
-                  <CardDescription className="text-purple-100">
+                  <CardDescription className="text-pink-100">
                     מסודר לפי חשיבות + דחיפות (גבוה → נמוך)
                   </CardDescription>
                 </CardHeader>
@@ -473,7 +481,7 @@ export default function TaskPlanning() {
             {/* Right: Task Input */}
             <div className="lg:col-span-1">
               <Card className="h-full flex flex-col shadow-lg border-2">
-                <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                <CardHeader className="text-white" style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}>
                   <CardTitle className="flex items-center gap-2">
                     <Plus className="h-5 w-5" />
                     הוספת משימה חדשה
@@ -524,7 +532,8 @@ export default function TaskPlanning() {
                   <Button
                     onClick={handleAddTask}
                     disabled={isAnalyzing || !newTaskTitle.trim()}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    className="w-full hover:opacity-90 transition-opacity"
+                    style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}
                     size="lg"
                   >
                     {isAnalyzing ? (
@@ -565,11 +574,11 @@ export default function TaskPlanning() {
 
       {/* Scheduling Results Panel at Bottom */}
       {schedulingResults && showResultsDialog && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-purple-500 shadow-2xl z-50 max-h-[60vh] overflow-y-auto">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 shadow-2xl z-50 max-h-[60vh] overflow-y-auto" style={{ borderTopColor: PRIMARY_COLOR }}>
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Brain className="h-6 w-6 text-purple-600" />
+                <Brain className="h-6 w-6" style={{ color: PRIMARY_COLOR }} />
                 <h2 className="text-xl font-bold text-gray-900">תוצאות תזמון AI</h2>
               </div>
               <div className="flex items-center gap-2">
@@ -715,7 +724,7 @@ export default function TaskPlanning() {
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-purple-600" />
+              <Brain className="h-5 w-5" style={{ color: PRIMARY_COLOR }} />
               שאלות נוספות לניתוח טוב יותר
             </DialogTitle>
             <DialogDescription>
@@ -749,7 +758,7 @@ export default function TaskPlanning() {
             <Button variant="outline" onClick={() => setShowAIDialog(false)}>
               דלג
             </Button>
-            <Button onClick={handleAnswerFollowUp} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={handleAnswerFollowUp} className="hover:opacity-90 transition-opacity text-white" style={{ backgroundColor: PRIMARY_COLOR }}>
               המשך לניתוח
             </Button>
           </div>
@@ -1459,16 +1468,16 @@ function TaskCard({
 
             {/* AI Analysis */}
             {task.aiAnalysis && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <h4 className="font-medium text-sm text-purple-900 mb-2 flex items-center gap-2">
+              <div className="bg-pink-50 border border-pink-200 rounded-lg p-3">
+                <h4 className="font-medium text-sm mb-2 flex items-center gap-2" style={{ color: PRIMARY_COLOR }}>
                   <Brain className="h-4 w-4" />
                   ניתוח AI
                 </h4>
-                <p className="text-sm text-purple-800 mb-2">{task.aiAnalysis.reasoning}</p>
+                <p className="text-sm text-gray-800 mb-2">{task.aiAnalysis.reasoning}</p>
                 {task.aiAnalysis.schedulingTips && task.aiAnalysis.schedulingTips.length > 0 && (
                   <div className="mt-2">
-                    <div className="text-xs font-medium text-purple-700 mb-1">טיפים לתזמון:</div>
-                    <ul className="text-xs text-purple-700 space-y-1">
+                    <div className="text-xs font-medium text-gray-700 mb-1">טיפים לתזמון:</div>
+                    <ul className="text-xs text-gray-700 space-y-1">
                       {task.aiAnalysis.schedulingTips.map((tip, i) => (
                         <li key={i}>• {tip}</li>
                       ))}

@@ -407,9 +407,7 @@ When calculating times, use the current date and timezone shown above. For "toda
     <div className="flex h-full min-h-[480px] flex-col gap-3 rounded-xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/80">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 shadow-sm">
-            <img src="/ai_circle.png" alt="AI" className="h-7 w-7 object-contain" />
-          </div>
+          <img src="/pandai.png" alt="AI" className="h-12 w-12 object-contain" />
           <div>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">Your scheduling companion</p>
