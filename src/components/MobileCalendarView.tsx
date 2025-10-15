@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 import { calculateEventLayouts, EventLayout } from "@/utils/eventLayoutUtils";
@@ -23,14 +23,8 @@ export const MobileCalendarView = ({
   onEventClick,
   onEventUpdate,
   onTimeSlotClick,
-  onDateChange,
 }: MobileCalendarViewProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const isSwiping = useRef(false);
 
   const now = new Date();
   const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
@@ -51,19 +45,8 @@ export const MobileCalendarView = ({
     });
   };
 
-  // Get events for current, previous, and next day
-  const nextDate = new Date(currentDate);
-  nextDate.setDate(currentDate.getDate() + 1);
-  const prevDate = new Date(currentDate);
-  prevDate.setDate(currentDate.getDate() - 1);
-
   const currentDayEvents = useMemo(() => getEventsForDate(currentDate), [currentDate, events]);
-  const nextDayEvents = useMemo(() => getEventsForDate(nextDate), [nextDate, events]);
-  const prevDayEvents = useMemo(() => getEventsForDate(prevDate), [prevDate, events]);
-
   const currentEventLayouts = useMemo(() => calculateEventLayouts(events, currentDate), [events, currentDate]);
-  const nextEventLayouts = useMemo(() => calculateEventLayouts(events, nextDate), [events, nextDate]);
-  const prevEventLayouts = useMemo(() => calculateEventLayouts(events, prevDate), [events, prevDate]);
 
   // Auto-scroll to current time on mount and when returning to today
   useEffect(() => {
@@ -96,88 +79,13 @@ export const MobileCalendarView = ({
     onTimeSlotClick(date, hour, minutes, e.clientX, e.clientY);
   };
 
-  // Swipe gesture handling
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    isSwiping.current = false;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (isAnimating) return;
-    
-    const deltaX = e.touches[0].clientX - touchStartX.current;
-    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
-    
-    if (Math.abs(deltaX) > 20 && Math.abs(deltaX) > deltaY) {
-      isSwiping.current = true;
-      setSwipeOffset(deltaX);
-      e.preventDefault();
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!isSwiping.current) {
-      setSwipeOffset(0);
-      return;
-    }
-
-    const threshold = 100;
-    
-    if (Math.abs(swipeOffset) > threshold) {
-      setIsAnimating(true);
-      
-      // Create stable date reference at the moment of swipe completion
-      const targetDate = new Date(currentDate);
-      if (swipeOffset > 0) {
-        // Swipe right = next day
-        targetDate.setDate(targetDate.getDate() + 1);
-      } else {
-        // Swipe left = previous day
-        targetDate.setDate(targetDate.getDate() - 1);
-      }
-      
-      setTimeout(() => {
-        onDateChange(targetDate);
-        setSwipeOffset(0);
-        setIsAnimating(false);
-      }, 200);
-    } else {
-      setSwipeOffset(0);
-    }
-    
-    isSwiping.current = false;
-  };
-
-  const getSwipeTransform = () => {
-    if (isAnimating) {
-      return swipeOffset > 0 ? 'translateX(100%)' : 'translateX(-100%)';
-    }
-    return `translateX(${swipeOffset}px)`;
-  };
-
-  const formatDateLabel = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
-  const renderDayColumn = (date: Date, dayEvents: CalendarEvent[], eventLayouts: Map<string, EventLayout>, offset: number) => {
-    const isCurrentDay = date.toDateString() === currentDate.toDateString();
+  const renderDayColumn = (date: Date, dayEvents: CalendarEvent[], eventLayouts: Map<string, EventLayout>) => {
     const isTodayDate = date.toDateString() === now.toDateString();
     
     return (
-      <div
-        className="absolute inset-0 flex flex-col"
-        style={{
-          transform: `translateX(${offset}px)`,
-          transition: isAnimating ? 'transform 0.2s ease-out' : 'none',
-        }}
-      >
+      <div className="absolute inset-0 flex flex-col">
         <div
-          ref={isCurrentDay ? scrollContainerRef : null}
+          ref={scrollContainerRef}
           className="h-full overflow-y-auto overflow-x-hidden ios-scroll hide-scrollbar"
         >
           <div className="relative">
@@ -219,7 +127,7 @@ export const MobileCalendarView = ({
                         ? 'bg-gray-50 active:bg-gray-100'
                         : 'bg-white active:bg-gray-50'
                     }`}
-                    onClick={(e) => isCurrentDay && handleTimeSlotClick(date, hour, e)}
+                    onClick={(e) => handleTimeSlotClick(date, hour, e)}
                   >
                     {/* 15-minute grid lines */}
                     <div className="absolute inset-0 flex flex-col pointer-events-none">
@@ -240,7 +148,7 @@ export const MobileCalendarView = ({
                             <DraggableEventCard
                               key={event.id}
                               event={event}
-                              onClick={(e) => isCurrentDay && onEventClick(event, e.clientX, e.clientY)}
+                              onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
                               onMove={onEventUpdate}
                               gridHeight={24 * TIME_SLOT_HEIGHT}
                               columnWidth={100}
@@ -265,25 +173,11 @@ export const MobileCalendarView = ({
     );
   };
 
-  const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 375;
-
   return (
-    <div 
-      className="relative h-full w-full overflow-hidden"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Calendar days container - shows prev/current/next */}
+    <div className="relative h-full w-full overflow-hidden">
+      {/* Calendar day container */}
       <div className="absolute inset-0 right-20">
-        {/* Previous day - on the left */}
-        {swipeOffset < 0 && renderDayColumn(prevDate, prevDayEvents, prevEventLayouts, swipeOffset - screenWidth)}
-        
-        {/* Current day */}
-        {renderDayColumn(currentDate, currentDayEvents, currentEventLayouts, swipeOffset)}
-        
-        {/* Next day - on the right */}
-        {swipeOffset > 0 && renderDayColumn(nextDate, nextDayEvents, nextEventLayouts, swipeOffset + screenWidth)}
+        {renderDayColumn(currentDate, currentDayEvents, currentEventLayouts)}
       </div>
 
       {/* Scrollable time labels on the right */}
@@ -318,28 +212,6 @@ export const MobileCalendarView = ({
           ))}
         </div>
       </div>
-
-      {/* Date separator during swipe */}
-      {swipeOffset !== 0 && (
-        <div
-          className="absolute top-0 bottom-0 z-50 flex items-center pointer-events-none"
-          style={{
-            left: swipeOffset < 0 ? 'auto' : `${swipeOffset}px`,
-            right: swipeOffset < 0 ? `${-swipeOffset + 80}px` : 'auto',
-          }}
-        >
-          <div className="w-0.5 h-full bg-gray-300" />
-          <div 
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-1 bg-gray-200/90 backdrop-blur rounded text-[10px] text-gray-600 font-medium whitespace-nowrap"
-            style={{
-              writingMode: 'vertical-rl',
-              textOrientation: 'mixed',
-            }}
-          >
-            {swipeOffset > 0 ? formatDateLabel(nextDate) : formatDateLabel(prevDate)}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

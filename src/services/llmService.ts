@@ -9,7 +9,7 @@ export interface LLMModel {
   id: string;
   name: string;
   vendor: string;
-  provider: 'gemini' | 'local';
+  provider: 'gemini' | 'local' | 'azure-openai' | 'azure-xai';
 }
 
 export interface ToolCall {
@@ -32,6 +32,212 @@ export interface ChatResponse {
   content: string;
   toolCalls?: ToolCall[];
   error?: string;
+}
+
+// Azure OpenAI Handler
+class AzureOpenAIHandler {
+  private apiKey: string;
+  private endpoint: string;
+  private apiVersion: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+    // Azure OpenAI endpoint - verified from user's Azure Portal
+    this.endpoint = 'https://noney-m902do9m-eastus.openai.azure.com/';
+    this.apiVersion = '2024-12-01-preview';
+  }
+
+  getAvailableModels(): LLMModel[] {
+    return [
+      {
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        vendor: 'OpenAI (Azure)',
+        provider: 'azure-openai'
+      },
+      {
+        id: 'gpt-5-mini',
+        name: 'GPT-5 Mini',
+        vendor: 'OpenAI (Azure)',
+        provider: 'azure-openai'
+      },
+      {
+        id: 'gpt-5-mini-2',
+        name: 'GPT-5 Mini 2',
+        vendor: 'OpenAI (Azure)',
+        provider: 'azure-openai'
+      },
+      {
+        id: 'grok-4-fast-reasoning',
+        name: 'Grok 4 Fast Reasoning',
+        vendor: 'xAI (Azure)',
+        provider: 'azure-openai'
+      },
+      {
+        id: 'o3-mini',
+        name: 'O3 Mini',
+        vendor: 'OpenAI (Azure)',
+        provider: 'azure-openai'
+      }
+    ];
+  }
+
+  async chat(messages: Message[], modelId: string = 'gpt-5-mini', systemPrompt?: string): Promise<ChatResponse> {
+    try {
+      // Debug: Log API key status (first/last 4 chars only for security)
+      console.log('[Azure OpenAI] API Key present:', !!this.apiKey);
+      console.log('[Azure OpenAI] API Key length:', this.apiKey?.length || 0);
+      if (this.apiKey && this.apiKey.length > 8) {
+        console.log('[Azure OpenAI] API Key preview:', `${this.apiKey.substring(0, 4)}...${this.apiKey.substring(this.apiKey.length - 4)}`);
+      }
+      console.log('[Azure OpenAI] Endpoint:', this.endpoint);
+      console.log('[Azure OpenAI] Model/Deployment:', modelId);
+      console.log('[Azure OpenAI] API Version:', this.apiVersion);
+
+      // Prepare messages with system prompt
+      const allMessages = systemPrompt
+        ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+        : messages;
+
+      const url = `${this.endpoint}openai/deployments/${modelId}/chat/completions?api-version=${this.apiVersion}`;
+      console.log('[Azure OpenAI] Request URL:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': this.apiKey,
+        },
+        body: JSON.stringify({
+          messages: allMessages,
+          max_tokens: 16384
+        })
+      });
+
+      console.log('[Azure OpenAI] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[Azure OpenAI] Error response:', errorData);
+        throw new Error(`Azure OpenAI API error: ${response.statusText}${errorData.error?.message ? ` - ${errorData.error.message}` : ''}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || 'No response';
+
+      return { 
+        content,
+        toolCalls: this.extractToolCalls(content)
+      };
+    } catch (error) {
+      console.error('[Azure OpenAI] Full error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private extractToolCalls(content: string): ToolCall[] | undefined {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.tool && parsed.parameters) {
+          return [parsed];
+        }
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
+          return parsed;
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
+    }
+    return undefined;
+  }
+}
+
+// Azure xAI (Grok) Handler
+class AzureXAIHandler {
+  private apiKey: string;
+  private endpoint: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+    this.endpoint = 'https://noney-m902do9m-eastus.services.ai.azure.com/openai/v1/';
+  }
+
+  getAvailableModels(): LLMModel[] {
+    return [
+      {
+        id: 'grok-4-fast-reasoning',
+        name: 'Grok 4 Fast Reasoning',
+        vendor: 'xAI (Azure)',
+        provider: 'azure-xai'
+      }
+    ];
+  }
+
+  async chat(messages: Message[], modelId: string = 'grok-4-fast-reasoning', systemPrompt?: string): Promise<ChatResponse> {
+    try {
+      // Prepare messages with system prompt
+      const allMessages = systemPrompt
+        ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+        : messages;
+
+      const response = await fetch(
+        `${this.endpoint}chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: allMessages
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Azure xAI API error: ${response.statusText}${errorData.error?.message ? ` - ${errorData.error.message}` : ''}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || 'No response';
+
+      return { 
+        content,
+        toolCalls: this.extractToolCalls(content)
+      };
+    } catch (error) {
+      console.error('Azure xAI error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private extractToolCalls(content: string): ToolCall[] | undefined {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.tool && parsed.parameters) {
+          return [parsed];
+        }
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
+          return parsed;
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
+    }
+    return undefined;
+  }
 }
 
 // Gemini API Handler
@@ -245,6 +451,8 @@ class LocalLMHandler {
 // Main LLM Service
 export class LLMService {
   private geminiHandler: GeminiHandler | null = null;
+  private azureOpenAIHandler: AzureOpenAIHandler | null = null;
+  private azureXAIHandler: AzureXAIHandler | null = null;
   private localHandler: LocalLMHandler;
 
   constructor() {
@@ -255,8 +463,24 @@ export class LLMService {
     this.geminiHandler = new GeminiHandler(apiKey);
   }
 
+  setAzureOpenAIKey(apiKey: string) {
+    this.azureOpenAIHandler = new AzureOpenAIHandler(apiKey);
+  }
+
+  setAzureXAIKey(apiKey: string) {
+    this.azureXAIHandler = new AzureXAIHandler(apiKey);
+  }
+
   async getAvailableModels(): Promise<LLMModel[]> {
     const models: LLMModel[] = [];
+
+    // Add Azure OpenAI models if API key is set
+    if (this.azureOpenAIHandler) {
+      const azureModels = this.azureOpenAIHandler.getAvailableModels();
+      models.push(...azureModels);
+    }
+
+    // Azure xAI models are now included in Azure OpenAI handler (same endpoint/key)
 
     // Add Gemini models if API key is set
     if (this.geminiHandler) {
@@ -274,7 +498,23 @@ export class LLMService {
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const { messages, model, tools, systemPrompt } = request;
 
-    if (model.provider === 'gemini') {
+    if (model.provider === 'azure-openai') {
+      if (!this.azureOpenAIHandler) {
+        return {
+          content: '',
+          error: 'Azure OpenAI API key not set'
+        };
+      }
+      return this.azureOpenAIHandler.chat(messages, model.id, systemPrompt);
+    } else if (model.provider === 'azure-xai') {
+      if (!this.azureXAIHandler) {
+        return {
+          content: '',
+          error: 'Azure xAI API key not set'
+        };
+      }
+      return this.azureXAIHandler.chat(messages, model.id, systemPrompt);
+    } else if (model.provider === 'gemini') {
       if (!this.geminiHandler) {
         return {
           content: '',

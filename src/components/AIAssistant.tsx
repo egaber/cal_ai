@@ -25,7 +25,7 @@ import { MemoryExtractionService } from "@/services/memoryExtractionService";
 import { StorageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
 import { EventCard } from "@/components/EventCard";
-import { getGeminiApiKey } from "@/config/gemini";
+import { getGeminiApiKey, getAzureOpenAIApiKey } from "@/config/gemini";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -57,6 +57,7 @@ export const AIAssistant = ({
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [azureOpenAIApiKey, setAzureOpenAIApiKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
 
@@ -108,14 +109,22 @@ export const AIAssistant = ({
     }
   };
 
-  // Load API key and fetch models on mount
+  // Load API keys and fetch models on mount
   useEffect(() => {
-    // Try to get API key from config first, then localStorage
-    const configKey = getGeminiApiKey();
-    if (configKey) {
-      setGeminiApiKey(configKey);
-      llmService.setGeminiKey(configKey);
+    // Try to get Gemini API key from config first, then localStorage
+    const geminiKey = getGeminiApiKey();
+    if (geminiKey) {
+      setGeminiApiKey(geminiKey);
+      llmService.setGeminiKey(geminiKey);
     }
+
+    // Try to get Azure OpenAI API key (used for all Azure models)
+    const azureOpenAIKey = getAzureOpenAIApiKey();
+    if (azureOpenAIKey) {
+      setAzureOpenAIApiKey(azureOpenAIKey);
+      llmService.setAzureOpenAIKey(azureOpenAIKey);
+    }
+
     loadModels();
   }, []);
 
@@ -141,17 +150,28 @@ export const AIAssistant = ({
   };
 
   const handleSaveSettings = () => {
+    let saved = false;
+
     if (geminiApiKey) {
-      // Only save to localStorage if user manually enters a key
-      // (config file key takes precedence)
       localStorage.setItem('gemini_api_key', geminiApiKey);
       llmService.setGeminiKey(geminiApiKey);
+      saved = true;
+    }
+
+    if (azureOpenAIApiKey) {
+      localStorage.setItem('azure_openai_api_key', azureOpenAIApiKey);
+      llmService.setAzureOpenAIKey(azureOpenAIApiKey);
+      saved = true;
+    }
+
+    if (saved) {
       toast({
         title: "Settings saved",
-        description: "Gemini API key has been saved.",
+        description: "API keys have been saved.",
       });
-      loadModels(); // Reload models to include Gemini
+      loadModels(); // Reload models to include new providers
     }
+    
     setSettingsOpen(false);
   };
 
@@ -429,7 +449,7 @@ When calculating times, use the current date and timezone shown above. For "toda
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="gemini-key">Gemini API Key</Label>
+                <Label htmlFor="gemini-key">Gemini API Key (Optional)</Label>
                 <Input
                   id="gemini-key"
                   type="password"
@@ -449,6 +469,21 @@ When calculating times, use the current date and timezone shown above. For "toda
                   </a>
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="azure-openai-key">Azure OpenAI API Key (Optional)</Label>
+                <Input
+                  id="azure-openai-key"
+                  type="password"
+                  placeholder="Enter your Azure OpenAI API key"
+                  value={azureOpenAIApiKey}
+                  onChange={(e) => setAzureOpenAIApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  For all Azure models: GPT-4.1, GPT-5 Mini, Grok 4, O3 Mini
+                </p>
+              </div>
+
               <Button onClick={handleSaveSettings} className="w-full">
                 Save Settings
               </Button>

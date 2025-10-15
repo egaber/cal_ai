@@ -15,7 +15,7 @@ import { useFamily } from '@/contexts/FamilyContext';
 
 interface FamilyManagementProps {
   members: FamilyMember[];
-  onAddMember: (member: Omit<FamilyMember, 'id'>) => void;
+  onAddMember: (member: Omit<FamilyMember, 'id' | 'color'>) => void;
   onRemoveMember: (memberId: string) => void;
   currentUser?: UserProfile;
 }
@@ -97,25 +97,11 @@ export const FamilyManagement = ({
     // Automatically set isMobile based on age and role
     const isMobile = newMemberRole === 'parent' || age >= 18;
 
-    const colors = [
-      'bg-blue-500',
-      'bg-purple-500',
-      'bg-green-500',
-      'bg-orange-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-red-500',
-      'bg-yellow-500',
-    ];
-    const usedColors = members.map(m => m.color);
-    const availableColor = colors.find(c => !usedColors.includes(c)) || colors[0];
-
     onAddMember({
       name: newMemberName.trim(),
       role: newMemberRole,
       age,
       isMobile,
-      color: availableColor,
     });
 
     // Reset form

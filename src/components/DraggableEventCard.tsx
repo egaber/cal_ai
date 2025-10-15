@@ -357,6 +357,11 @@ export const DraggableEventCard = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Disable drag on mobile/touch devices
+    if ('ontouchstart' in window) {
+      return;
+    }
+    
     if (e.target instanceof HTMLElement && e.target.classList.contains('resize-handle')) {
       return;
     }
@@ -390,6 +395,11 @@ export const DraggableEventCard = ({
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent, direction: 'top' | 'bottom') => {
+    // Disable resize on mobile/touch devices
+    if ('ontouchstart' in window) {
+      return;
+    }
+    
     e.stopPropagation();
     setIsResizing(direction);
   };
@@ -490,7 +500,8 @@ export const DraggableEventCard = ({
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       className={cn(
-        'absolute cursor-move select-none overflow-hidden rounded-sm border bg-white/90 shadow-sm transition-all hover:shadow-md',
+        'absolute select-none overflow-hidden rounded-sm border bg-white/90 shadow-sm transition-all hover:shadow-md',
+        'ontouchstart' in window ? 'cursor-pointer' : 'cursor-move',
         styles.card,
         isDragging && 'scale-[1.01] border-primary/40',
         isResizing && 'scale-[1.01] border-primary/40',
@@ -510,11 +521,13 @@ export const DraggableEventCard = ({
       {/* Vertical color bar on the left - full height and positioned slightly to the right */}
       <div className={cn('absolute left-1.5 top-1 bottom-1 w-1', styles.bar, 'rounded-full')} />
 
-      {/* Top resize handle */}
-      <div
-        className="resize-handle absolute left-4 right-4 top-1 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
-        onMouseDown={(e) => handleResizeMouseDown(e, 'top')}
-      />
+      {/* Top resize handle - hidden on mobile */}
+      {'ontouchstart' in window ? null : (
+        <div
+          className="resize-handle absolute left-4 right-4 top-1 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
+          onMouseDown={(e) => handleResizeMouseDown(e, 'top')}
+        />
+      )}
 
       <div className="flex h-full flex-col gap-0.5 pl-2 pr-2 py-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -581,11 +594,13 @@ export const DraggableEventCard = ({
         )}
       </div>
 
-      {/* Bottom resize handle */}
-      <div
-        className="resize-handle absolute bottom-1 left-4 right-4 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
-        onMouseDown={(e) => handleResizeMouseDown(e, 'bottom')}
-      />
+      {/* Bottom resize handle - hidden on mobile */}
+      {'ontouchstart' in window ? null : (
+        <div
+          className="resize-handle absolute bottom-1 left-4 right-4 h-1 rounded-full bg-gray-300/50 opacity-0 transition-opacity cursor-ns-resize hover:opacity-100"
+          onMouseDown={(e) => handleResizeMouseDown(e, 'bottom')}
+        />
+      )}
     </div>
   );
 };

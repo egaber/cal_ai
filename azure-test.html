@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Azure OpenAI Test</title>
+</head>
+<body>
+    <h1>Azure OpenAI Connection Test</h1>
+    <div>
+        <label>API Key: <input type="password" id="apiKey" size="50" placeholder="Paste your Azure OpenAI API key"></label>
+    </div>
+    <div>
+        <label>Endpoint: <input type="text" id="endpoint" size="50" value="https://noney-m9021pcb-eastus2.cognitiveservices.azure.com/"></label>
+    </div>
+    <div>
+        <label>Deployment: <input type="text" id="deployment" value="gpt-5-mini"></label>
+    </div>
+    <div>
+        <button onclick="testConnection()">Test Connection</button>
+    </div>
+    <div id="result" style="margin-top: 20px; white-space: pre-wrap; font-family: monospace;"></div>
+
+    <script>
+        async function testConnection() {
+            const apiKey = document.getElementById('apiKey').value;
+            const endpoint = document.getElementById('endpoint').value;
+            const deployment = document.getElementById('deployment').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!apiKey) {
+                resultDiv.textContent = 'Error: Please enter an API key';
+                return;
+            }
+
+            resultDiv.textContent = 'Testing connection...\n';
+            resultDiv.textContent += `Endpoint: ${endpoint}\n`;
+            resultDiv.textContent += `Deployment: ${deployment}\n`;
+            resultDiv.textContent += `API Key length: ${apiKey.length}\n`;
+            resultDiv.textContent += `API Key preview: ${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}\n\n`;
+
+            const url = `${endpoint}openai/deployments/${deployment}/chat/completions?api-version=2024-12-01-preview`;
+            resultDiv.textContent += `Request URL: ${url}\n\n`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'api-key': apiKey,
+                    },
+                    body: JSON.stringify({
+                        messages: [
+                            {
+                                role: 'user',
+                                content: 'Say "Hello, Azure OpenAI is working!"'
+                            }
+                        ],
+                        max_tokens: 50
+                    })
+                });
+
+                resultDiv.textContent += `Response Status: ${response.status} ${response.statusText}\n\n`;
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent += '✅ SUCCESS!\n\n';
+                    resultDiv.textContent += `Response:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.textContent += '❌ ERROR!\n\n';
+                    resultDiv.textContent += `Error Response:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.textContent += `❌ EXCEPTION: ${error.message}\n`;
+                resultDiv.textContent += `${error.stack}`;
+            }
+        }
+    </script>
+</body>
+</html>
