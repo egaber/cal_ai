@@ -519,7 +519,7 @@ Interpret relative times like "today at 6pm" using today's date (${currentDate.t
                   }`}
                 >
                   <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    {msg.role === 'user' ? '👤 You' : '🐼 Assistant'}
+                    {msg.role === 'user' ? '🙍‍♂️' : '🐼'}
                   </div>
                   
                   {/* Render EventCard if this message has an event */}

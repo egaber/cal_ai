@@ -1,13 +1,30 @@
-// Task Service - Enhanced AI task pipeline (mobile-first quick creation + staged processing)
+// Task Service - Enhanced AI task pipeline with Firestore cloud storage
 //
 // Key changes:
+// - Cloud storage via Firestore (per-user collections)
 // - Quick creation without waiting for AI (instant insertion)
 // - Separate AI pipeline steps: categorize, prioritize, break down, estimate, enhance, SMART evaluate
 // - Each step can run independently; can batch run full pipeline
 // - Processing progress stored inside Task.processingSteps + processingPhase
+// - Real-time sync with listeners
 // - Backwards-compatible analyzeTask (legacy)
 // - Weekly scheduling unchanged (will later leverage enhanced fields)
 
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
+  orderBy,
+  Timestamp,
+  onSnapshot,
+  QuerySnapshot,
+  DocumentData,
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { llmService, Message } from './llmService';
 import {
   Task,
@@ -37,8 +54,176 @@ const PIPELINE_PHASES: TaskProcessingPhase[] = [
 
 class TaskService {
   private static STORAGE_KEY = 'calendar_ai_tasks';
+  private userId: string | null = null;
+  private familyId: string | null = null;
 
-  // ---------- Utility & Storage ----------
+  // Initialize with user context for Firestore
+  initialize(userId: string, familyId: string): void {
+    this.userId = userId;
+    this.familyId = familyId;
+    // Migrate localStorage tasks to Firestore on first init
+    this.migrateLocalStorageToFirestore().catch(err => 
+      console.error('Migration error:', err)
+    );
+  }
+
+  // Get Firestore collection path
+  private getTasksCollection(): string {
+    if (!this.userId || !this.familyId) {
+      throw new Error('TaskService not initialized with user/family ID');
+    }
+    return `families/${this.familyId}/members/${this.userId}/tasks`;
+  }
+
+  // ---------- Firestore Operations ----------
+
+  // Convert Task to Firestore format
+  private toFirestore(task: Task): DocumentData {
+    const cleanTask: any = {};
+    Object.keys(task).forEach(key => {
+      const value = (task as any)[key];
+      if (value !== undefined) {
+        cleanTask[key] = value;
+      }
+    });
+    return {
+      ...cleanTask,
+      createdAt: task.createdAt || Timestamp.now().toDate().toISOString(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
+    };
+  }
+
+  // Convert Firestore document to Task
+  private fromFirestore(doc: DocumentData): Task {
+    return {
+      ...doc,
+      id: doc.id,
+    } as Task;
+  }
+
+  // Save task to Firestore
+  async saveTaskToFirestore(task: Task): Promise<void> {
+    if (!this.userId || !this.familyId) return;
+    try {
+      const taskRef = doc(collection(db, this.getTasksCollection()), task.id);
+      await setDoc(taskRef, this.toFirestore(task));
+    } catch (error) {
+      console.error('Error saving task to Firestore:', error);
+      throw error;
+    }
+  }
+
+  // Update task in Firestore
+  async updateTaskInFirestore(taskId: string, updates: Partial<Task>): Promise<void> {
+    if (!this.userId || !this.familyId) return;
+    try {
+      const cleanUpdates: any = {};
+      Object.keys(updates).forEach(key => {
+        const value = (updates as any)[key];
+        if (value !== undefined) {
+          cleanUpdates[key] = value;
+        }
+      });
+      const taskRef = doc(db, this.getTasksCollection(), taskId);
+      await updateDoc(taskRef, {
+        ...cleanUpdates,
+        updatedAt: Timestamp.now().toDate().toISOString(),
+      });
+    } catch (error) {
+      console.error('Error updating task in Firestore:', error);
+      throw error;
+    }
+  }
+
+  // Delete task from Firestore
+  async deleteTaskFromFirestore(taskId: string): Promise<void> {
+    if (!this.userId || !this.familyId) return;
+    try {
+      const taskRef = doc(db, this.getTasksCollection(), taskId);
+      await deleteDoc(taskRef);
+    } catch (error) {
+      console.error('Error deleting task from Firestore:', error);
+      throw error;
+    }
+  }
+
+  // Load tasks from Firestore
+  async loadTasksFromFirestore(): Promise<Task[]> {
+    if (!this.userId || !this.familyId) return [];
+    try {
+      const tasksRef = collection(db, this.getTasksCollection());
+      const q = query(tasksRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const tasks: Task[] = [];
+      querySnapshot.forEach((doc) => {
+        tasks.push(this.fromFirestore({ id: doc.id, ...doc.data() }));
+      });
+      return tasks;
+    } catch (error) {
+      console.error('Error loading tasks from Firestore:', error);
+      return [];
+    }
+  }
+
+  // Subscribe to real-time task updates
+  subscribeToTasks(callback: (tasks: Task[]) => void): () => void {
+    if (!this.userId || !this.familyId) {
+      console.warn('Cannot subscribe: TaskService not initialized');
+      return () => {};
+    }
+    try {
+      const tasksRef = collection(db, this.getTasksCollection());
+      const q = query(tasksRef, orderBy('createdAt', 'desc'));
+      const unsubscribe = onSnapshot(
+        q,
+        (querySnapshot: QuerySnapshot) => {
+          const tasks: Task[] = [];
+          querySnapshot.forEach((doc) => {
+            tasks.push(this.fromFirestore({ id: doc.id, ...doc.data() }));
+          });
+          callback(tasks);
+        },
+        (error) => {
+          console.error('Error subscribing to tasks:', error);
+        }
+      );
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up task subscription:', error);
+      return () => {};
+    }
+  }
+
+  // Migrate localStorage tasks to Firestore
+  private async migrateLocalStorageToFirestore(): Promise<void> {
+    if (!this.userId || !this.familyId) return;
+    try {
+      const localTasks = this.loadRaw();
+      if (localTasks.length === 0) return;
+
+      // Check if already migrated
+      const firestoreTasks = await this.loadTasksFromFirestore();
+      if (firestoreTasks.length > 0) {
+        // Already have Firestore tasks, clear localStorage
+        localStorage.removeItem(TaskService.STORAGE_KEY);
+        return;
+      }
+
+      // Migrate each task
+      console.log(`Migrating ${localTasks.length} tasks to Firestore...`);
+      for (const task of localTasks) {
+        await this.saveTaskToFirestore(task);
+      }
+      
+      // Clear localStorage after successful migration
+      localStorage.removeItem(TaskService.STORAGE_KEY);
+      console.log('Migration complete!');
+    } catch (error) {
+      console.error('Error migrating tasks:', error);
+    }
+  }
+
+  // ---------- Legacy localStorage Methods (for backward compatibility) ----------
 
   private loadRaw(): Task[] {
     try {
@@ -50,14 +235,25 @@ class TaskService {
   }
 
   saveTasks(tasks: Task[]): void {
-    try {
-      localStorage.setItem(TaskService.STORAGE_KEY, JSON.stringify(tasks));
-    } catch (error) {
-      console.error('Error saving tasks:', error);
+    // Save to Firestore if initialized
+    if (this.userId && this.familyId) {
+      tasks.forEach(task => {
+        this.saveTaskToFirestore(task).catch(err =>
+          console.error(`Error saving task ${task.id}:`, err)
+        );
+      });
+    } else {
+      // Fallback to localStorage
+      try {
+        localStorage.setItem(TaskService.STORAGE_KEY, JSON.stringify(tasks));
+      } catch (error) {
+        console.error('Error saving tasks:', error);
+      }
     }
   }
 
   loadTasks(): Task[] {
+    // This is now synchronous fallback - use loadTasksFromFirestore for async
     return this.loadRaw();
   }
 

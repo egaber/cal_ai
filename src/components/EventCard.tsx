@@ -2,7 +2,7 @@ import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getCategoryMeta, getCategoryEmoji, categoryBadgeClasses } from "@/config/taskCategories";
+import { getCategoryMeta, getCategoryEmoji, categoryBadgeClasses, getCategoryName } from "@/config/taskCategories";
 
 interface EventCardProps {
   event: CalendarEvent;
@@ -85,7 +85,7 @@ export const EventCard = ({ event, member }: EventCardProps) => {
               categoryBadgeClasses(event.category)
             )}>
               <span className="mr-1">{getCategoryEmoji(event.category)}</span>
-              {event.category}
+              {getCategoryName(event.category)}
             </span>
             
             {member && (

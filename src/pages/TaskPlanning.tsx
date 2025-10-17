@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Task, TaskProcessingPhase } from '@/types/task';
 import { FamilyMember } from '@/types/calendar';
+import { UserProfile } from '@/types/user';
 import { taskService } from '@/services/taskService';
 import { StorageService } from '@/services/storageService';
 import { Button } from '@/components/ui/button';
@@ -17,12 +18,6 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle
-} from '@/components/ui/sheet';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -44,8 +39,6 @@ import {
   CheckCircle2,
   ChevronUp,
   ChevronDown,
-  Menu,
-  Settings2,
   Cpu
 } from 'lucide-react';
 import { PRIMARY_COLOR } from '@/config/branding';
@@ -53,7 +46,7 @@ import { useEvents } from '@/contexts/EventContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { llmService, LLMModel } from '@/services/llmService';
-import { categoryBadgeClasses, getCategoryEmoji } from '@/config/taskCategories';
+import { categoryBadgeClasses, getCategoryEmoji, getCategoryName } from '@/config/taskCategories';
 
 const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   idle: 'ממתין',
@@ -68,8 +61,6 @@ const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   error: 'שגיאה'
 };
 
-// Using centralized category definitions from config/taskCategories.ts
-
 export default function TaskPlanning() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -78,36 +69,74 @@ export default function TaskPlanning() {
   const [quickTitle, setQuickTitle] = useState('');
   const [quickDescription, setQuickDescription] = useState('');
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
-  const [showGuidance, setShowGuidance] = useState(false);
-  const [showPipelineDialog, setShowPipelineDialog] = useState(false);
   const [pipelineTask, setPipelineTask] = useState<Task | null>(null);
+  const [showPipelineDialog, setShowPipelineDialog] = useState(false);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
-  const [showCategoryDrawer, setShowCategoryDrawer] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+
+  // Right side icon pane state
+  const [activeRightPane, setActiveRightPane] = useState<'categories' | 'model' | 'guidance' | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Model selection for pipeline
-  const [showModelDrawer, setShowModelDrawer] = useState(false);
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
 
   const { events } = useEvents();
 
+  // Initialize taskService and subscribe to Firestore
   useEffect(() => {
+    if (!currentUser?.uid || !currentUser?.familyId) return;
+
+    // Initialize task service with user context
+    taskService.initialize(currentUser.uid, currentUser.familyId);
+
+    // Subscribe to real-time task updates
+    const unsubscribe = taskService.subscribeToTasks((updatedTasks) => {
+      setTasks(sortTasks(updatedTasks));
+      setLoadingTasks(false);
+    });
+
+    // Load family members
     const members = StorageService.loadFamilyMembers() || [];
     setFamilyMembers(members);
-    hydrateTasks();
-  }, []);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser]);
+
+  // Sort tasks helper
+  const sortTasks = (taskList: Task[]): Task[] => {
+    const phaseOrder: TaskProcessingPhase[] = [
+      'idle',
+      'context_loading',
+      'categorizing',
+      'prioritizing',
+      'breaking_down',
+      'estimating',
+      'enhancing',
+      'smart_evaluating',
+      'complete',
+      'error'
+    ];
+
+    return [...taskList].sort((a, b) => {
+      const phaseDiff = phaseOrder.indexOf(a.processingPhase) - phaseOrder.indexOf(b.processingPhase);
+      if (phaseDiff !== 0) return phaseDiff;
+      return (b.priority || 0) - (a.priority || 0);
+    });
+  };
 
   useEffect(() => {
-    // Initialize selected model from localStorage
     try {
       const stored = localStorage.getItem('task_pipeline_model_id');
       if (stored) {
         setSelectedModelId(stored);
       }
     } catch {
-      // ignore
+      /* ignore */
     }
     loadModels();
   }, []);
@@ -133,7 +162,7 @@ export default function TaskPlanning() {
           title: 'מודל נשמר',
           description: `מודל תהליך המשימות עודכן (${selectedModelId}).`
         });
-        setShowModelDrawer(false);
+        setActiveRightPane(null);
       } catch {
         toast({
           title: 'שגיאה',
@@ -154,48 +183,13 @@ export default function TaskPlanning() {
           processingSteps: t.aiAnalysis
             ? []
             : [
-                {
-                  id: 'step-context_loading',
-                  phase: 'context_loading' as TaskProcessingPhase,
-                  label: 'טעינת הקשר',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-categorizing',
-                  phase: 'categorizing' as TaskProcessingPhase,
-                  label: 'קטגוריזציה',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-prioritizing',
-                  phase: 'prioritizing' as TaskProcessingPhase,
-                  label: 'קביעת עדיפות',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-breaking_down',
-                  phase: 'breaking_down' as TaskProcessingPhase,
-                  label: 'פירוק למשימות משנה',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-estimating',
-                  phase: 'estimating' as TaskProcessingPhase,
-                  label: 'הערכת זמנים',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-enhancing',
-                  phase: 'enhancing' as TaskProcessingPhase,
-                  label: 'שיפור ואופטימיזציה',
-                  status: 'pending'
-                },
-                {
-                  id: 'step-smart_evaluating',
-                  phase: 'smart_evaluating' as TaskProcessingPhase,
-                  label: 'SMART / קס"ם',
-                  status: 'pending'
-                }
+                { id: 'step-context_loading', phase: 'context_loading', label: 'טעינת הקשר', status: 'pending' },
+                { id: 'step-categorizing', phase: 'categorizing', label: 'קטגוריזציה', status: 'pending' },
+                { id: 'step-prioritizing', phase: 'prioritizing', label: 'קביעת עדיפות', status: 'pending' },
+                { id: 'step-breaking_down', phase: 'breaking_down', label: 'פירוק למשימות משנה', status: 'pending' },
+                { id: 'step-estimating', phase: 'estimating', label: 'הערכת זמנים', status: 'pending' },
+                { id: 'step-enhancing', phase: 'enhancing', label: 'שיפור ואופטימיזציה', status: 'pending' },
+                { id: 'step-smart_evaluating', phase: 'smart_evaluating', label: 'SMART / קס"ם', status: 'pending' }
               ]
         } as Task;
       }
@@ -216,8 +210,7 @@ export default function TaskPlanning() {
     ];
 
     updated.sort((a, b) => {
-      const phaseDiff =
-        phaseOrder.indexOf(a.processingPhase) - phaseOrder.indexOf(b.processingPhase);
+      const phaseDiff = phaseOrder.indexOf(a.processingPhase) - phaseOrder.indexOf(b.processingPhase);
       if (phaseDiff !== 0) return phaseDiff;
       return (b.priority || 0) - (a.priority || 0);
     });
@@ -226,7 +219,7 @@ export default function TaskPlanning() {
     setTasks(updated);
   };
 
-  const handleQuickAdd = () => {
+const handleQuickAdd = async () => {
     if (!quickTitle.trim()) {
       toast({
         title: 'שגיאה',
@@ -238,11 +231,28 @@ export default function TaskPlanning() {
     const newTask = taskService.quickCreateTask(quickTitle.trim(), quickDescription.trim());
     setQuickTitle('');
     setQuickDescription('');
+    // Hydrate so steps scaffold exists before running phases
     hydrateTasks();
-    toast({
-      title: '✅ נוספה משימה',
-      description: `המשימה "${newTask.title}" נוצרה. ה-AI עדיין לא התחיל.`
-    });
+    setRunningTaskId(newTask.id);
+    try {
+      // Auto context load then categorization
+      await taskService.runPhase(newTask.id, 'context_loading', familyMembers, events);
+      await taskService.runPhase(newTask.id, 'categorizing', familyMembers, events);
+      hydrateTasks();
+      toast({
+        title: '✅ נוספה וסווגה',
+        description: `המשימה "${newTask.title}" סווגה אוטומטית.`
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'שגיאה בסיווג';
+      toast({
+        title: 'שגיאת סיווג',
+        description: message,
+        variant: 'destructive'
+      });
+    } finally {
+      setRunningTaskId(null);
+    }
   };
 
   const runPhase = async (taskId: string, phase: TaskProcessingPhase) => {
@@ -256,24 +266,16 @@ export default function TaskPlanning() {
         'enhancing',
         'smart_evaluating'
       ].includes(phase)
-    ) {
+    )
       return;
-    }
     setRunningTaskId(taskId);
     try {
       await taskService.runPhase(taskId, phase, familyMembers, events);
       hydrateTasks();
-      toast({
-        title: 'AI',
-        description: `השלב "${PIPELINE_PHASE_LABELS[phase]}" הושלם`
-      });
+      toast({ title: 'AI', description: `השלב "${PIPELINE_PHASE_LABELS[phase]}" הושלם` });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'שגיאה בשלב';
-      toast({
-        title: 'שגיאת AI',
-        description: message,
-        variant: 'destructive'
-      });
+      toast({ title: 'שגיאת AI', description: message, variant: 'destructive' });
     } finally {
       setRunningTaskId(null);
     }
@@ -283,7 +285,8 @@ export default function TaskPlanning() {
     setRunningTaskId(taskId);
     try {
       const current = taskService.loadTasks().find(t => t.id === taskId);
-      const smallTask = current && current.estimatedDuration && current.estimatedDuration <= 60 && current.subtasks.length === 0;
+      const smallTask =
+        current && current.estimatedDuration && current.estimatedDuration <= 60 && current.subtasks.length === 0;
       const phases: TaskProcessingPhase[] = [
         'context_loading',
         'categorizing',
@@ -301,17 +304,10 @@ export default function TaskPlanning() {
       }
       taskService.updateTask(taskId, { processingPhase: 'complete' });
       hydrateTasks();
-      toast({
-        title: 'AI',
-        description: 'תהליך ניתוח הושלם'
-      });
+      toast({ title: 'AI', description: 'תהליך ניתוח הושלם' });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'שגיאה בתהליך ניתוח';
-      toast({
-        title: 'שגיאה',
-        description: message,
-        variant: 'destructive'
-      });
+      toast({ title: 'שגיאה', description: message, variant: 'destructive' });
     } finally {
       setRunningTaskId(null);
     }
@@ -325,17 +321,10 @@ export default function TaskPlanning() {
         await runFullPipeline(id);
       }
       hydrateTasks();
-      toast({
-        title: 'עיבוד אצווה',
-        description: 'כל משימות idle עובדו'
-      });
+      toast({ title: 'עיבוד אצווה', description: 'כל משימות idle עובדו' });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'תקלה';
-      toast({
-        title: 'שגיאה בעיבוד אצווה',
-        description: message,
-        variant: 'destructive'
-      });
+      toast({ title: 'שגיאה בעיבוד אצווה', description: message, variant: 'destructive' });
     } finally {
       setIsBatchRunning(false);
     }
@@ -388,7 +377,7 @@ export default function TaskPlanning() {
         let cumulative = 0;
         t.subtasks.forEach((st, idx) => {
           const scaled = Math.max(1, Math.round(st.estimatedDuration * ratio));
-          st.estimatedDuration = scaled;
+            st.estimatedDuration = scaled;
           cumulative += scaled;
           if (idx === t.subtasks.length - 1 && cumulative !== Math.round(newTotal)) {
             const diff = Math.round(newTotal) - cumulative;
@@ -400,6 +389,82 @@ export default function TaskPlanning() {
     }
     taskService.saveTasks(all);
     hydrateTasks();
+  };
+
+  const handleSuggestTime = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const durationMin = Math.max(15, task.estimatedDuration || 30);
+    const slotMs = durationMin * 60 * 1000;
+    const now = new Date();
+    const horizonDays = 7;
+    const WORK_START = 9;
+    const WORK_END = 18;
+
+    const futureEvents = events
+      .filter(e => new Date(e.endTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    const findSlotInDay = (day: Date): { start: Date; end: Date } | null => {
+      const dayStart = new Date(day);
+      dayStart.setHours(WORK_START, 0, 0, 0);
+      const dayEnd = new Date(day);
+      dayEnd.setHours(WORK_END, 0, 0, 0);
+
+      const dayEvents = futureEvents.filter(ev => {
+        const evStart = new Date(ev.startTime);
+        return (
+          evStart.getFullYear() === day.getFullYear() &&
+          evStart.getMonth() === day.getMonth() &&
+          evStart.getDate() === day.getDate()
+        );
+      });
+
+      let cursor = dayStart;
+      for (const ev of dayEvents) {
+        const evStart = new Date(ev.startTime);
+        const evEnd = new Date(ev.endTime);
+        if (evStart.getTime() - cursor.getTime() >= slotMs) {
+          return { start: new Date(cursor), end: new Date(cursor.getTime() + slotMs) };
+        }
+        if (evEnd > cursor) cursor = new Date(evEnd);
+        if (cursor.getTime() + slotMs > dayEnd.getTime()) break;
+      }
+      if (dayEnd.getTime() - cursor.getTime() >= slotMs) {
+        return { start: new Date(cursor), end: new Date(cursor.getTime() + slotMs) };
+      }
+      return null;
+    };
+
+    let found: { start: Date; end: Date } | null = null;
+    for (let i = 0; i < horizonDays && !found; i++) {
+      const d = new Date();
+      d.setDate(now.getDate() + i);
+      found = findSlotInDay(d);
+    }
+
+    if (found) {
+      const fmt = (d: Date) =>
+        d.toLocaleString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      toast({
+        title: 'הצעת זמן',
+        description: `הצעה: ${fmt(found.start)} – ${fmt(found.end)} (${durationMin} דק)`
+      });
+    } else {
+      const fallback = task.aiAnalysis?.schedulingTips?.[0];
+      toast({
+        title: 'לא נמצא חלון פנוי',
+        description: fallback || 'אין זמינות מתאימה ב-7 הימים הקרובים.',
+        variant: fallback ? 'default' : 'destructive'
+      });
+    }
   };
 
   const categoryStats = useMemo(() => {
@@ -424,19 +489,11 @@ export default function TaskPlanning() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b">
         <div className="px-4 py-3 flex items-center justify-between">
-          {/* Left group: category button + icon/title */}
+          {/* Title Group */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCategoryDrawer(true)}
-              className="whitespace-nowrap flex items-center gap-1"
-            >
-              <Menu className="h-4 w-4" />
-              קטגוריות
-            </Button>
             <div
               className="p-2 rounded-lg"
               style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}
@@ -444,69 +501,57 @@ export default function TaskPlanning() {
               <ListTodo className="h-5 w-5 text-white" />
             </div>
             <div className="text-right" dir="rtl">
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                משימות (גרסה חדשה)
-                {currentModel ? (
-                  <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-slate-100 border border-slate-300">
-                    מודל: {currentModel.name}
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-red-50 border border-red-300 text-red-700">
-                    אין מודל
-                  </span>
-                )}
-              </h1>
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">משימות</h1>
               <p className="text-xs text-gray-600">תוצאה AI למעלה • תהליך עיבוד למטה</p>
             </div>
           </div>
+
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowModelDrawer(true)}
-              className="whitespace-nowrap flex items-center gap-1"
-            >
-              <Cpu className="h-4 w-4" />
-              מודל
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowGuidance(true)}
-              className="whitespace-nowrap"
-            >
-              <Sparkles className="h-4 w-4 ml-1" />
-              עקרונות
-            </Button>
             <Button
               size="sm"
               disabled={isBatchRunning}
               onClick={runPipelineOnAllIdle}
               className="bg-green-600 hover:bg-green-700"
             >
-              {isBatchRunning ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <PlayCircle className="h-4 w-4" />
-              )}
+              {isBatchRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
               עבד הכל
             </Button>
           </div>
         </div>
-        <div className="px-4 pb-3">
+
+        {/* Model circle beneath header */}
+        <div className="px-4 pb-2 flex justify-end">
+          {currentModel ? (
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-9 rounded-full bg-slate-100 border border-slate-300 text-[9px] font-semibold flex items-center justify-center shadow-sm">
+                {currentModel.name.slice(0, 3)}
+              </div>
+              <span className="text-[10px] px-2 py-1 rounded-full bg-slate-50 border border-slate-300">
+                מודל: {currentModel.name}
+              </span>
+            </div>
+          ) : (
+            <span className="text-[10px] px-2 py-1 rounded-full bg-red-50 border border-red-300 text-red-700">
+              אין מודל
+            </span>
+          )}
+        </div>
+
+        {/* Quick Add */}
+        <div className="px-2 pb-3 pr-14 md:pr-14">
           <div className="bg-white rounded-lg shadow p-3 space-y-2 border">
             <Input
               dir="rtl"
               placeholder="הוסף משימה מידית... (כותרת)"
               value={quickTitle}
-              onChange={(e) => setQuickTitle(e.target.value)}
+              onChange={e => setQuickTitle(e.target.value)}
               className="text-right"
             />
             <Textarea
               dir="rtl"
               placeholder="תיאור (אופציונלי)"
               value={quickDescription}
-              onChange={(e) => setQuickDescription(e.target.value)}
+              onChange={e => setQuickDescription(e.target.value)}
               className="text-right min-h-[70px]"
             />
             <div className="flex gap-2">
@@ -530,19 +575,58 @@ export default function TaskPlanning() {
               </Button>
             </div>
             <div className="text-xs text-gray-600" dir="rtl">
-              המשימה נכנסת מיד לרשימה. AI מתחיל רק לאחר לחיצה על שלב או הפעלת Run AI.
+              המשימה נכנסת מיד לרשימה וה-AI מסווג אותה אוטומטית. שאר השלבים ירוצו כשתפעיל Run AI או שלב בודד.
             </div>
           </div>
         </div>
       </div>
 
-      {/* CATEGORY DRAWER */}
-      <Sheet open={showCategoryDrawer} onOpenChange={setShowCategoryDrawer}>
-        <SheetContent side="left" className="w-72" dir="rtl">
-          <SheetHeader>
-            <SheetTitle>קטגוריות משימות</SheetTitle>
-          </SheetHeader>
-          <ScrollArea className="h-[80vh] pr-2 mt-2">
+      {/* Right side vertical icon pane */}
+      <div className="fixed top-24 py-1 right-2 z-40 flex flex-col gap-2">
+        <Button
+          variant={activeRightPane === 'categories' ? 'secondary' : 'outline'}
+          size="icon"
+          onClick={() => setActiveRightPane(activeRightPane === 'categories' ? null : 'categories')}
+          className="h-10 w-10"
+          title="קטגוריות"
+        >
+          <ListTodo className="h-5 w-5" />
+        </Button>
+        <Button
+          variant={activeRightPane === 'model' ? 'secondary' : 'outline'}
+          size="icon"
+          onClick={() => setActiveRightPane(activeRightPane === 'model' ? null : 'model')}
+          className="h-10 w-10"
+          title="מודל"
+        >
+          <Cpu className="h-5 w-5" />
+        </Button>
+        <Button
+          variant={activeRightPane === 'guidance' ? 'secondary' : 'outline'}
+          size="icon"
+          onClick={() => setActiveRightPane(activeRightPane === 'guidance' ? null : 'guidance')}
+          className="h-10 w-10"
+          title="עקרונות"
+        >
+          <Sparkles className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Categories Panel */}
+      {activeRightPane === 'categories' && (
+        <div
+          className="fixed top-24 right-14 w-72 h-[70vh] bg-white rounded-xl shadow-lg border p-3 z-40 flex flex-col"
+          dir="rtl"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <ListTodo className="h-4 w-4" /> קטגוריות משימות
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => setActiveRightPane(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 pr-1">
             <div className="space-y-2">
               <Button
                 variant={selectedCategory ? 'outline' : 'secondary'}
@@ -550,7 +634,7 @@ export default function TaskPlanning() {
                 className="w-full justify-between"
                 onClick={() => {
                   setSelectedCategory(null);
-                  setShowCategoryDrawer(false);
+                  setActiveRightPane(null);
                 }}
               >
                 <span>הכל</span>
@@ -568,13 +652,17 @@ export default function TaskPlanning() {
                     className="w-full justify-between"
                     onClick={() => {
                       setSelectedCategory(cat);
-                      setShowCategoryDrawer(false);
+                      setActiveRightPane(null);
                     }}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-1 ${categoryBadgeClasses(cat)}`}>
-<span>{getCategoryEmoji(cat)}</span>
-                        {cat}
+                      <span
+                        className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-1 ${categoryBadgeClasses(
+                          cat
+                        )}`}
+                      >
+                        <span>{getCategoryEmoji(cat)}</span>
+                        {getCategoryName(cat)}
                       </span>
                     </div>
                     <span className="text-xs">
@@ -584,32 +672,37 @@ export default function TaskPlanning() {
                 ))}
             </div>
           </ScrollArea>
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
 
-      {/* MODEL DRAWER */}
-      <Sheet open={showModelDrawer} onOpenChange={setShowModelDrawer}>
-        <SheetContent side="right" className="w-80" dir="rtl">
-          <SheetHeader>
-            <SheetTitle>מודל AI של תהליך המשימות</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
-            <div className="text-xs text-gray-600">
-              בחר את המודל שישמש לעיבוד שלבי המשימה (קטגוריזציה, עדיפות, פירוק, הערכה, שיפור, SMART).
-            </div>
+      {/* Model Panel */}
+      {activeRightPane === 'model' && (
+        <div
+          className="fixed top-24 right-14 w-80 h-[70vh] bg-white rounded-xl shadow-lg border p-4 z-40 flex flex-col"
+          dir="rtl"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Cpu className="h-4 w-4" /> מודל AI תהליך משימות
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => setActiveRightPane(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="text-xs text-gray-600 mb-3">
+            בחר מודל לעיבוד השלבים (קטגוריזציה, עדיפות, פירוק, הערכה, שיפור, SMART).
+          </div>
+          <div className="flex-1 space-y-3">
             {loadingModels ? (
               <div className="text-sm flex items-center gap-2 text-gray-500">
                 <RefreshCw className="h-4 w-4 animate-spin" /> טוען מודלים...
               </div>
             ) : models.length === 0 ? (
               <div className="text-sm text-red-600">
-                אין מודלים זמינים. יש להגדיר מפתחות API (Gemini / Azure) או להפעיל שרת מקומי.
+                אין מודלים זמינים. יש להגדיר מפתחות API או להפעיל שרת מקומי.
               </div>
             ) : (
-              <Select
-                value={selectedModelId || undefined}
-                onValueChange={(v) => setSelectedModelId(v)}
-              >
+              <Select value={selectedModelId || undefined} onValueChange={v => setSelectedModelId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="בחר מודל" />
                 </SelectTrigger>
@@ -623,11 +716,7 @@ export default function TaskPlanning() {
               </Select>
             )}
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowModelDrawer(false)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setActiveRightPane(null)}>
                 סגור
               </Button>
               <Button
@@ -645,8 +734,59 @@ export default function TaskPlanning() {
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
+
+      {/* Guidance Panel */}
+      {activeRightPane === 'guidance' && (
+        <div
+          className="fixed top-24 right-14 w-[340px] h-[70vh] bg-white rounded-xl shadow-lg border p-4 z-40 flex flex-col"
+          dir="rtl"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Sparkles className="h-4 w-4" /> עקרונות תיעדוף
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => setActiveRightPane(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 pr-1">
+            <div className="space-y-4 text-sm text-gray-800">
+              <div className="bg-blue-50 rounded p-3 border border-blue-200">
+                <h4 className="font-semibold mb-1">שלושת השלבים:</h4>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>רשימות – כתיבה מוחלטת של כל המטלות (Inbox)</li>
+                  <li>הערכת חשיבות / דחיפות וזמנים</li>
+                  <li>הכנסה ללוז (עוגנים והרגלים תחילה)</li>
+                </ol>
+                <p className="mt-2">שאלת סינון: האם חייב השבוע / אפשר לדחות / לבטל / להאציל?</p>
+              </div>
+              <div className="bg-purple-50 rounded p-3 border border-purple-200">
+                <h4 className="font-semibold mb-1">SMART:</h4>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>ספציפי</li>
+                  <li>מדיד</li>
+                  <li>בר השגה</li>
+                  <li>רלוונטי</li>
+                  <li>מוגבל בזמן</li>
+                </ul>
+                <h4 className="font-semibold mt-3 mb-1">קס"ם:</h4>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>קונקרטי / קצר</li>
+                  <li>ספציפי</li>
+                  <li>מדיד</li>
+                  <li>מוגבל בזמן / מתואם</li>
+                </ul>
+              </div>
+              <div className="bg-green-50 rounded p-3 border border-green-200">
+                <h4 className="font-semibold mb-1">תזמון AI:</h4>
+                <p>AI מנתח עומס שבועי, זמנים ומשימות משנה ומסייע לשילוב בלוח.</p>
+              </div>
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
@@ -654,13 +794,11 @@ export default function TaskPlanning() {
             {selectedCategory && (
               <div className="rounded-md border bg-white shadow-sm p-2 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
-<span className="text-xl">{getCategoryEmoji(selectedCategory)}</span>
+                  <span className="text-xl">{getCategoryEmoji(selectedCategory)}</span>
                   <span className={`px-2 py-1 rounded-full text-xs border ${categoryBadgeClasses(selectedCategory)}`}>
-                    {selectedCategory}
+                    {getCategoryName(selectedCategory)}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    משימות: {filteredTasks.length}
-                  </span>
+                  <span className="text-xs text-gray-500">משימות: {filteredTasks.length}</span>
                 </div>
                 <Button
                   variant="outline"
@@ -677,13 +815,11 @@ export default function TaskPlanning() {
               <div className="text-center py-12">
                 <Brain className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">
-                  {selectedCategory
-                    ? 'אין משימות בקטגוריה זו.'
-                    : 'אין משימות עדיין. הוסף משימה חדשה.'}
+                  {selectedCategory ? 'אין משימות בקטגוריה זו.' : 'אין משימות עדיין. הוסף משימה חדשה.'}
                 </p>
               </div>
             )}
-            {filteredTasks.map((task) => (
+            {filteredTasks.map(task => (
               <TaskCard
                 key={task.id}
                 task={task}
@@ -699,63 +835,15 @@ export default function TaskPlanning() {
                 onSetSubtask={setSubtaskDuration}
                 onSetTotal={setTotalDuration}
                 familyMembers={familyMembers}
-                currentUserId={currentUser?.uid || null}
+                currentUser={currentUser}
+                onSuggestTime={handleSuggestTime}
               />
             ))}
           </div>
         </ScrollArea>
       </div>
 
-      <Dialog open={showGuidance} onOpenChange={setShowGuidance}>
-        <DialogContent dir="rtl" className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>עקרונות תיעדוף ומשימות</DialogTitle>
-            <DialogDescription>תהליך מובנה לניהול משימות אפקטיבי</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-2">
-            <div className="space-y-4 text-sm text-gray-800">
-              <div className="bg-blue-50 rounded p-3 border border-blue-200">
-                <h4 className="font-semibold mb-1">שלושת השלבים:</h4>
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>רשימות – כתיבה מוחלטת של כל המטלות (Inbox)</li>
-                  <li>הערכת חשיבות / דחיפות וזמנים (שעה-שעתיים למשימה)</li>
-                  <li>הכנסה ללוז (עוגנים והרגלים תחילה, אחר כך משימות)</li>
-                </ol>
-                <p className="mt-2">
-                  שאלת סינון: האם חייב השבוע / אפשר לדחות / לבטל / להאציל?
-                </p>
-              </div>
-              <div className="bg-purple-50 rounded p-3 border border-purple-200">
-                <h4 className="font-semibold mb-1">SMART:</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>ספציפי (Specific)</li>
-                  <li>מדיד (Measurable)</li>
-                  <li>בר השגה (Achievable)</li>
-                  <li>רלוונטי (Relevant)</li>
-                  <li>מוגבל בזמן (Time-bound)</li>
-                </ul>
-                <h4 className="font-semibold mt-3 mb-1">קס"ם (וריאציה):</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>קונקרטי / קצר</li>
-                  <li>ספציפי</li>
-                  <li>מדיד</li>
-                  <li>מוגבל בזמן / מתואם</li>
-                </ul>
-              </div>
-              <div className="bg-green-50 rounded p-3 border border-green-200">
-                <h4 className="font-semibold mb-1">תזמון AI:</h4>
-                <p>
-                  AI מנתח עומס שבועי, זמנים, משימות משנה (רק אם ביקשת פירוק), ומסייע לשילוב בלוח.
-                </p>
-              </div>
-            </div>
-          </ScrollArea>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button onClick={() => setShowGuidance(false)}>סגור</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
+      {/* Pipeline Dialog */}
       <Dialog open={showPipelineDialog} onOpenChange={setShowPipelineDialog}>
         <DialogContent dir="rtl" className="max-w-2xl">
           <DialogHeader>
@@ -770,11 +858,8 @@ export default function TaskPlanning() {
               </h3>
               <ScrollArea className="max-h-[60vh] pr-1">
                 <div className="space-y-2">
-                  {pipelineTask.processingSteps?.map((step) => (
-                    <div
-                      key={step.id}
-                      className="p-3 rounded border bg-white flex flex-col gap-2"
-                    >
+                  {pipelineTask.processingSteps?.map(step => (
+                    <div key={step.id} className="p-3 rounded border bg-white flex flex-col gap-2">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <Badge
@@ -789,16 +874,12 @@ export default function TaskPlanning() {
                             }
                           >
                             {step.label}
-                            {step.status === 'in-progress' && (
-                              <span className="ml-1 animate-pulse">…</span>
-                            )}
+                            {step.status === 'in-progress' && <span className="ml-1 animate-pulse">…</span>}
                           </Badge>
                           {step.status === 'in-progress' && (
                             <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
                           )}
-                          {step.status === 'done' && (
-                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          )}
+                          {step.status === 'done' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
                           {step.status === 'error' && <X className="h-4 w-4 text-red-600" />}
                         </div>
                         <div className="flex gap-1">
@@ -814,9 +895,7 @@ export default function TaskPlanning() {
                         </div>
                       </div>
                       {step.status === 'in-progress' && (
-                        <div className="text-[11px] text-blue-700">
-                          מבצע: {PIPELINE_PHASE_LABELS[step.phase]}…
-                        </div>
+                        <div className="text-[11px] text-blue-700">מבצע: {PIPELINE_PHASE_LABELS[step.phase]}…</div>
                       )}
                       {step.reasoning && (
                         <div className="text-xs text-gray-700">
@@ -876,7 +955,8 @@ interface TaskCardProps {
   onSetSubtask: (taskId: string, subtaskId: string, value: number) => void;
   onSetTotal: (taskId: string, total: number) => void;
   familyMembers: FamilyMember[];
-  currentUserId: string | null;
+  currentUser: UserProfile | null;
+  onSuggestTime: (taskId: string) => void;
 }
 
 function TaskCard({
@@ -890,13 +970,29 @@ function TaskCard({
   onSetSubtask,
   onSetTotal,
   familyMembers,
-  currentUserId
+  currentUser,
+  onSuggestTime
 }: TaskCardProps) {
-  const [showSmart, setShowSmart] = useState(false);
+const [showSmart, setShowSmart] = useState(false);
+const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (
+      running ||
+      (task.processingPhase !== 'idle' &&
+        task.processingPhase !== 'complete' &&
+        task.processingPhase !== 'error')
+    ) {
+      setExpanded(true);
+    } else if (!running && task.processingPhase === 'complete') {
+      setExpanded(false);
+    }
+  }, [running, task.processingPhase]);
 
-  const nextStep = task.processingSteps?.find((s) => s.status === 'pending');
+  const nextStep = task.processingSteps?.find(s => s.status === 'pending');
   const totalSteps = task.processingSteps?.length || 0;
-  const doneSteps = task.processingSteps?.filter(s => s.status === 'done').length || (task.processingPhase === 'complete' ? totalSteps : 0);
+  const doneSteps =
+    task.processingSteps?.filter(s => s.status === 'done').length ||
+    (task.processingPhase === 'complete' ? totalSteps : 0);
   const pipelineProgress =
     totalSteps > 0
       ? Math.round((doneSteps / totalSteps) * 100)
@@ -907,10 +1003,8 @@ function TaskCard({
   const currentStepObj = task.processingSteps?.find(s => s.phase === task.processingPhase);
   const currentReasoning = currentStepObj?.reasoning || task.aiAnalysis?.reasoning;
 
-  const smallTaskNoBreakdown =
-    task.subtasks.length === 0 && task.estimatedDuration <= 60;
+  const smallTaskNoBreakdown = task.subtasks.length === 0 && task.estimatedDuration <= 60;
 
-  // Detect mentioned members by simple name inclusion in title/description
   const detectedMemberIds = familyMembers
     .filter(m => {
       const haystack = `${task.title} ${task.description || ''}`.toLowerCase();
@@ -918,84 +1012,88 @@ function TaskCard({
     })
     .map(m => m.id);
 
-  const allRelevantMemberIds = Array.from(
-    new Set([...(task.assignedToMemberIds || []), ...detectedMemberIds])
-  );
+  const allRelevantMemberIds = Array.from(new Set([...(task.assignedToMemberIds || []), ...detectedMemberIds]));
 
   return (
-    <div
-      className={`rounded-xl border shadow-sm bg-white flex flex-col gap-3 p-3 ${
+<div
+      className={`rounded-md border bg-white flex flex-col gap-2 p-3 w-full max-w-xl md:max-w-2xl hover:shadow-sm transition-shadow ${
         running ? 'ring-1 ring-blue-400' : ''
       }`}
     >
       {/* TOP RESULT SECTION (AI RESULT) */}
-      <div className="flex flex-col gap-2" dir="rtl">
-        <div className="flex items-start justify-between">
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            {task.emoji && <span className="text-2xl">{task.emoji}</span>}
-            <h3 className="font-semibold text-gray-900 text-base">{task.title}</h3>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between w-full">
+          {/* Left: category chip */}
+          <div className="flex items-center">
             <span
-              className={`text-xs px-2 py-1 rounded-full border flex items-center gap-1 ${categoryBadgeClasses(
+              className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-1 shrink-0 ${categoryBadgeClasses(
                 task.category
               )}`}
             >
-<span>{getCategoryEmoji(task.category)}</span>
-              {task.category}
+              <span>{getCategoryEmoji(task.category)}</span>
+              {getCategoryName(task.category)}
             </span>
-            {task.priority > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                עדיפות {task.priority}
-              </Badge>
-            )}
-            <Badge variant="outline" className="text-xs">
-              {PIPELINE_PHASE_LABELS[task.processingPhase]}
-              {running && <span className="ml-1 animate-pulse">…</span>}
-            </Badge>
+          </div>
+          {/* Right: title area (all right-aligned: button, icon, title) */}
+          <div className="flex items-center gap-2 flex-row-reverse flex-wrap text-right">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setExpanded(e => !e)}
+            >
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+            {task.emoji && <span className="text-2xl leading-none">{task.emoji}</span>}
+            <h3 className="font-semibold text-gray-900 text-base leading-tight">{task.title}</h3>
             {running && (
-              <div className="flex items-center gap-1 text-xs text-blue-700 font-medium">
+              <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium flex-row-reverse">
                 <RefreshCw className="h-3 w-3 animate-spin" />
-                עובד: {PIPELINE_PHASE_LABELS[task.processingPhase]}
+                {PIPELINE_PHASE_LABELS[task.processingPhase]}
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            {allRelevantMemberIds.length === 0 && currentUserId && (
-              <Avatar className="h-7 w-7 border">
+        </div>
+        <div className="flex items-center gap-1">
+          {allRelevantMemberIds.length === 0 && currentUser && (
+            <Avatar className="h-7 w-7 border">
+              {currentUser.photoURL ? (
+                <AvatarImage src={currentUser.photoURL} alt={currentUser.displayName} />
+              ) : (
                 <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
-                  אני
+                  {currentUser.displayName?.slice(0, 2).toUpperCase() || 'ME'}
                 </AvatarFallback>
+              )}
+            </Avatar>
+          )}
+          {allRelevantMemberIds.slice(0, 5).map(id => {
+            const mem = familyMembers.find(m => m.id === id);
+            if (!mem) return null;
+            return (
+              <Avatar key={id} className="h-7 w-7 border">
+                {mem.avatar ? (
+                  <AvatarImage src={mem.avatar} alt={mem.name} />
+                ) : (
+                  <AvatarFallback className="text-[10px] bg-gray-100 text-gray-700">
+                    {mem.name?.slice(0, 2) || '??'}
+                  </AvatarFallback>
+                )}
               </Avatar>
-            )}
-            {allRelevantMemberIds.slice(0, 5).map(id => {
-              const mem = familyMembers.find(m => m.id === id);
-              if (!mem) return null;
-              return (
-                <Avatar key={id} className="h-7 w-7 border">
-                  {mem.avatar ? (
-                    <AvatarImage src={mem.avatar} alt={mem.name} />
-                  ) : (
-                    <AvatarFallback className="text-[10px] bg-gray-100 text-gray-700">
-                      {mem.name?.slice(0, 2) || '??'}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-              );
-            })}
-            {allRelevantMemberIds.length > 5 && (
-              <Badge variant="outline" className="text-[10px]">
-                +{allRelevantMemberIds.length - 5}
-              </Badge>
-            )}
-          </div>
+            );
+          })}
+          {allRelevantMemberIds.length > 5 && (
+            <Badge variant="outline" className="text-[10px]">
+              +{allRelevantMemberIds.length - 5}
+            </Badge>
+          )}
         </div>
 
-        {task.description && (
-          <p className="text-xs text-gray-600 whitespace-pre-line">{task.description}</p>
+{(expanded || running) && task.description && (
+          <p className="text-xs text-gray-600 whitespace-pre-line text-left">{task.description}</p>
         )}
 
-        {/* AI consolidated results */}
-        {(task.aiAnalysis || task.smart) && (
-          <div className="rounded-md border border-blue-200 bg-blue-50 p-2 space-y-1">
+{(expanded || running) && (task.aiAnalysis || task.smart) && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-2 space-y-1 text-left" dir="ltr">
             {task.aiAnalysis && (
               <>
                 <div className="flex flex-wrap gap-3 text-[11px] text-blue-800">
@@ -1004,7 +1102,7 @@ function TaskCard({
                   <span>טיפים: {task.aiAnalysis.schedulingTips?.length || 0}</span>
                 </div>
                 {task.aiAnalysis.schedulingTips && task.aiAnalysis.schedulingTips.length > 0 && (
-                  <ul className="list-disc pr-4 text-[11px] text-blue-700 space-y-0.5">
+                  <ul className="list-disc pl-4 text-[11px] text-blue-700 space-y-0.5">
                     {task.aiAnalysis.schedulingTips.slice(0, 3).map((tip, i) => (
                       <li key={i}>{tip}</li>
                     ))}
@@ -1026,26 +1124,48 @@ function TaskCard({
                     <Hash className="h-3 w-3" />
                     SMART / קס"ם
                   </span>
-                  <span className="text-purple-600">
-                    {showSmart ? 'הסתר' : 'הצג'}
-                  </span>
+                  <span className="text-purple-600">{showSmart ? 'הסתר' : 'הצג'}</span>
                 </button>
                 {showSmart && (
-                  <div className="px-2 pb-2 text-[11px] text-purple-700 space-y-1">
-                    <div><span className="font-semibold">S:</span> {task.smart.specific || '—'}</div>
-                    <div><span className="font-semibold">M:</span> {task.smart.measurable || '—'}</div>
-                    <div><span className="font-semibold">A:</span> {task.smart.achievable || '—'}</div>
-                    <div><span className="font-semibold">R:</span> {task.smart.relevant || '—'}</div>
-                    <div><span className="font-semibold">T:</span> {task.smart.timeBound || '—'}</div>
+                  <div className="px-2 pb-2 text-[11px] text-purple-700 space-y-1 text-left">
+                    <div>
+                      <span className="font-semibold">S:</span> {task.smart.specific || '—'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">M:</span> {task.smart.measurable || '—'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">A:</span> {task.smart.achievable || '—'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">R:</span> {task.smart.relevant || '—'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">T:</span> {task.smart.timeBound || '—'}
+                    </div>
                     {task.smart.score !== undefined && (
-                      <div><span className="font-semibold">ציון:</span> {task.smart.score}</div>
+                      <div>
+                        <span className="font-semibold">ציון:</span> {task.smart.score}
+                      </div>
                     )}
                     {task.smart.kesemVariant && (
                       <div className="mt-1 space-y-1">
-                        <div><span className="font-semibold">קונקרטי:</span> {task.smart.kesemVariant.concrete || '—'}</div>
-                        <div><span className="font-semibold">ספציפי:</span> {task.smart.kesemVariant.specific || '—'}</div>
-                        <div><span className="font-semibold">מדיד:</span> {task.smart.kesemVariant.measurable || '—'}</div>
-                        <div><span className="font-semibold">זמן/תיאום:</span> {task.smart.kesemVariant.timeOrAligned || '—'}</div>
+                        <div>
+                          <span className="font-semibold">קונקרטי:</span>{' '}
+                          {task.smart.kesemVariant.concrete || '—'}
+                        </div>
+                        <div>
+                          <span className="font-semibold">ספציפי:</span>{' '}
+                          {task.smart.kesemVariant.specific || '—'}
+                        </div>
+                        <div>
+                          <span className="font-semibold">מדיד:</span>{' '}
+                          {task.smart.kesemVariant.measurable || '—'}
+                        </div>
+                        <div>
+                          <span className="font-semibold">זמן/תיאום:</span>{' '}
+                          {task.smart.kesemVariant.timeOrAligned || '—'}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1056,28 +1176,25 @@ function TaskCard({
         )}
       </div>
 
-      {/* DIVIDER */}
-      <div className="border-t pt-2 space-y-3" dir="rtl">
-        {/* PROCESS SECTION */}
+<div className={`border-t pt-2 space-y-3 ${expanded || running ? '' : 'hidden'}`} dir="rtl">
         <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-gray-600">
+          <div className="flex justify-between text-[10px] text-gray-600 w-full text-right">
             <span>התקדמות AI</span>
-            <span>{doneSteps}/{totalSteps} ({pipelineProgress}%)</span>
+            <span>
+              {doneSteps}/{totalSteps} ({pipelineProgress}%)
+            </span>
           </div>
           <Progress value={pipelineProgress} className="h-2" />
-          <div className="text-[10px] text-gray-700 flex items-center gap-1">
+          <div className="text-[10px] text-gray-700 flex items-center gap-1 justify-end">
             <Gauge className="h-3 w-3" />
             שלב נוכחי: {PIPELINE_PHASE_LABELS[task.processingPhase]}
           </div>
           {currentReasoning && (
-            <div className="text-[10px] text-gray-500 line-clamp-3">
-              {currentReasoning}
-            </div>
+            <div className="text-[10px] text-gray-500 line-clamp-3">{currentReasoning}</div>
           )}
         </div>
 
-        {/* Duration Editing */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 text-right">
           <div className="text-[11px] text-gray-700 flex items-center gap-1">
             <Timer className="h-3 w-3" />
             משך כולל:
@@ -1097,7 +1214,7 @@ function TaskCard({
               min={1}
               value={task.estimatedDuration || 0}
               disabled={running}
-              onChange={(e) => onSetTotal(task.id, Number(e.target.value))}
+              onChange={e => onSetTotal(task.id, Number(e.target.value))}
               className="h-6 w-16 text-center text-xs"
             />
             <Button
@@ -1113,8 +1230,7 @@ function TaskCard({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 justify-end w-full">
           <Button
             variant="outline"
             size="sm"
@@ -1125,15 +1241,15 @@ function TaskCard({
             <Gauge className="h-4 w-4 ml-1" />
             תהליך ניתוח
           </Button>
-          <Button
-            size="sm"
-            onClick={() => onRunFull(false)}
-            disabled={running || task.processingPhase === 'complete'}
-            className="bg-green-600 hover:bg-green-700 text-xs"
-          >
-            <PlayCircle className="h-4 w-4 ml-1" />
-            run AI
-          </Button>
+            <Button
+              size="sm"
+              onClick={() => onRunFull(false)}
+              disabled={running || task.processingPhase === 'complete'}
+              className="bg-green-600 hover:bg-green-700 text-xs"
+            >
+              <PlayCircle className="h-4 w-4 ml-1" />
+              run AI
+            </Button>
           {smallTaskNoBreakdown && (
             <Button
               size="sm"
@@ -1163,24 +1279,20 @@ function TaskCard({
             )}
         </div>
 
-        {/* Subtasks */}
         {task.subtasks && task.subtasks.length > 0 && (
           <div className="space-y-1">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center text-right">
               <span className="text-xs font-medium text-gray-700 flex items-center gap-1">
                 <Layers className="h-3 w-3" /> משימות משנה
               </span>
               <span className="text-[10px] text-gray-500">
-                {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
+                {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length}
               </span>
             </div>
             <div className="space-y-1">
-              {task.subtasks.slice(0, 8).map((st) => (
+              {task.subtasks.slice(0, 8).map(st => (
                 <div key={st.id} className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    checked={st.completed}
-                    onCheckedChange={() => onToggleSubtask(task.id, st.id)}
-                  />
+                  <Checkbox checked={st.completed} onCheckedChange={() => onToggleSubtask(task.id, st.id)} />
                   <span
                     className={`flex-1 ${
                       st.completed ? 'line-through text-gray-400' : 'text-gray-700'
@@ -1203,9 +1315,7 @@ function TaskCard({
                       min={1}
                       value={st.estimatedDuration}
                       disabled={running}
-                      onChange={(e) =>
-                        onSetSubtask(task.id, st.id, Number(e.target.value))
-                      }
+                      onChange={e => onSetSubtask(task.id, st.id, Number(e.target.value))}
                       className="h-6 w-14 text-center text-[11px]"
                     />
                     <Button
@@ -1230,7 +1340,6 @@ function TaskCard({
           </div>
         )}
 
-        {/* Scheduling readiness */}
         {task.processingPhase === 'complete' && (
           <div className="flex items-center gap-2 justify-between">
             <Badge variant="secondary" className="text-xs">
@@ -1241,6 +1350,7 @@ function TaskCard({
               size="sm"
               className="text-xs"
               disabled={running}
+              onClick={() => onSuggestTime(task.id)}
             >
               <Calendar className="h-3 w-3 ml-1" />
               הצעת זמן

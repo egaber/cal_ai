@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
 import { cn } from "@/lib/utils";
-import { getCategoryMeta, getCategoryEmoji, categoryBadgeClasses, TASK_CATEGORY_DEFINITIONS } from "@/config/taskCategories";
+import { getCategoryMeta, getCategoryEmoji, categoryBadgeClasses, TASK_CATEGORY_DEFINITIONS, getCategoryName } from "@/config/taskCategories";
 
 interface EventPopoverProps {
   event: CalendarEvent | null;
@@ -362,7 +362,7 @@ export const EventPopover = ({
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Badge className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold capitalize border', categoryBadgeClasses(editedEvent.category))}>
-                          <span>{getCategoryEmoji(editedEvent.category)}</span> {editedEvent.category}
+                          <span>{getCategoryEmoji(editedEvent.category)}</span> {getCategoryName(editedEvent.category)}
                         </Badge>
                       </SelectTrigger>
                       <SelectContent className="max-h-60 z-[10000]" onClick={(e) => e.stopPropagation()}>
@@ -370,7 +370,7 @@ export const EventPopover = ({
                           <SelectItem key={def.id} value={def.id}>
                             <div className="flex items-center gap-2">
                               <div className={cn('w-3 h-3 rounded-full', def.bg)} />
-                              <span className="capitalize flex items-center gap-1">{getCategoryEmoji(def.id)} {def.id}</span>
+                              <span className="capitalize flex items-center gap-1">{getCategoryEmoji(def.id)} {getCategoryName(def.id)}</span>
                             </div>
                           </SelectItem>
                         ))}

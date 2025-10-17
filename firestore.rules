@@ -85,6 +85,12 @@ service cloud.firestore {
           // Only the user can access their personal memories
           allow read, write: if isOwner(userId);
         }
+        
+        // User's tasks (private to user)
+        match /tasks/{taskId} {
+          // Only the user can access their own tasks
+          allow read, write: if isOwner(userId);
+        }
       }
     }
     

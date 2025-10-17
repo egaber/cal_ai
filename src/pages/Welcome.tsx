@@ -304,7 +304,7 @@ export default function Welcome({ onAuthenticated }: WelcomeProps) {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            <img src="pandai_tran.png" alt="Panda AI" className="h-32 w-32 mx-auto object-contain" />
+            <img src="pandai.png" alt="Panda AI" className="h-32 w-32 mx-auto object-contain" />
           </div>
           <CardTitle className="text-2xl">Welcome to {APP_NAME}</CardTitle>
           <CardDescription>
