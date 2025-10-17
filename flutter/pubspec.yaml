@@ -1,0 +1,38 @@
+name: calendar_ai_flutter
+description: Mobile app for Calendar AI with iOS-native feel and cross-platform support
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.6.1
+  
+  # UI Utilities
+  cupertino_icons: ^1.0.8
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Linting
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  # Fonts (Optional - using system fonts for native feel)
+  # fonts:
+  #   - family: SFProText
+  #     fonts:
+  #       - asset: fonts/SF-Pro-Text-Regular.otf
