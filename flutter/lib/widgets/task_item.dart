@@ -75,7 +75,7 @@ class TaskItem extends ConsumerWidget {
                   
                   const SizedBox(height: 4),
                   
-                  // Metadata row (date, time, location)
+                  // Metadata row (date, time, location, tags)
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
@@ -86,6 +86,7 @@ class TaskItem extends ConsumerWidget {
                       if (task.recurrence != RecurrencePattern.none)
                         _buildRecurrenceBadge(),
                       if (task.reminders.isNotEmpty) _buildReminderBadge(),
+                      ...task.tags.map((tag) => _buildTagBadge(tag)),
                     ],
                   ),
                 ],
@@ -221,6 +222,14 @@ class TaskItem extends ConsumerWidget {
       icon: CupertinoIcons.bell_fill,
       label: '${task.reminders.length}',
       color: CupertinoColors.systemTeal,
+    );
+  }
+
+  Widget _buildTagBadge(String tag) {
+    return _buildBadge(
+      icon: CupertinoIcons.tag_fill,
+      label: '#$tag',
+      color: CupertinoColors.systemPurple,
     );
   }
 

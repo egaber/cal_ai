@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/task.dart';
 import 'providers/task_provider.dart';
+import 'providers/calendar_provider.dart';
 import 'widgets/task_creation_sheet.dart';
 import 'widgets/task_item.dart';
+import 'widgets/calendar/month_view.dart';
+import 'widgets/calendar/event_list.dart';
+import 'widgets/calendar/day_view.dart';
 
 /// Main entry point for the Calendar AI Flutter app.
 /// 
@@ -96,7 +100,7 @@ class TodosTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pendingTasks = ref.watch(pendingTasksProvider);
+    final allTasks = ref.watch(taskProvider);
 
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
@@ -107,7 +111,7 @@ class TodosTab extends ConsumerWidget {
         child: Stack(
           children: [
             // Task list
-            pendingTasks.isEmpty
+            allTasks.isEmpty
                 ? _buildEmptyState(context)
                 : CustomScrollView(
                     slivers: [
@@ -122,9 +126,9 @@ class TodosTab extends ConsumerWidget {
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
-                              return TaskItem(task: pendingTasks[index]);
+                              return TaskItem(task: allTasks[index]);
                             },
-                            childCount: pendingTasks.length,
+                            childCount: allTasks.length,
                           ),
                         ),
                       ),
@@ -208,6 +212,7 @@ class TodosTab extends ConsumerWidget {
   }
 
   Future<void> _showTaskCreation(BuildContext context, WidgetRef ref) async {
+    print('=== SHOWING TASK CREATION SHEET ===');
     final result = await showCupertinoModalPopup<Task>(
       context: context,
       barrierColor: CupertinoColors.black.withOpacity(0.35),
@@ -223,42 +228,159 @@ class TodosTab extends ConsumerWidget {
       ),
     );
     
+    print('=== MODAL CLOSED ===');
+    print('Result: $result');
+    
     if (result != null) {
+      print('Adding task to provider: ${result.title}');
       ref.read(taskProvider.notifier).addTask(result);
+      print('Task added successfully');
+    } else {
+      print('Result was null, task not added');
     }
   }
 }
 
-/// Calendar tab - Event viewing and scheduling (Future phase).
-class CalendarTab extends StatelessWidget {
+/// Calendar tab - Beautiful event viewing and scheduling.
+/// 
+/// Features:
+/// - Month view with event dots
+/// - Day view with hourly schedule and current time indicator
+/// - Selected date highlighting
+/// - Event list for selected date
+/// - Event details modal
+/// - Smooth animations and transitions
+/// - iOS-native design
+class CalendarTab extends ConsumerStatefulWidget {
   const CalendarTab({super.key});
+
+  @override
+  ConsumerState<CalendarTab> createState() => _CalendarTabState();
+}
+
+class _CalendarTabState extends ConsumerState<CalendarTab> {
+  CalendarViewMode _viewMode = CalendarViewMode.month;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Calendar'),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              CupertinoIcons.calendar,
-              size: 64,
-              color: CupertinoColors.systemGrey.resolveFrom(context),
+      navigationBar: CupertinoNavigationBar(
+        middle: CupertinoSegmentedControl<CalendarViewMode>(
+          groupValue: _viewMode,
+          onValueChanged: (value) {
+            setState(() {
+              _viewMode = value;
+            });
+          },
+          children: const {
+            CalendarViewMode.month: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Text('Month', style: TextStyle(fontSize: 13)),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Calendar coming soon',
-              style: CupertinoTheme.of(context)
-                  .textTheme
-                  .navLargeTitleTextStyle
-                  .copyWith(
-                    color: CupertinoColors.systemGrey.resolveFrom(context),
-                  ),
+            CalendarViewMode.day: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Text('Day', style: TextStyle(fontSize: 13)),
+            ),
+          },
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _goToToday,
+              child: const Text('Today'),
+            ),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showAddEventSheet(context),
+              child: const Icon(CupertinoIcons.add),
             ),
           ],
+        ),
+      ),
+      child: SafeArea(
+        child: _buildViewContent(),
+      ),
+    );
+  }
+
+  Widget _buildViewContent() {
+    switch (_viewMode) {
+      case CalendarViewMode.month:
+        return Column(
+          children: [
+            // Month calendar view
+            Expanded(
+              flex: 3,
+              child: const MonthView(),
+            ),
+            // Event list for selected date
+            Expanded(
+              flex: 2,
+              child: const EventList(),
+            ),
+          ],
+        );
+      case CalendarViewMode.day:
+        return const DayView();
+      case CalendarViewMode.week:
+        // Week view not implemented yet
+        return const Center(
+          child: Text('Week view coming soon'),
+        );
+    }
+  }
+
+  void _goToToday() {
+    ref.read(selectedDateProvider.notifier).state = DateTime.now();
+  }
+
+  void _showAddEventSheet(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  CupertinoIcons.calendar_badge_plus,
+                  size: 64,
+                  color: CupertinoColors.activeBlue,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Add Event',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Event creation coming soon',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: CupertinoColors.systemGrey.resolveFrom(context),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                CupertinoButton.filled(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -100,8 +100,14 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
   }
 
   void _saveTask() {
+    print('=== SAVE TASK CALLED ===');
     final title = _parsedData?.cleanTitle ?? _textController.text.trim();
-    if (title.isEmpty) return;
+    print('Title: $title');
+    
+    if (title.isEmpty) {
+      print('Title is empty, returning');
+      return;
+    }
 
     final task = Task(
       id: widget.existingTask?.id ?? _uuid.v4(),
@@ -119,6 +125,8 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
       tags: _parsedData?.tags ?? [],
     );
 
+    print('Task created: ${task.title}, Priority: ${task.priority}');
+    print('Popping with task...');
     Navigator.of(context).pop(task);
   }
 
@@ -221,9 +229,17 @@ class _TaskCreationSheetState extends ConsumerState<TaskCreationSheet> {
   }
 
   Widget _buildTitleInput() {
-    return HighlightedTextField(
+    return CupertinoTextField(
       controller: _textController,
       placeholder: 'e.g., "Buy milk tomorrow 3pm P1 @Store"',
+      style: const TextStyle(fontSize: 18),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemGrey6,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      maxLines: null,
+      textCapitalization: TextCapitalization.sentences,
       autofocus: widget.existingTask == null,
     );
   }

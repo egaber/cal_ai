@@ -75,12 +75,28 @@ final taskProvider = StateNotifierProvider<TaskNotifier, List<Task>>((ref) {
 
 /// Provider for pending tasks
 final pendingTasksProvider = Provider<List<Task>>((ref) {
-  final taskNotifier = ref.watch(taskProvider.notifier);
-  return taskNotifier.pendingTasks;
+  final tasks = ref.watch(taskProvider);
+  return tasks.where((task) => task.status == TaskStatus.pending).toList()
+    ..sort((a, b) {
+      // Sort by priority first (P1 > P2 > P3 > None)
+      if (a.priority.value != b.priority.value) {
+        return a.priority.value.compareTo(b.priority.value);
+      }
+      // Then by due date
+      if (a.dueDate != null && b.dueDate == null) return -1;
+      if (a.dueDate == null && b.dueDate != null) return 1;
+      if (a.dueDate != null && b.dueDate != null) {
+        return a.dueDate!.compareTo(b.dueDate!);
+      }
+      // Finally by creation date
+      return b.createdAt.compareTo(a.createdAt);
+    });
 });
 
 /// Provider for completed tasks
 final completedTasksProvider = Provider<List<Task>>((ref) {
-  final taskNotifier = ref.watch(taskProvider.notifier);
-  return taskNotifier.completedTasks;
+  final tasks = ref.watch(taskProvider);
+  return tasks.where((task) => task.status == TaskStatus.completed).toList()
+    ..sort((a, b) => (b.completedAt ?? b.createdAt)
+        .compareTo(a.completedAt ?? a.createdAt));
 });
