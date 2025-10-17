@@ -1,6 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'models/task.dart';
+import 'providers/task_provider.dart';
+import 'widgets/task_creation_sheet.dart';
+import 'widgets/task_item.dart';
 
 /// Main entry point for the Calendar AI Flutter app.
 /// 
@@ -86,11 +90,14 @@ class MainScreen extends StatelessWidget {
 /// - Floating action button for quick task creation
 /// - Pull-to-refresh
 /// - Task details drawer on tap
-class TodosTab extends StatelessWidget {
+/// - NLP-powered task creation with Hebrew support
+class TodosTab extends ConsumerWidget {
   const TodosTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pendingTasks = ref.watch(pendingTasksProvider);
+
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
         middle: Text('Todos'),
@@ -99,36 +106,30 @@ class TodosTab extends StatelessWidget {
       child: SafeArea(
         child: Stack(
           children: [
-            // Task list will go here
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    CupertinoIcons.checkmark_circle,
-                    size: 64,
-                    color: CupertinoColors.systemGrey.resolveFrom(context),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No tasks yet',
-                    style: CupertinoTheme.of(context)
-                        .textTheme
-                        .navLargeTitleTextStyle
-                        .copyWith(
-                          color: CupertinoColors.systemGrey.resolveFrom(context),
+            // Task list
+            pendingTasks.isEmpty
+                ? _buildEmptyState(context)
+                : CustomScrollView(
+                    slivers: [
+                      CupertinoSliverRefreshControl(
+                        onRefresh: () async {
+                          // Simulate refresh
+                          await Future.delayed(const Duration(seconds: 1));
+                        },
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 80),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              return TaskItem(task: pendingTasks[index]);
+                            },
+                            childCount: pendingTasks.length,
+                          ),
                         ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap + to create your first task',
-                    style: TextStyle(
-                      color: CupertinoColors.systemGrey.resolveFrom(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             
             // Floating action button
             Positioned(
@@ -136,22 +137,7 @@ class TodosTab extends StatelessWidget {
               bottom: 16,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: () {
-                  // TODO: Show task creation dialog
-                  showCupertinoDialog<void>(
-                    context: context,
-                    builder: (context) => CupertinoAlertDialog(
-                      title: const Text('Create Task'),
-                      content: const Text('Task creation coming soon!'),
-                      actions: [
-                        CupertinoDialogAction(
-                          child: const Text('OK'),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                onPressed: () => _showTaskCreation(context, ref),
                 child: Container(
                   width: 56,
                   height: 56,
@@ -178,6 +164,68 @@ class TodosTab extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            CupertinoIcons.checkmark_circle,
+            size: 64,
+            color: CupertinoColors.systemGrey.resolveFrom(context),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No tasks yet',
+            style: CupertinoTheme.of(context)
+                .textTheme
+                .navLargeTitleTextStyle
+                .copyWith(
+                  color: CupertinoColors.systemGrey.resolveFrom(context),
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap + to create your first task',
+            style: TextStyle(
+              color: CupertinoColors.systemGrey.resolveFrom(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Try: "Buy milk tomorrow 3pm P1 @Store"',
+            style: TextStyle(
+              color: CupertinoColors.systemGrey2.resolveFrom(context),
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showTaskCreation(BuildContext context, WidgetRef ref) async {
+    final result = await showCupertinoModalPopup<Task>(
+      context: context,
+      barrierColor: CupertinoColors.black.withOpacity(0.35),
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+        ),
+        child: const TaskCreationSheet(),
+      ),
+    );
+    
+    if (result != null) {
+      ref.read(taskProvider.notifier).addTask(result);
+    }
   }
 }
 
