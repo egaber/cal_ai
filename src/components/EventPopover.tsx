@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { describeRecurrence, validateRecurrenceRule } from "@/utils/recurrenceUtils";
 import { cn } from "@/lib/utils";
+import { getCategoryMeta, getCategoryEmoji, categoryBadgeClasses, TASK_CATEGORY_DEFINITIONS } from "@/config/taskCategories";
 
 interface EventPopoverProps {
   event: CalendarEvent | null;
@@ -37,35 +38,7 @@ interface EventPopoverProps {
   familyMembers?: FamilyMember[];
 }
 
-// Category color mapping
-const CATEGORY_COLORS: Record<CalendarEvent["category"], { bg: string; border: string; text: string; lightBg: string }> = {
-  health: { bg: 'bg-emerald-500', border: 'border-emerald-200', text: 'text-emerald-700', lightBg: 'bg-emerald-50' },
-  work: { bg: 'bg-sky-500', border: 'border-sky-200', text: 'text-sky-700', lightBg: 'bg-sky-50' },
-  personal: { bg: 'bg-amber-500', border: 'border-amber-200', text: 'text-amber-700', lightBg: 'bg-amber-50' },
-  family: { bg: 'bg-blue-500', border: 'border-blue-200', text: 'text-blue-700', lightBg: 'bg-blue-50' },
-  education: { bg: 'bg-indigo-500', border: 'border-indigo-200', text: 'text-indigo-700', lightBg: 'bg-indigo-50' },
-  social: { bg: 'bg-pink-500', border: 'border-pink-200', text: 'text-pink-700', lightBg: 'bg-pink-50' },
-  finance: { bg: 'bg-green-600', border: 'border-green-200', text: 'text-green-700', lightBg: 'bg-green-50' },
-  home: { bg: 'bg-orange-500', border: 'border-orange-200', text: 'text-orange-700', lightBg: 'bg-orange-50' },
-  travel: { bg: 'bg-cyan-500', border: 'border-cyan-200', text: 'text-cyan-700', lightBg: 'bg-cyan-50' },
-  fitness: { bg: 'bg-red-500', border: 'border-red-200', text: 'text-red-700', lightBg: 'bg-red-50' },
-  food: { bg: 'bg-yellow-500', border: 'border-yellow-200', text: 'text-yellow-700', lightBg: 'bg-yellow-50' },
-  shopping: { bg: 'bg-indigo-500', border: 'border-indigo-200', text: 'text-indigo-700', lightBg: 'bg-indigo-50' },
-  entertainment: { bg: 'bg-blue-500', border: 'border-blue-200', text: 'text-blue-700', lightBg: 'bg-blue-50' },
-  sports: { bg: 'bg-orange-600', border: 'border-orange-200', text: 'text-orange-700', lightBg: 'bg-orange-50' },
-  hobby: { bg: 'bg-teal-500', border: 'border-teal-200', text: 'text-teal-700', lightBg: 'bg-teal-50' },
-  volunteer: { bg: 'bg-rose-500', border: 'border-rose-200', text: 'text-rose-700', lightBg: 'bg-rose-50' },
-  appointment: { bg: 'bg-blue-500', border: 'border-blue-200', text: 'text-blue-700', lightBg: 'bg-blue-50' },
-  maintenance: { bg: 'bg-slate-500', border: 'border-slate-200', text: 'text-slate-700', lightBg: 'bg-slate-50' },
-  celebration: { bg: 'bg-pink-600', border: 'border-pink-200', text: 'text-pink-700', lightBg: 'bg-pink-50' },
-  meeting: { bg: 'bg-indigo-600', border: 'border-indigo-200', text: 'text-indigo-700', lightBg: 'bg-indigo-50' },
-  childcare: { bg: 'bg-cyan-600', border: 'border-cyan-200', text: 'text-cyan-700', lightBg: 'bg-cyan-50' },
-  pet: { bg: 'bg-amber-600', border: 'border-amber-200', text: 'text-amber-700', lightBg: 'bg-amber-50' },
-  errand: { bg: 'bg-lime-500', border: 'border-lime-200', text: 'text-lime-700', lightBg: 'bg-lime-50' },
-  transport: { bg: 'bg-gray-500', border: 'border-gray-200', text: 'text-gray-700', lightBg: 'bg-gray-50' },
-  project: { bg: 'bg-sky-600', border: 'border-sky-200', text: 'text-sky-700', lightBg: 'bg-sky-50' },
-  deadline: { bg: 'bg-red-600', border: 'border-red-200', text: 'text-red-700', lightBg: 'bg-red-50' },
-};
+/* Using centralized taskCategories for category styles */
 
 // Priority color mapping
 const PRIORITY_COLORS: Record<CalendarEvent["priority"], { bg: string; text: string; label: string }> = {
@@ -251,7 +224,7 @@ export const EventPopover = ({
   };
 
   const currentMember = familyMembers.find(m => m.id === editedEvent.memberId);
-  const categoryColor = CATEGORY_COLORS[editedEvent.category];
+  const categoryMeta = getCategoryMeta(editedEvent.category);
   const priorityColor = PRIORITY_COLORS[editedEvent.priority];
 
   const popoverContent = isOpen ? (
@@ -271,7 +244,7 @@ export const EventPopover = ({
             <div
               ref={dragHandleRef}
               onMouseDown={handleDragStart}
-              className={cn('h-3 cursor-move', categoryColor.bg, isDragging && 'cursor-grabbing')}
+              className={cn('h-3 cursor-move', categoryMeta.bg, isDragging && 'cursor-grabbing')}
             />
             
             {/* Header */}
@@ -388,22 +361,19 @@ export const EventPopover = ({
                         className="h-7 w-auto border-0 px-0 gap-1 focus:ring-0"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Badge className={cn(categoryColor.lightBg, categoryColor.text, 'text-xs font-semibold capitalize border', categoryColor.border)}>
-                          {editedEvent.category}
+                        <Badge className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold capitalize border', categoryBadgeClasses(editedEvent.category))}>
+                          <span>{getCategoryEmoji(editedEvent.category)}</span> {editedEvent.category}
                         </Badge>
                       </SelectTrigger>
                       <SelectContent className="max-h-60 z-[10000]" onClick={(e) => e.stopPropagation()}>
-                        {Object.keys(CATEGORY_COLORS).map((cat) => {
-                          const colors = CATEGORY_COLORS[cat as CalendarEvent['category']];
-                          return (
-                            <SelectItem key={cat} value={cat}>
-                              <div className="flex items-center gap-2">
-                                <div className={cn('w-3 h-3 rounded-full', colors.bg)} />
-                                <span className="capitalize">{cat}</span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
+                        {TASK_CATEGORY_DEFINITIONS.map(def => (
+                          <SelectItem key={def.id} value={def.id}>
+                            <div className="flex items-center gap-2">
+                              <div className={cn('w-3 h-3 rounded-full', def.bg)} />
+                              <span className="capitalize flex items-center gap-1">{getCategoryEmoji(def.id)} {def.id}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
 

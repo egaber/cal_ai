@@ -3,7 +3,6 @@ import { MobileCalendarView } from "@/components/MobileCalendarView";
 import { MobileEventDetails } from "@/components/MobileEventDetails";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
-import { InlineEventCreator } from "@/components/InlineEventCreator";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/contexts/EventContext";
@@ -27,13 +26,7 @@ const MobileIndex = () => {
   const [eventPopoverPosition, setEventPopoverPosition] = useState({ x: 0, y: 0 });
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isNewEventDialogOpen, setIsNewEventDialogOpen] = useState(false);
-  const [isInlineCreatorOpen, setIsInlineCreatorOpen] = useState(false);
-  const [inlineCreatorData, setInlineCreatorData] = useState<{
-    date: Date;
-    hour: number;
-    minute: number;
-    position: { x: number; y: number };
-  } | null>(null);
+  const [inlineDraft, setInlineDraft] = useState<{ date: Date; hour: number; minute: number } | null>(null);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
   const [isMonthViewExpanded, setIsMonthViewExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -96,17 +89,16 @@ const MobileIndex = () => {
     );
   };
 
-  const handleTimeSlotClick = (date: Date, hour: number, minute: number, clickX: number, clickY: number) => {
-    setInlineCreatorData({ date, hour, minute, position: { x: clickX, y: clickY } });
-    setIsInlineCreatorOpen(true);
+  const handleTimeSlotClick = (date: Date, hour: number, minute: number, _clickX: number, _clickY: number) => {
+    setInlineDraft({ date, hour, minute });
   };
 
   const handleInlineEventSave = async (title: string, isAllDay?: boolean) => {
     setIsEventPopoverOpen(false);
     setSelectedEvent(null);
     
-    if (inlineCreatorData) {
-      const { date, hour, minute } = inlineCreatorData;
+    if (inlineDraft) {
+      const { date, hour, minute } = inlineDraft;
       const startDate = new Date(date);
       const endDate = new Date(date);
       
@@ -143,8 +135,7 @@ const MobileIndex = () => {
         isAllDay: isAllDay || false,
       });
 
-      setIsInlineCreatorOpen(false);
-      setInlineCreatorData(null);
+      setInlineDraft(null);
       
       toast({
         title: "Event Created",
@@ -552,6 +543,9 @@ const MobileIndex = () => {
           onEventUpdate={handleEventUpdate}
           onTimeSlotClick={handleTimeSlotClick}
           onDateChange={(date) => setCurrentDate(date)}
+          inlineDraft={inlineDraft || undefined}
+          onInlineSave={handleInlineEventSave}
+          onInlineCancel={() => setInlineDraft(null)}
         />
       </div>
 
@@ -575,19 +569,6 @@ const MobileIndex = () => {
         members={familyMembers}
       />
 
-      {isInlineCreatorOpen && inlineCreatorData && (
-        <InlineEventCreator
-          date={inlineCreatorData.date}
-          hour={inlineCreatorData.hour}
-          minute={inlineCreatorData.minute}
-          position={inlineCreatorData.position}
-          onSave={handleInlineEventSave}
-          onCancel={() => {
-            setIsInlineCreatorOpen(false);
-            setInlineCreatorData(null);
-          }}
-        />
-      )}
     </div>
   );
 };

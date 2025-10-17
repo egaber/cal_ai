@@ -3,6 +3,7 @@ import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 import { calculateEventLayouts } from "@/utils/eventLayoutUtils";
 import { AllDayEventsBar } from "./AllDayEventsBar";
+import { InlineEventCreator } from "./InlineEventCreator";
 
 interface CalendarGridProps {
   viewMode: 'day' | 'week' | 'workweek' | 'month';
@@ -12,6 +13,9 @@ interface CalendarGridProps {
   onEventClick: (event: CalendarEvent, clickX: number, clickY: number) => void;
   onEventUpdate: (eventId: string, newStartTime: string, newEndTime: string) => void;
   onTimeSlotClick: (date: Date, hour: number, minute: number, clickX: number, clickY: number) => void;
+  inlineDraft?: { date: Date; hour: number; minute: number };
+  onInlineSave?: (title: string, isAllDay?: boolean) => void;
+  onInlineCancel?: () => void;
 }
 
 const START_HOUR = 0; // 12 AM - start of day
@@ -31,6 +35,9 @@ export const CalendarGrid = ({
   onEventClick,
   onEventUpdate,
   onTimeSlotClick,
+  inlineDraft,
+  onInlineSave,
+  onInlineCancel,
 }: CalendarGridProps) => {
   const gridRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -259,6 +266,26 @@ export const CalendarGrid = ({
                               />
                             );
                           })}
+
+                          {inlineDraft && inlineDraft.date.toDateString() === date.toDateString() && (
+                            <div
+                              className="absolute left-1 right-1 rounded-sm border border-dashed border-primary/50 bg-white/95 shadow-sm p-1 z-30"
+                              style={{
+                                top: `${(inlineDraft.hour * 60 + inlineDraft.minute) * (TIME_SLOT_HEIGHT / 60)}px`,
+                                height: `${TIME_SLOT_HEIGHT}px`,
+                                minHeight: '30px',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <InlineEventCreator
+                                date={inlineDraft.date}
+                                hour={inlineDraft.hour}
+                                minute={inlineDraft.minute}
+                                onSave={(title, isAllDay) => onInlineSave && onInlineSave(title, isAllDay)}
+                                onCancel={() => onInlineCancel && onInlineCancel()}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })()}

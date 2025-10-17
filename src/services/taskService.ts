@@ -22,6 +22,7 @@ import {
 import { CalendarEvent, FamilyMember } from '../types/calendar';
 import { StorageService } from './storageService';
 import { MemoryData, TravelInfo, Place } from '../types/memory';
+import { buildCategoryPromptList } from '../config/taskCategories';
 
 // Pipeline definition (order)
 const PIPELINE_PHASES: TaskProcessingPhase[] = [
@@ -131,10 +132,16 @@ class TaskService {
     familyMembers: FamilyMember[]
   ): Promise<TaskAnalysisResponse> {
     try {
+      const categoriesList = buildCategoryPromptList();
       const systemPrompt = `אתה עוזר AI מומחה לניהול זמן ומשימות למשפחה ישראלית. תפקידך לנתח משימות ולספק המלצות מפורטות.
 
 המשפחה:
 ${familyMembers.map(m => `- ${m.name} (${m.role})`).join('\n')}
+
+קטגוריות זמינות (id אימוג'י - משמעות):
+${categoriesList}
+
+בחר קטגוריה אחת בלבד מתוך רשימת ה-id.
 
 החזר JSON בלבד במבנה שניתן (ללא טקסט נוסף).`;
 
@@ -432,7 +439,16 @@ ${familyMembers.map(m => `- ${m.name} (${m.role})`).join('\n')}
   }
 
   private async phaseCategorize(task: Task, familyMembers: FamilyMember[]) {
-    const systemPrompt = `אתה AI למיון משימות. סווג משימה אחת לקטגוריה, הוסף אימוג'י והצע חברי משפחה רלוונטיים. החזר JSON:
+    const categoriesList = buildCategoryPromptList();
+    const systemPrompt = `אתה AI למיון משימות. סווג משימה אחת לקטגוריה מתוך הרשימה הבאה (id אימוג'י - משמעות):
+${categoriesList}
+
+כללים:
+- החזר רק id אחד שקיים ברשימה (לא מחרוזת חדשה)
+- בחר אימוג'י מייצג (אפשר להשתמש בזה שמופיע ברשימה או להתאים קרוב)
+- הצע חברי משפחה רלוונטיים אם נדרש
+
+החזר JSON:
 {
   "category": "string",
   "emoji": "string",
@@ -623,10 +639,24 @@ ${familyMembers.map(m => `- ${m.name} (${m.role})`).join('\n')}
     const messages: Message[] = [{ role: 'user', content: userContent }];
     const models = await llmService.getAvailableModels();
     if (models.length === 0) throw new Error('אין מודלים זמינים');
-    const preferredModel =
-      models.find(m => m.id.toLowerCase().includes('claude') && m.id.toLowerCase().includes('sonnet') && (m.id.includes('4.5') || m.id.includes('4-5'))) ||
-      models.find(m => m.id.toLowerCase().includes('claude') && m.id.toLowerCase().includes('sonnet')) ||
-      models[0];
+
+    // User-selected model (persisted by TaskPlanning UI)
+    let preferredModel;
+    try {
+      const selectedId = localStorage.getItem('task_pipeline_model_id') || undefined;
+      if (selectedId) {
+        preferredModel = models.find(m => m.id === selectedId);
+      }
+    } catch {
+      // ignore localStorage access errors (e.g. server-side)
+    }
+
+    if (!preferredModel) {
+      preferredModel =
+        models.find(m => m.id.toLowerCase().includes('claude') && m.id.toLowerCase().includes('sonnet') && (m.id.includes('4.5') || m.id.includes('4-5'))) ||
+        models.find(m => m.id.toLowerCase().includes('claude') && m.id.toLowerCase().includes('sonnet')) ||
+        models[0];
+    }
 
     const response = await llmService.chat({
       messages,

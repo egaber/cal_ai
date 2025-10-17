@@ -51,13 +51,7 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
   const [eventPopoverPosition, setEventPopoverPosition] = useState({ x: 0, y: 0 });
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isNewEventDialogOpen, setIsNewEventDialogOpen] = useState(false);
-  const [isInlineCreatorOpen, setIsInlineCreatorOpen] = useState(false);
-  const [inlineCreatorData, setInlineCreatorData] = useState<{
-    date: Date;
-    hour: number;
-    minute: number;
-    position: { x: number; y: number };
-  } | null>(null);
+  const [inlineDraft, setInlineDraft] = useState<{ date: Date; hour: number; minute: number } | null>(null);
   const [newEventDefaults, setNewEventDefaults] = useState<{
     date?: Date;
     hour?: number;
@@ -234,23 +228,16 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
     setIsNewEventDialogOpen(true);
   };
 
-  const handleTimeSlotClick = (date: Date, hour: number, minute: number, clickX: number, clickY: number) => {
-    setInlineCreatorData({
-      date,
-      hour,
-      minute,
-      position: { x: clickX, y: clickY },
-    });
-    setIsInlineCreatorOpen(true);
+  const handleTimeSlotClick = (date: Date, hour: number, minute: number) => {
+    setInlineDraft({ date, hour, minute });
   };
 
   const handleInlineEventSave = async (title: string, isAllDay?: boolean) => {
-    // Close any open popovers first
     setIsEventPopoverOpen(false);
     setSelectedEvent(null);
-    
-    if (inlineCreatorData) {
-      const { date, hour, minute } = inlineCreatorData;
+
+    if (inlineDraft) {
+      const { date, hour, minute } = inlineDraft;
       const startDate = new Date(date);
       const endDate = new Date(date);
       
@@ -293,9 +280,8 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
         isAllDay: isAllDay || false,
       });
 
-      setIsInlineCreatorOpen(false);
-      setInlineCreatorData(null);
-      
+      setInlineDraft(null);
+
       toast({
         title: "Event Created",
         description: `"${title}" has been added to your calendar`,
@@ -303,10 +289,6 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
     }
   };
 
-  const handleInlineCreatorCancel = () => {
-    setIsInlineCreatorOpen(false);
-    setInlineCreatorData(null);
-  };
 
   const handleCreateEvent = useCallback(async (eventData: Omit<CalendarEvent, 'id'>) => {
     await createCloudEvent(eventData);
@@ -848,6 +830,9 @@ What would you like to know or do with this event?`;
                       onEventClick={handleEventClick}
                       onEventUpdate={handleEventUpdate}
                       onTimeSlotClick={handleTimeSlotClick}
+                      inlineDraft={inlineDraft || undefined}
+                      onInlineSave={handleInlineEventSave}
+                      onInlineCancel={() => setInlineDraft(null)}
                     />
                   </div>
                 </EventPopover>
@@ -879,16 +864,6 @@ What would you like to know or do with this event?`;
         members={familyMembers}
       />
 
-      {isInlineCreatorOpen && inlineCreatorData && (
-        <InlineEventCreator
-          date={inlineCreatorData.date}
-          hour={inlineCreatorData.hour}
-          minute={inlineCreatorData.minute}
-          position={inlineCreatorData.position}
-          onSave={handleInlineEventSave}
-          onCancel={handleInlineCreatorCancel}
-        />
-      )}
 
       {/* Family Management Dialog */}
       <Dialog open={isFamilyManagementOpen} onOpenChange={setIsFamilyManagementOpen}>

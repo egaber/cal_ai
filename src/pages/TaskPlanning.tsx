@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Task, TaskProcessingPhase } from '@/types/task';
 import { FamilyMember } from '@/types/calendar';
 import { taskService } from '@/services/taskService';
@@ -17,6 +17,13 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from '@/components/ui/sheet';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
   Plus,
@@ -37,10 +44,16 @@ import {
   CheckCircle2,
   ChevronUp,
   ChevronDown,
-  Edit3
+  Menu,
+  Settings2,
+  Cpu
 } from 'lucide-react';
 import { PRIMARY_COLOR } from '@/config/branding';
 import { useEvents } from '@/contexts/EventContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { llmService, LLMModel } from '@/services/llmService';
+import { categoryBadgeClasses, getCategoryEmoji } from '@/config/taskCategories';
 
 const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   idle: 'ממתין',
@@ -55,8 +68,11 @@ const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   error: 'שגיאה'
 };
 
+// Using centralized category definitions from config/taskCategories.ts
+
 export default function TaskPlanning() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [quickTitle, setQuickTitle] = useState('');
@@ -66,14 +82,67 @@ export default function TaskPlanning() {
   const [showPipelineDialog, setShowPipelineDialog] = useState(false);
   const [pipelineTask, setPipelineTask] = useState<Task | null>(null);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [showCategoryDrawer, setShowCategoryDrawer] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Model selection for pipeline
+  const [showModelDrawer, setShowModelDrawer] = useState(false);
+  const [models, setModels] = useState<LLMModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
+
   const { events } = useEvents();
 
-  // Load initial data
   useEffect(() => {
     const members = StorageService.loadFamilyMembers() || [];
     setFamilyMembers(members);
     hydrateTasks();
   }, []);
+
+  useEffect(() => {
+    // Initialize selected model from localStorage
+    try {
+      const stored = localStorage.getItem('task_pipeline_model_id');
+      if (stored) {
+        setSelectedModelId(stored);
+      }
+    } catch {
+      // ignore
+    }
+    loadModels();
+  }, []);
+
+  const loadModels = async () => {
+    setLoadingModels(true);
+    try {
+      const available = await llmService.getAvailableModels();
+      setModels(available);
+      if (available.length > 0 && !selectedModelId) {
+        setSelectedModelId(available[0].id);
+      }
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  const saveSelectedModel = () => {
+    if (selectedModelId) {
+      try {
+        localStorage.setItem('task_pipeline_model_id', selectedModelId);
+        toast({
+          title: 'מודל נשמר',
+          description: `מודל תהליך המשימות עודכן (${selectedModelId}).`
+        });
+        setShowModelDrawer(false);
+      } catch {
+        toast({
+          title: 'שגיאה',
+          description: 'לא ניתן לשמור את המודל',
+          variant: 'destructive'
+        });
+      }
+    }
+  };
 
   const hydrateTasks = () => {
     const loaded = taskService.loadTasks();
@@ -157,7 +226,6 @@ export default function TaskPlanning() {
     setTasks(updated);
   };
 
-  // Quick create (instant insert)
   const handleQuickAdd = () => {
     if (!quickTitle.trim()) {
       toast({
@@ -177,7 +245,6 @@ export default function TaskPlanning() {
     });
   };
 
-  // Run a single phase (stream update after completion)
   const runPhase = async (taskId: string, phase: TaskProcessingPhase) => {
     if (
       ![
@@ -212,13 +279,11 @@ export default function TaskPlanning() {
     }
   };
 
-  // Stream each phase sequentially (skip breakdown for small tasks unless user asks)
   const runFullPipeline = async (taskId: string, forceBreakdown: boolean = false) => {
     setRunningTaskId(taskId);
     try {
       const current = taskService.loadTasks().find(t => t.id === taskId);
       const smallTask = current && current.estimatedDuration && current.estimatedDuration <= 60 && current.subtasks.length === 0;
-      // Build phases without spread to satisfy strict TaskProcessingPhase typing
       const phases: TaskProcessingPhase[] = [
         'context_loading',
         'categorizing',
@@ -228,12 +293,11 @@ export default function TaskPlanning() {
         'smart_evaluating'
       ];
       if (!(smallTask && !forceBreakdown)) {
-        // Insert breakdown after prioritizing
         phases.splice(3, 0, 'breaking_down');
       }
       for (const phase of phases) {
         await taskService.runPhase(taskId, phase, familyMembers, events);
-        hydrateTasks(); // refresh after each phase for live feel
+        hydrateTasks();
       }
       taskService.updateTask(taskId, { processingPhase: 'complete' });
       hydrateTasks();
@@ -253,13 +317,12 @@ export default function TaskPlanning() {
     }
   };
 
-  // Batch run using streamed pipeline
   const runPipelineOnAllIdle = async () => {
     setIsBatchRunning(true);
     try {
       const idleIds = tasks.filter(t => t.processingPhase === 'idle').map(t => t.id);
       for (const id of idleIds) {
-        await runFullPipeline(id); // uses skip logic
+        await runFullPipeline(id);
       }
       hydrateTasks();
       toast({
@@ -283,7 +346,6 @@ export default function TaskPlanning() {
     hydrateTasks();
   };
 
-  // Adjust single subtask duration by delta minutes
   const adjustSubtaskDuration = (taskId: string, subtaskId: string, delta: number) => {
     const all = taskService.loadTasks();
     const t = all.find(x => x.id === taskId);
@@ -291,13 +353,11 @@ export default function TaskPlanning() {
     const st = t.subtasks.find(s => s.id === subtaskId);
     if (!st) return;
     st.estimatedDuration = Math.max(1, (st.estimatedDuration || 0) + delta);
-    // Recalculate total
     t.estimatedDuration = t.subtasks.reduce((sum, s) => sum + s.estimatedDuration, 0);
     taskService.saveTasks(all);
     hydrateTasks();
   };
 
-  // Set specific subtask duration
   const setSubtaskDuration = (taskId: string, subtaskId: string, value: number) => {
     if (isNaN(value) || value <= 0) return;
     const all = taskService.loadTasks();
@@ -311,7 +371,6 @@ export default function TaskPlanning() {
     hydrateTasks();
   };
 
-  // Set total duration and proportionally distribute across subtasks
   const setTotalDuration = (taskId: string, newTotal: number) => {
     if (isNaN(newTotal) || newTotal <= 0) return;
     const all = taskService.loadTasks();
@@ -322,7 +381,6 @@ export default function TaskPlanning() {
     } else {
       const currentTotal = t.subtasks.reduce((sum, s) => sum + s.estimatedDuration, 0);
       if (currentTotal === 0) {
-        // Equal split
         const equal = Math.round(newTotal / t.subtasks.length);
         t.subtasks.forEach(st => (st.estimatedDuration = Math.max(1, equal)));
       } else {
@@ -332,7 +390,6 @@ export default function TaskPlanning() {
           const scaled = Math.max(1, Math.round(st.estimatedDuration * ratio));
           st.estimatedDuration = scaled;
           cumulative += scaled;
-          // Adjust last to match total exactly
           if (idx === t.subtasks.length - 1 && cumulative !== Math.round(newTotal)) {
             const diff = Math.round(newTotal) - cumulative;
             st.estimatedDuration = Math.max(1, st.estimatedDuration + diff);
@@ -345,12 +402,41 @@ export default function TaskPlanning() {
     hydrateTasks();
   };
 
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { total: number; complete: number }> = {};
+    tasks.forEach(t => {
+      if (!map[t.category]) map[t.category] = { total: 0, complete: 0 };
+      map[t.category].total += 1;
+      if (t.processingPhase === 'complete') map[t.category].complete += 1;
+    });
+    return map;
+  }, [tasks]);
+
+  const filteredTasks = useMemo(
+    () => (selectedCategory ? tasks.filter(t => t.category === selectedCategory) : tasks),
+    [tasks, selectedCategory]
+  );
+
+  const currentModel = useMemo(
+    () => models.find(m => m.id === selectedModelId) || null,
+    [models, selectedModelId]
+  );
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b">
         <div className="px-4 py-3 flex items-center justify-between">
+          {/* Left group: category button + icon/title */}
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCategoryDrawer(true)}
+              className="whitespace-nowrap flex items-center gap-1"
+            >
+              <Menu className="h-4 w-4" />
+              קטגוריות
+            </Button>
             <div
               className="p-2 rounded-lg"
               style={{ background: `linear-gradient(to right, ${PRIMARY_COLOR}, #e91e63)` }}
@@ -358,11 +444,31 @@ export default function TaskPlanning() {
               <ListTodo className="h-5 w-5 text-white" />
             </div>
             <div className="text-right" dir="rtl">
-              <h1 className="text-xl font-bold text-gray-900">משימות (גרסה חדשה)</h1>
-              <p className="text-xs text-gray-600">רשימה → ניתוח AI → SMART → לוח שנה</p>
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                משימות (גרסה חדשה)
+                {currentModel ? (
+                  <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-slate-100 border border-slate-300">
+                    מודל: {currentModel.name}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-red-50 border border-red-300 text-red-700">
+                    אין מודל
+                  </span>
+                )}
+              </h1>
+              <p className="text-xs text-gray-600">תוצאה AI למעלה • תהליך עיבוד למטה</p>
             </div>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowModelDrawer(true)}
+              className="whitespace-nowrap flex items-center gap-1"
+            >
+              <Cpu className="h-4 w-4" />
+              מודל
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -387,7 +493,6 @@ export default function TaskPlanning() {
             </Button>
           </div>
         </div>
-        {/* Quick Input */}
         <div className="px-4 pb-3">
           <div className="bg-white rounded-lg shadow p-3 space-y-2 border">
             <Input
@@ -431,17 +536,154 @@ export default function TaskPlanning() {
         </div>
       </div>
 
-      {/* Task List */}
+      {/* CATEGORY DRAWER */}
+      <Sheet open={showCategoryDrawer} onOpenChange={setShowCategoryDrawer}>
+        <SheetContent side="left" className="w-72" dir="rtl">
+          <SheetHeader>
+            <SheetTitle>קטגוריות משימות</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="h-[80vh] pr-2 mt-2">
+            <div className="space-y-2">
+              <Button
+                variant={selectedCategory ? 'outline' : 'secondary'}
+                size="sm"
+                className="w-full justify-between"
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setShowCategoryDrawer(false);
+                }}
+              >
+                <span>הכל</span>
+                <span className="text-xs">
+                  {tasks.filter(t => t.processingPhase === 'complete').length}/{tasks.length} הושלם
+                </span>
+              </Button>
+              {Object.entries(categoryStats)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([cat, stat]) => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="w-full justify-between"
+                    onClick={() => {
+                      setSelectedCategory(cat);
+                      setShowCategoryDrawer(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-1 ${categoryBadgeClasses(cat)}`}>
+<span>{getCategoryEmoji(cat)}</span>
+                        {cat}
+                      </span>
+                    </div>
+                    <span className="text-xs">
+                      {stat.complete}/{stat.total}
+                    </span>
+                  </Button>
+                ))}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
+      {/* MODEL DRAWER */}
+      <Sheet open={showModelDrawer} onOpenChange={setShowModelDrawer}>
+        <SheetContent side="right" className="w-80" dir="rtl">
+          <SheetHeader>
+            <SheetTitle>מודל AI של תהליך המשימות</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div className="text-xs text-gray-600">
+              בחר את המודל שישמש לעיבוד שלבי המשימה (קטגוריזציה, עדיפות, פירוק, הערכה, שיפור, SMART).
+            </div>
+            {loadingModels ? (
+              <div className="text-sm flex items-center gap-2 text-gray-500">
+                <RefreshCw className="h-4 w-4 animate-spin" /> טוען מודלים...
+              </div>
+            ) : models.length === 0 ? (
+              <div className="text-sm text-red-600">
+                אין מודלים זמינים. יש להגדיר מפתחות API (Gemini / Azure) או להפעיל שרת מקומי.
+              </div>
+            ) : (
+              <Select
+                value={selectedModelId || undefined}
+                onValueChange={(v) => setSelectedModelId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר מודל" />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map(m => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name} ({m.vendor})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowModelDrawer(false)}
+              >
+                סגור
+              </Button>
+              <Button
+                size="sm"
+                disabled={!selectedModelId}
+                onClick={saveSelectedModel}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                שמור מודל
+              </Button>
+            </div>
+            {currentModel && (
+              <div className="text-xs text-gray-700">
+                מודל נוכחי: <strong>{currentModel.name}</strong> ({currentModel.vendor})
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4">
-            {tasks.length === 0 && (
-              <div className="text-center py-12">
-                <Brain className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">אין משימות עדיין. הוסף משימה חדשה.</p>
+            {selectedCategory && (
+              <div className="rounded-md border bg-white shadow-sm p-2 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+<span className="text-xl">{getCategoryEmoji(selectedCategory)}</span>
+                  <span className={`px-2 py-1 rounded-full text-xs border ${categoryBadgeClasses(selectedCategory)}`}>
+                    {selectedCategory}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    משימות: {filteredTasks.length}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setSelectedCategory(null)}
+                >
+                  הסר סינון
+                </Button>
               </div>
             )}
-            {tasks.map((task) => (
+
+            {filteredTasks.length === 0 && (
+              <div className="text-center py-12">
+                <Brain className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">
+                  {selectedCategory
+                    ? 'אין משימות בקטגוריה זו.'
+                    : 'אין משימות עדיין. הוסף משימה חדשה.'}
+                </p>
+              </div>
+            )}
+            {filteredTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
@@ -456,13 +698,14 @@ export default function TaskPlanning() {
                 onAdjustSubtask={adjustSubtaskDuration}
                 onSetSubtask={setSubtaskDuration}
                 onSetTotal={setTotalDuration}
+                familyMembers={familyMembers}
+                currentUserId={currentUser?.uid || null}
               />
             ))}
           </div>
         </ScrollArea>
       </div>
 
-      {/* Guidance Dialog */}
       <Dialog open={showGuidance} onOpenChange={setShowGuidance}>
         <DialogContent dir="rtl" className="max-w-xl">
           <DialogHeader>
@@ -513,7 +756,6 @@ export default function TaskPlanning() {
         </DialogContent>
       </Dialog>
 
-      {/* Pipeline Details Dialog */}
       <Dialog open={showPipelineDialog} onOpenChange={setShowPipelineDialog}>
         <DialogContent dir="rtl" className="max-w-2xl">
           <DialogHeader>
@@ -633,6 +875,8 @@ interface TaskCardProps {
   onAdjustSubtask: (taskId: string, subtaskId: string, delta: number) => void;
   onSetSubtask: (taskId: string, subtaskId: string, value: number) => void;
   onSetTotal: (taskId: string, total: number) => void;
+  familyMembers: FamilyMember[];
+  currentUserId: string | null;
 }
 
 function TaskCard({
@@ -644,65 +888,233 @@ function TaskCard({
   onToggleSubtask,
   onAdjustSubtask,
   onSetSubtask,
-  onSetTotal
+  onSetTotal,
+  familyMembers,
+  currentUserId
 }: TaskCardProps) {
+  const [showSmart, setShowSmart] = useState(false);
+
   const nextStep = task.processingSteps?.find((s) => s.status === 'pending');
+  const totalSteps = task.processingSteps?.length || 0;
+  const doneSteps = task.processingSteps?.filter(s => s.status === 'done').length || (task.processingPhase === 'complete' ? totalSteps : 0);
   const pipelineProgress =
-    task.processingSteps && task.processingSteps.length
-      ? Math.round(
-          (task.processingSteps.filter((s) => s.status === 'done').length /
-            task.processingSteps.length) * 100
-        )
+    totalSteps > 0
+      ? Math.round((doneSteps / totalSteps) * 100)
       : task.processingPhase === 'complete'
       ? 100
       : 0;
 
+  const currentStepObj = task.processingSteps?.find(s => s.phase === task.processingPhase);
+  const currentReasoning = currentStepObj?.reasoning || task.aiAnalysis?.reasoning;
+
   const smallTaskNoBreakdown =
     task.subtasks.length === 0 && task.estimatedDuration <= 60;
 
+  // Detect mentioned members by simple name inclusion in title/description
+  const detectedMemberIds = familyMembers
+    .filter(m => {
+      const haystack = `${task.title} ${task.description || ''}`.toLowerCase();
+      return m.name && haystack.includes(m.name.toLowerCase());
+    })
+    .map(m => m.id);
+
+  const allRelevantMemberIds = Array.from(
+    new Set([...(task.assignedToMemberIds || []), ...detectedMemberIds])
+  );
+
   return (
     <div
-      className={`rounded-xl border shadow-sm bg-white p-3 flex flex-col gap-3 relative ${
-        running ? 'ring-2 ring-blue-400' : ''
+      className={`rounded-xl border shadow-sm bg-white flex flex-col gap-3 p-3 ${
+        running ? 'ring-1 ring-blue-400' : ''
       }`}
     >
-      {/* Running overlay label */}
-      {running && (
-        <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl z-10">
-          <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mb-2" />
-            <div className="text-sm font-medium text-blue-800 flex items-center gap-1">
-            AI: {PIPELINE_PHASE_LABELS[task.processingPhase]} <span className="animate-pulse">…</span>
-          </div>
-          <div className="text-[11px] text-gray-600 mt-1">
-            מעבד את המשימה בזמן אמת
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0" dir="rtl">
-          <div className="flex items-center gap-2 flex-wrap">
+      {/* TOP RESULT SECTION (AI RESULT) */}
+      <div className="flex flex-col gap-2" dir="rtl">
+        <div className="flex items-start justify-between">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             {task.emoji && <span className="text-2xl">{task.emoji}</span>}
             <h3 className="font-semibold text-gray-900 text-base">{task.title}</h3>
-            <Badge variant="outline" className="text-xs">
-              {PIPELINE_PHASE_LABELS[task.processingPhase]}
-              {running && <span className="ml-1 animate-pulse">…</span>}
-            </Badge>
-            <Badge variant="outline" className="text-xs">
+            <span
+              className={`text-xs px-2 py-1 rounded-full border flex items-center gap-1 ${categoryBadgeClasses(
+                task.category
+              )}`}
+            >
+<span>{getCategoryEmoji(task.category)}</span>
               {task.category}
-            </Badge>
+            </span>
             {task.priority > 0 && (
               <Badge variant="secondary" className="text-xs">
                 עדיפות {task.priority}
               </Badge>
             )}
+            <Badge variant="outline" className="text-xs">
+              {PIPELINE_PHASE_LABELS[task.processingPhase]}
+              {running && <span className="ml-1 animate-pulse">…</span>}
+            </Badge>
+            {running && (
+              <div className="flex items-center gap-1 text-xs text-blue-700 font-medium">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                עובד: {PIPELINE_PHASE_LABELS[task.processingPhase]}
+              </div>
+            )}
           </div>
-          {task.description && (
-            <p className="text-xs text-gray-600 mt-1 line-clamp-3">{task.description}</p>
+          <div className="flex items-center gap-1">
+            {allRelevantMemberIds.length === 0 && currentUserId && (
+              <Avatar className="h-7 w-7 border">
+                <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
+                  אני
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {allRelevantMemberIds.slice(0, 5).map(id => {
+              const mem = familyMembers.find(m => m.id === id);
+              if (!mem) return null;
+              return (
+                <Avatar key={id} className="h-7 w-7 border">
+                  {mem.avatar ? (
+                    <AvatarImage src={mem.avatar} alt={mem.name} />
+                  ) : (
+                    <AvatarFallback className="text-[10px] bg-gray-100 text-gray-700">
+                      {mem.name?.slice(0, 2) || '??'}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              );
+            })}
+            {allRelevantMemberIds.length > 5 && (
+              <Badge variant="outline" className="text-[10px]">
+                +{allRelevantMemberIds.length - 5}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {task.description && (
+          <p className="text-xs text-gray-600 whitespace-pre-line">{task.description}</p>
+        )}
+
+        {/* AI consolidated results */}
+        {(task.aiAnalysis || task.smart) && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-2 space-y-1">
+            {task.aiAnalysis && (
+              <>
+                <div className="flex flex-wrap gap-3 text-[11px] text-blue-800">
+                  <span>משך משוער: {task.estimatedDuration} דק</span>
+                  <span>חברי צוות: {task.assignedToMemberIds.length || 0}</span>
+                  <span>טיפים: {task.aiAnalysis.schedulingTips?.length || 0}</span>
+                </div>
+                {task.aiAnalysis.schedulingTips && task.aiAnalysis.schedulingTips.length > 0 && (
+                  <ul className="list-disc pr-4 text-[11px] text-blue-700 space-y-0.5">
+                    {task.aiAnalysis.schedulingTips.slice(0, 3).map((tip, i) => (
+                      <li key={i}>{tip}</li>
+                    ))}
+                    {task.aiAnalysis.schedulingTips.length > 3 && (
+                      <li>+ עוד {task.aiAnalysis.schedulingTips.length - 3}</li>
+                    )}
+                  </ul>
+                )}
+              </>
+            )}
+            {task.smart && (
+              <div className="rounded border border-purple-200 bg-purple-50">
+                <button
+                  type="button"
+                  onClick={() => setShowSmart(s => !s)}
+                  className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-medium text-purple-800"
+                >
+                  <span className="flex items-center gap-1">
+                    <Hash className="h-3 w-3" />
+                    SMART / קס"ם
+                  </span>
+                  <span className="text-purple-600">
+                    {showSmart ? 'הסתר' : 'הצג'}
+                  </span>
+                </button>
+                {showSmart && (
+                  <div className="px-2 pb-2 text-[11px] text-purple-700 space-y-1">
+                    <div><span className="font-semibold">S:</span> {task.smart.specific || '—'}</div>
+                    <div><span className="font-semibold">M:</span> {task.smart.measurable || '—'}</div>
+                    <div><span className="font-semibold">A:</span> {task.smart.achievable || '—'}</div>
+                    <div><span className="font-semibold">R:</span> {task.smart.relevant || '—'}</div>
+                    <div><span className="font-semibold">T:</span> {task.smart.timeBound || '—'}</div>
+                    {task.smart.score !== undefined && (
+                      <div><span className="font-semibold">ציון:</span> {task.smart.score}</div>
+                    )}
+                    {task.smart.kesemVariant && (
+                      <div className="mt-1 space-y-1">
+                        <div><span className="font-semibold">קונקרטי:</span> {task.smart.kesemVariant.concrete || '—'}</div>
+                        <div><span className="font-semibold">ספציפי:</span> {task.smart.kesemVariant.specific || '—'}</div>
+                        <div><span className="font-semibold">מדיד:</span> {task.smart.kesemVariant.measurable || '—'}</div>
+                        <div><span className="font-semibold">זמן/תיאום:</span> {task.smart.kesemVariant.timeOrAligned || '—'}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* DIVIDER */}
+      <div className="border-t pt-2 space-y-3" dir="rtl">
+        {/* PROCESS SECTION */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-gray-600">
+            <span>התקדמות AI</span>
+            <span>{doneSteps}/{totalSteps} ({pipelineProgress}%)</span>
+          </div>
+          <Progress value={pipelineProgress} className="h-2" />
+          <div className="text-[10px] text-gray-700 flex items-center gap-1">
+            <Gauge className="h-3 w-3" />
+            שלב נוכחי: {PIPELINE_PHASE_LABELS[task.processingPhase]}
+          </div>
+          {currentReasoning && (
+            <div className="text-[10px] text-gray-500 line-clamp-3">
+              {currentReasoning}
+            </div>
           )}
         </div>
-        <div className="flex flex-col items-end gap-1">
+
+        {/* Duration Editing */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] text-gray-700 flex items-center gap-1">
+            <Timer className="h-3 w-3" />
+            משך כולל:
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2"
+              disabled={running}
+              onClick={() => onSetTotal(task.id, Math.max(5, (task.estimatedDuration || 0) - 5))}
+            >
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+            <Input
+              type="number"
+              min={1}
+              value={task.estimatedDuration || 0}
+              disabled={running}
+              onChange={(e) => onSetTotal(task.id, Number(e.target.value))}
+              className="h-6 w-16 text-center text-xs"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2"
+              disabled={running}
+              onClick={() => onSetTotal(task.id, (task.estimatedDuration || 0) + 5)}
+            >
+              <ChevronUp className="h-3 w-3" />
+            </Button>
+            <span className="text-[10px] text-gray-500">דקות</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -713,228 +1125,129 @@ function TaskCard({
             <Gauge className="h-4 w-4 ml-1" />
             תהליך ניתוח
           </Button>
-          <div className="flex gap-1">
+          <Button
+            size="sm"
+            onClick={() => onRunFull(false)}
+            disabled={running || task.processingPhase === 'complete'}
+            className="bg-green-600 hover:bg-green-700 text-xs"
+          >
+            <PlayCircle className="h-4 w-4 ml-1" />
+            run AI
+          </Button>
+          {smallTaskNoBreakdown && (
             <Button
               size="sm"
-              onClick={() => onRunFull(false)}
-              disabled={running || task.processingPhase === 'complete'}
-              className="bg-green-600 hover:bg-green-700 text-xs"
-            >
-              <PlayCircle className="h-4 w-4 ml-1" />
-              run AI
-            </Button>
-            {smallTaskNoBreakdown && (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={running}
-                onClick={() => onRunFull(true)}
-                className="text-xs"
-              >
-                <Layers className="h-4 w-4 ml-1" />
-                פירוק
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-[10px] text-gray-600" dir="rtl">
-          <span>התקדמות AI</span>
-          <span>{pipelineProgress}%</span>
-        </div>
-        <Progress value={pipelineProgress} className="h-2" />
-      </div>
-
-      {/* Duration Editing */}
-      <div className="flex items-center justify-between gap-2" dir="rtl">
-        <div className="text-[11px] text-gray-700 flex items-center gap-1">
-          <Timer className="h-3 w-3" />
-          משך כולל:
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 px-2"
-            disabled={running}
-            onClick={() => onSetTotal(task.id, Math.max(5, (task.estimatedDuration || 0) - 5))}
-          >
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-          <Input
-            type="number"
-            min={1}
-            value={task.estimatedDuration || 0}
-            disabled={running}
-            onChange={(e) => onSetTotal(task.id, Number(e.target.value))}
-            className="h-6 w-16 text-center text-xs"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 px-2"
-            disabled={running}
-            onClick={() => onSetTotal(task.id, (task.estimatedDuration || 0) + 5)}
-          >
-            <ChevronUp className="h-3 w-3" />
-          </Button>
-          <span className="text-[10px] text-gray-500">דקות</span>
-        </div>
-      </div>
-
-      {/* Action row */}
-      {nextStep &&
-        task.processingPhase !== 'complete' &&
-        task.processingPhase !== 'error' &&
-        !running && (
-          <div className="flex flex-wrap gap-2" dir="rtl">
-            <Button
-              size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={running}
-              onClick={() => onRunPhase(task.id, nextStep.phase)}
+              onClick={() => onRunFull(true)}
               className="text-xs"
             >
-              {iconForPhase(nextStep.phase)}
-              הפעל {PIPELINE_PHASE_LABELS[nextStep.phase]}
+              <Layers className="h-4 w-4 ml-1" />
+              פירוק
             </Button>
-            {task.processingSteps
-              .filter((s) => s.phase !== nextStep.phase && s.status === 'pending')
-              .slice(0, 2)
-              .map((s) => (
-                <Button
-                  key={s.id}
-                  size="sm"
-                  variant="ghost"
-                  disabled={running}
-                  onClick={() => onRunPhase(task.id, s.phase)}
-                  className="text-xs"
-                >
-                  {iconForPhase(s.phase)}
-                  {PIPELINE_PHASE_LABELS[s.phase]}
-                </Button>
+          )}
+          {nextStep &&
+            task.processingPhase !== 'complete' &&
+            task.processingPhase !== 'error' &&
+            !running && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={running}
+                onClick={() => onRunPhase(task.id, nextStep.phase)}
+                className="text-xs"
+              >
+                {iconForPhase(nextStep.phase)}
+                הפעל {PIPELINE_PHASE_LABELS[nextStep.phase]}
+              </Button>
+            )}
+        </div>
+
+        {/* Subtasks */}
+        {task.subtasks && task.subtasks.length > 0 && (
+          <div className="space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                <Layers className="h-3 w-3" /> משימות משנה
+              </span>
+              <span className="text-[10px] text-gray-500">
+                {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {task.subtasks.slice(0, 8).map((st) => (
+                <div key={st.id} className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    checked={st.completed}
+                    onCheckedChange={() => onToggleSubtask(task.id, st.id)}
+                  />
+                  <span
+                    className={`flex-1 ${
+                      st.completed ? 'line-through text-gray-400' : 'text-gray-700'
+                    }`}
+                  >
+                    {st.title}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2"
+                      disabled={running}
+                      onClick={() => onAdjustSubtask(task.id, st.id, -5)}
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={st.estimatedDuration}
+                      disabled={running}
+                      onChange={(e) =>
+                        onSetSubtask(task.id, st.id, Number(e.target.value))
+                      }
+                      className="h-6 w-14 text-center text-[11px]"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2"
+                      disabled={running}
+                      onClick={() => onAdjustSubtask(task.id, st.id, +5)}
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </Button>
+                    <span className="text-[10px] text-gray-500">דק</span>
+                  </div>
+                </div>
               ))}
+              {task.subtasks.length > 8 && (
+                <span className="text-[10px] text-gray-500">
+                  + עוד {task.subtasks.length - 8} משימות משנה
+                </span>
+              )}
+            </div>
           </div>
         )}
 
-      {/* Subtasks */}
-      {task.subtasks && task.subtasks.length > 0 && (
-        <div className="space-y-1" dir="rtl">
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-medium text-gray-700 flex items-center gap-1">
-              <Layers className="h-3 w-3" /> משימות משנה
-            </span>
-            <span className="text-[10px] text-gray-500">
-              {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
-            </span>
+        {/* Scheduling readiness */}
+        {task.processingPhase === 'complete' && (
+          <div className="flex items-center gap-2 justify-between">
+            <Badge variant="secondary" className="text-xs">
+              מוכן לתזמון
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={running}
+            >
+              <Calendar className="h-3 w-3 ml-1" />
+              הצעת זמן
+            </Button>
           </div>
-          <div className="space-y-1">
-            {task.subtasks.slice(0, 8).map((st) => (
-              <div key={st.id} className="flex items-center gap-2 text-xs">
-                <Checkbox
-                  checked={st.completed}
-                  onCheckedChange={() => onToggleSubtask(task.id, st.id)}
-                />
-                <span
-                  className={`flex-1 ${
-                    st.completed ? 'line-through text-gray-400' : 'text-gray-700'
-                  }`}
-                >
-                  {st.title}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2"
-                    disabled={running}
-                    onClick={() => onAdjustSubtask(task.id, st.id, -5)}
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={st.estimatedDuration}
-                    disabled={running}
-                    onChange={(e) =>
-                      onSetSubtask(task.id, st.id, Number(e.target.value))
-                    }
-                    className="h-6 w-14 text-center text-[11px]"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2"
-                    disabled={running}
-                    onClick={() => onAdjustSubtask(task.id, st.id, +5)}
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </Button>
-                  <span className="text-[10px] text-gray-500">דק</span>
-                </div>
-              </div>
-            ))}
-            {task.subtasks.length > 8 && (
-              <span className="text-[10px] text-gray-500">
-                + עוד {task.subtasks.length - 8} משימות משנה
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* SMART Summary */}
-      {task.smart && (
-        <div className="rounded bg-purple-50 border border-purple-200 p-2" dir="rtl">
-          <div className="flex items-center gap-1 text-[11px] font-medium text-purple-800">
-            <Hash className="h-3 w-3" />
-            SMART / קס"ם
-          </div>
-          <div className="grid grid-cols-3 gap-1 mt-1 text-[10px] text-purple-700">
-            <div>
-              <span className="font-semibold">S:</span> {truncate(task.smart.specific)}
-            </div>
-            <div>
-              <span className="font-semibold">M:</span> {truncate(task.smart.measurable)}
-            </div>
-            <div>
-              <span className="font-semibold">A:</span> {truncate(task.smart.achievable)}
-            </div>
-            <div>
-              <span className="font-semibold">R:</span> {truncate(task.smart.relevant)}
-            </div>
-            <div>
-              <span className="font-semibold">T:</span> {truncate(task.smart.timeBound)}
-            </div>
-            <div>
-              <span className="font-semibold">ציון:</span> {task.smart.score ?? '—'}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scheduling readiness */}
-      {task.processingPhase === 'complete' && (
-        <div className="flex items-center gap-2 justify-between">
-          <Badge variant="secondary" className="text-xs">
-            מוכן לתזמון
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            disabled={running}
-            // Future scheduling suggestion
-          >
-            <Calendar className="h-3 w-3 ml-1" />
-            הצעת זמן
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
