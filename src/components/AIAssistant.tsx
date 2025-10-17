@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send, Sparkles, Settings, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,25 @@ export const AIAssistant = ({
   const [azureOpenAIApiKey, setAzureOpenAIApiKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Auto-scroll to bottom when chat history changes
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
 
   // Background memory extraction
   const extractMemoriesInBackground = async (userMessage: string) => {
@@ -424,12 +443,13 @@ When calculating times, use the current date and timezone shown above. For "toda
   };
 
   return (
-    <div className="flex h-full min-h-[480px] flex-col gap-3 rounded-xl border border-slate-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/80">
-      <div className="flex items-center justify-between gap-2">
+    <div className={`flex flex-col ${isMobile ? 'h-full overflow-hidden' : 'h-full min-h-[480px] rounded-xl border border-slate-200/80 shadow-sm p-4'} bg-white dark:bg-slate-900 ${!isMobile ? 'gap-3' : ''}`}>
+      {/* Header - Always visible at top */}
+      <div className={`flex-none flex items-center justify-between gap-2 bg-white dark:bg-slate-900 ${isMobile ? 'px-4 py-3 border-b border-slate-200/80 dark:border-slate-700/60' : ''}`} style={isMobile ? { paddingTop: 'max(12px, env(safe-area-inset-top))' } : {}}>
         <div className="flex items-center gap-3">
-          <img src="/pandai.png" alt="AI" className="h-12 w-12 object-contain" />
+          <img src="/pandai.png" alt="AI" className="h-10 w-10 object-contain" />
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI Assistant v1.4</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">Your scheduling companion</p>
           </div>
         </div>
@@ -492,8 +512,8 @@ When calculating times, use the current date and timezone shown above. For "toda
         </Dialog>
       </div>
 
-      {/* Model Selection */}
-      <div>
+      {/* Model Selection - Fixed below header for mobile */}
+      <div className={`flex-none bg-white dark:bg-slate-900 ${isMobile ? 'px-4 py-1.5 border-b border-slate-200/80 dark:border-slate-700/60' : ''}`}>
         <Select
           value={selectedModel?.id}
           onValueChange={(value) => {
@@ -520,53 +540,64 @@ When calculating times, use the current date and timezone shown above. For "toda
         </Select>
       </div>
 
-      {/* Conversation Area */}
-      <div className="flex flex-1 flex-col gap-3 overflow-hidden">
+      {/* Conversation Area - Scrollable, takes all available space */}
+      <div className={`flex-1 min-h-0 ${isMobile ? '' : 'gap-3'}`}>
         {chatHistory.length > 0 ? (
-          <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-slate-50/80 p-4 dark:bg-slate-800/60" style={{ minHeight: '280px', maxHeight: '420px' }}>
-            {chatHistory.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`rounded-lg p-3 ${
-                  msg.role === 'user'
-                    ? 'ml-8 bg-sky-100/80 dark:bg-sky-900/30'
-                    : 'mr-8 bg-white dark:bg-slate-800'
-                }`}
-              >
-                <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  {msg.role === 'user' ? 'You' : 'Assistant'}
-                </div>
-                
-                {/* Render EventCard if this message has an event */}
-                {msg.event && (
-                  <div className="mb-3">
-                    <EventCard event={msg.event} member={msg.eventMember} />
+          <div 
+            ref={chatContainerRef}
+            className={`h-full overflow-y-auto flex flex-col justify-end ${isMobile ? 'px-4 py-3' : 'rounded-lg p-4 bg-slate-50/80 dark:bg-slate-800/60'}`} 
+            style={isMobile ? { 
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain'
+            } : { minHeight: '280px', maxHeight: '420px' }}
+          >
+            <div className="space-y-3">
+              {chatHistory.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-lg p-3 ${
+                    msg.role === 'user'
+                      ? 'ml-8 bg-sky-100/80 dark:bg-sky-900/30'
+                      : 'mr-8 bg-slate-50 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50'
+                  }`}
+                >
+                  <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {msg.role === 'user' ? '👤 You' : '🐼 Assistant'}
                   </div>
-                )}
-                
-                {/* Render the text content - filter out JSON code blocks when event is shown */}
-                {(() => {
-                  let displayContent = msg.content;
                   
-                  // If we're showing an event widget, remove JSON code blocks from the text
-                  if (msg.event) {
-                    // Remove ```json...``` blocks
-                    displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
-                    // Remove any standalone JSON objects
-                    displayContent = displayContent.replace(/\{[\s\S]*?"tool"[\s\S]*?\}/g, '').trim();
-                  }
+                  {/* Render EventCard if this message has an event */}
+                  {msg.event && (
+                    <div className="mb-3">
+                      <EventCard event={msg.event} member={msg.eventMember} />
+                    </div>
+                  )}
                   
-                  return displayContent ? (
-                    <p className="whitespace-pre-wrap text-sm text-slate-900 dark:text-slate-100">
-                      {displayContent}
-                    </p>
-                  ) : null;
-                })()}
-              </div>
-            ))}
+                  {/* Render the text content - filter out JSON code blocks when event is shown */}
+                  {(() => {
+                    let displayContent = msg.content;
+                    
+                    // If we're showing an event widget, remove JSON code blocks from the text
+                    if (msg.event) {
+                      // Remove ```json...``` blocks
+                      displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
+                      // Remove any standalone JSON objects
+                      displayContent = displayContent.replace(/\{[\s\S]*?"tool"[\s\S]*?\}/g, '').trim();
+                    }
+                    
+                    return displayContent ? (
+                      <p className="whitespace-pre-wrap text-sm text-slate-900 dark:text-slate-100">
+                        {displayContent}
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
-          <div className="rounded-lg bg-slate-50/80 p-4 dark:bg-slate-800/60">
+          <div className={`h-full flex items-center justify-center ${isMobile ? 'px-4 py-8' : 'rounded-lg bg-slate-50/80 dark:bg-slate-800/60 p-4'}`}>
+            <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
               <Wrench className="h-3 w-3" />
               <span>Calendar Control Enabled</span>
@@ -580,15 +611,16 @@ When calculating times, use the current date and timezone shown above. For "toda
               <li>• Edit meeting details (title, description, priority)</li>
               <li>• Delete or cancel meetings</li>
             </ul>
-            <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
-              I can see your current schedule for today and this week. Just tell me what you need!
-            </p>
+              <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">
+                I can see your current schedule for today and this week. Just tell me what you need!
+              </p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="flex gap-2">
+      {/* Input Area - Stays at bottom */}
+      <div className={`flex gap-2 flex-none ${isMobile ? 'px-4 py-3 border-t border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-900' : ''}`} style={isMobile ? { paddingBottom: 'max(12px, env(safe-area-inset-bottom))' } : {}}>
         <textarea
           value={message}
           onChange={(e) => {

@@ -219,11 +219,11 @@ const MobileIndex = () => {
     
     if (Math.abs(diff) > swipeThreshold) {
       if (diff > 0) {
-        // Swiped left - go to next
-        handleNavigate('next');
-      } else {
-        // Swiped right - go to previous
+        // Swiped left - go to previous
         handleNavigate('prev');
+      } else {
+        // Swiped right - go to next
+        handleNavigate('next');
       }
     }
   };

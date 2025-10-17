@@ -34,31 +34,28 @@ const MobileAppLayout = () => {
   };
 
   return (
-    <div className={`h-screen flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`h-screen flex flex-col ${isDarkMode ? 'dark' : ''} overflow-hidden`}>
       {/* Fixed Background */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 -z-10" />
       
-
       {/* Main Content Area - Takes remaining space */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 min-h-0">
         {activeTab === 'calendar' && <MobileIndex />}
         {activeTab === 'tasks' && <TaskPlanning />}
         {activeTab === 'ai' && (
-          <div className="h-full p-4 overflow-y-auto ios-scroll hide-scrollbar">
-            <AIAssistant
-              calendarService={new CalendarService({
-                createEvent: () => {},
-                updateEvent: () => {},
-                deleteEvent: () => {},
-                moveEvent: () => {},
-              })}
-              currentDate={new Date()}
-              todayEvents={[]}
-              weekEvents={[]}
-              familyMembers={[]}
-              onMemoryUpdate={() => {}}
-            />
-          </div>
+          <AIAssistant
+            calendarService={new CalendarService({
+              createEvent: () => {},
+              updateEvent: () => {},
+              deleteEvent: () => {},
+              moveEvent: () => {},
+            })}
+            currentDate={new Date()}
+            todayEvents={[]}
+            weekEvents={[]}
+            familyMembers={[]}
+            onMemoryUpdate={() => {}}
+          />
         )}
       </main>
 
