@@ -5,18 +5,18 @@ import 'dart:math' as math;
 import '../../models/calendar_event.dart';
 import '../../providers/calendar_provider.dart';
 
-/// Beautiful day view with hourly schedule and current time indicator
-class DayView extends ConsumerStatefulWidget {
-  const DayView({super.key});
+/// Beautiful 3-day view with hourly schedule and current time indicator
+class ThreeDayView extends ConsumerStatefulWidget {
+  const ThreeDayView({super.key});
 
   @override
-  ConsumerState<DayView> createState() => _DayViewState();
+  ConsumerState<ThreeDayView> createState() => _ThreeDayViewState();
 }
 
-class _DayViewState extends ConsumerState<DayView> {
+class _ThreeDayViewState extends ConsumerState<ThreeDayView> {
   late ScrollController _scrollController;
   static const double _hourHeight = 60.0;
-  static const double _timeColumnWidth = 60.0;
+  static const double _timeColumnWidth = 50.0;
 
   @override
   void initState() {
@@ -61,20 +61,27 @@ class _DayViewState extends ConsumerState<DayView> {
     }
   }
 
+  List<DateTime> _getThreeDays() {
+    final selectedDate = ref.watch(selectedDateProvider);
+    final yesterday = selectedDate.subtract(const Duration(days: 1));
+    final tomorrow = selectedDate.add(const Duration(days: 1));
+    return [yesterday, selectedDate, tomorrow];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selectedDate = ref.watch(selectedDateProvider);
-    final events = ref.watch(selectedDateEventsProvider);
-    final isToday = _isToday(selectedDate);
+    final threeDays = _getThreeDays();
+    final events = ref.watch(calendarEventsProvider);
 
     return Column(
       children: [
-        _buildDateHeader(context, selectedDate),
+        _buildDateHeaders(context, threeDays),
         Expanded(
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              _buildHourlyGrid(context, events, isToday),
-              if (isToday) _buildCurrentTimeIndicator(context),
+              _buildHourlyGrid(context, threeDays, events),
+              _buildCurrentTimeIndicator(context, threeDays),
             ],
           ),
         ),
@@ -82,11 +89,11 @@ class _DayViewState extends ConsumerState<DayView> {
     );
   }
 
-  Widget _buildDateHeader(BuildContext context, DateTime date) {
-    final isToday = _isToday(date);
+  Widget _buildDateHeaders(BuildContext context, List<DateTime> days) {
+    final now = DateTime.now();
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground.resolveFrom(context),
         border: Border(
@@ -97,94 +104,110 @@ class _DayViewState extends ConsumerState<DayView> {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isToday ? 'Today' : DateFormat('EEEE').format(date),
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                DateFormat('MMMM d, yyyy').format(date),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: CupertinoColors.systemGrey.resolveFrom(context),
-                ),
-              ),
-            ],
-          ),
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: _scrollToCurrentTime,
-            child: Row(
-              children: [
-                const Icon(
-                  CupertinoIcons.clock,
-                  size: 20,
-                  color: CupertinoColors.activeBlue,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  DateFormat('HH:mm').format(DateTime.now()),
-                  style: const TextStyle(
-                    color: CupertinoColors.activeBlue,
-                    fontWeight: FontWeight.w600,
+          // Time column spacer
+          SizedBox(width: _timeColumnWidth),
+          // Day headers
+          ...days.map((day) {
+            final isToday = _isSameDay(day, now);
+            final dayLabel = _getDayLabel(day);
+            
+            return Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  ref.read(selectedDateProvider.notifier).state = day;
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isToday
+                        ? CupertinoColors.activeBlue.withOpacity(0.1)
+                        : null,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        dayLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isToday
+                              ? CupertinoColors.activeBlue
+                              : CupertinoColors.systemGrey.resolveFrom(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('d').format(day),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isToday
+                              ? CupertinoColors.activeBlue
+                              : CupertinoColors.label.resolveFrom(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildHourlyGrid(BuildContext context, List<CalendarEvent> events, bool isToday) {
+  Widget _buildHourlyGrid(
+    BuildContext context,
+    List<DateTime> days,
+    List<CalendarEvent> allEvents,
+  ) {
     return SingleChildScrollView(
       controller: _scrollController,
       child: SizedBox(
         height: 24 * _hourHeight, // 24 hours
-        child: Stack(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Hour lines and labels
-            ...List.generate(24, (hour) => _buildHourRow(context, hour)),
-            // Events
-            _buildEventBlocks(context, events),
-            // Current time indicator INSIDE the scrollable area
-            if (isToday) _buildCurrentTimeIndicatorInGrid(context),
+            // Time column
+            _buildTimeColumn(context),
+            // Day columns
+            ...days.map((day) {
+              final dayEvents = allEvents
+                  .where((event) => event.occursOnDate(day))
+                  .toList();
+              return Expanded(
+                child: _buildDayColumn(context, day, dayEvents),
+              );
+            }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHourRow(BuildContext context, int hour) {
-    final isPastHour = DateTime.now().hour > hour;
-    
-    return Positioned(
-      top: hour * _hourHeight,
-      left: 0,
-      right: 0,
-      height: _hourHeight,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Time label
-          SizedBox(
-            width: _timeColumnWidth,
+  Widget _buildTimeColumn(BuildContext context) {
+    return SizedBox(
+      width: _timeColumnWidth,
+      child: Stack(
+        children: List.generate(24, (hour) {
+          final isPastHour = DateTime.now().hour > hour;
+          
+          return Positioned(
+            top: hour * _hourHeight,
+            left: 0,
+            right: 0,
+            height: _hourHeight,
             child: Padding(
-              padding: const EdgeInsets.only(right: 8, top: 4),
+              padding: const EdgeInsets.only(right: 4, top: 4),
               child: Text(
                 DateFormat('HH:mm').format(
                   DateTime(2024, 1, 1, hour),
                 ),
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: isPastHour
                       ? CupertinoColors.systemGrey2.resolveFrom(context)
                       : CupertinoColors.systemGrey.resolveFrom(context),
@@ -192,62 +215,87 @@ class _DayViewState extends ConsumerState<DayView> {
                 textAlign: TextAlign.right,
               ),
             ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildDayColumn(
+    BuildContext context,
+    DateTime day,
+    List<CalendarEvent> events,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: CupertinoColors.separator.resolveFrom(context),
+            width: 0.5,
           ),
-          // Hour line
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: CupertinoColors.separator.resolveFrom(context),
-                    width: hour % 3 == 0 ? 1.0 : 0.5,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Hour lines
+          ...List.generate(24, (hour) {
+            return Positioned(
+              top: hour * _hourHeight,
+              left: 0,
+              right: 0,
+              height: _hourHeight,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: hour % 3 == 0 ? 0.5 : 0.25,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          }),
+          // Events
+          _buildEventBlocks(context, day, events),
         ],
       ),
     );
   }
 
-  Widget _buildEventBlocks(BuildContext context, List<CalendarEvent> events) {
+  Widget _buildEventBlocks(
+    BuildContext context,
+    DateTime day,
+    List<CalendarEvent> events,
+  ) {
     if (events.isEmpty) return const SizedBox.shrink();
 
-    // Sort events by start time
     final sortedEvents = List<CalendarEvent>.from(events)
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-    // Calculate overlapping events for better positioning
     final eventBlocks = <Widget>[];
     
     for (int i = 0; i < sortedEvents.length; i++) {
       final event = sortedEvents[i];
       if (event.isAllDay) continue;
 
-      // Calculate overlaps
-      int overlapCount = 0;
-      int overlapIndex = 0;
-      
-      for (int j = 0; j < sortedEvents.length; j++) {
-        if (i == j) {
-          overlapIndex = overlapCount;
-          continue;
-        }
-        
-        final other = sortedEvents[j];
-        if (other.isAllDay) continue;
-        
-        if (_eventsOverlap(event, other)) {
-          overlapCount++;
-        }
-      }
+      // Calculate overlaps for positioning
+      final overlappingEvents = sortedEvents.where((other) {
+        return other != event &&
+               !other.isAllDay &&
+               _eventsOverlap(event, other);
+      }).toList();
+
+      final totalOverlaps = overlappingEvents.length + 1;
+      final overlapIndex = overlappingEvents
+          .where((other) => other.startTime.isBefore(event.startTime))
+          .length;
 
       eventBlocks.add(
         _buildEventBlock(
           context,
           event,
-          overlapCount + 1,
+          totalOverlaps,
           overlapIndex,
         ),
       );
@@ -266,86 +314,50 @@ class _DayViewState extends ConsumerState<DayView> {
     final duration = event.duration.inMinutes / 60;
     final eventColor = _getEventColor(event);
 
-    final leftOffset = _timeColumnWidth + 
-                      (overlapIndex * (MediaQuery.of(context).size.width - _timeColumnWidth) / totalOverlaps);
-    final width = (MediaQuery.of(context).size.width - _timeColumnWidth) / totalOverlaps - 4;
+    // Calculate width to fit within the day column
+    final screenWidth = MediaQuery.of(context).size.width;
+    final availableWidth = (screenWidth - _timeColumnWidth) / 3;
+    final leftOffset = (overlapIndex * availableWidth / totalOverlaps);
+    final width = (availableWidth / totalOverlaps) - 4;
 
     return Positioned(
       top: startHour * _hourHeight,
-      left: leftOffset,
+      left: leftOffset + 2,
       width: width,
       height: duration * _hourHeight,
       child: GestureDetector(
         onTap: () => _showEventDetails(context, event),
         child: Container(
           margin: const EdgeInsets.only(right: 2, top: 1, bottom: 1),
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: eventColor.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: eventColor,
-              width: 1.5,
+              width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: eventColor.withOpacity(0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Flexible(
-                child: Text(
-                  event.title,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                event.title,
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               if (duration >= 0.5) ...[
                 const SizedBox(height: 2),
                 Text(
-                  '${DateFormat('h:mm a').format(event.startTime)} - ${DateFormat('h:mm a').format(event.endTime)}',
+                  DateFormat('h:mm a').format(event.startTime),
                   style: const TextStyle(
                     color: CupertinoColors.white,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (event.location != null && duration >= 1) ...[
-                const SizedBox(height: 2),
-                Flexible(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        CupertinoIcons.location_solid,
-                        size: 10,
-                        color: CupertinoColors.white,
-                      ),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          event.location!,
-                          style: const TextStyle(
-                            color: CupertinoColors.white,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                    fontSize: 9,
                   ),
                 ),
               ],
@@ -356,94 +368,78 @@ class _DayViewState extends ConsumerState<DayView> {
     );
   }
 
-  Widget _buildCurrentTimeIndicator(BuildContext context) {
-    // This is kept for potential future use but currently unused
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildCurrentTimeIndicatorInGrid(BuildContext context) {
+  Widget _buildCurrentTimeIndicator(
+    BuildContext context,
+    List<DateTime> days,
+  ) {
     final now = DateTime.now();
+    
+    // Check if today is one of the displayed days
+    final todayIndex = days.indexWhere((day) => _isSameDay(day, now));
+    if (todayIndex == -1) {
+      return const SizedBox.shrink();
+    }
+
     final currentHour = now.hour + now.minute / 60;
     final topPosition = currentHour * _hourHeight;
-    final timeString = DateFormat('HH:mm').format(now);
 
     return Positioned(
-      top: topPosition - 1,
+      top: topPosition - 1.5, // Center the line
       left: 0,
       right: 0,
       child: IgnorePointer(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Current time label
-            Container(
-              width: _timeColumnWidth,
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(
-                timeString,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFF3B30),
+        child: Container(
+          height: 3,
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemRed,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xFFFF3B30),
+                blurRadius: 12,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Time indicator circle at the start
+              Container(
+                margin: const EdgeInsets.only(left: _timeColumnWidth - 10),
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemRed,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: CupertinoColors.white,
+                    width: 3,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0xFFFF3B30),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.right,
               ),
-            ),
-            // Elegant red line with circle indicator
-            Expanded(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // Thin red line
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 2,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF3B30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF3B30).withOpacity(0.3),
-                            blurRadius: 4,
-                            spreadRadius: 0.5,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Small circle indicator at the start
-                  Positioned(
-                    left: -4,
-                    top: -3,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF3B30),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: CupertinoColors.white,
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF3B30).withOpacity(0.4),
-                            blurRadius: 6,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              // Red line extending across
+              const Expanded(child: SizedBox()),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _getDayLabel(DateTime date) {
+    final now = DateTime.now();
+    if (_isSameDay(date, now)) return 'Today';
+    if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
+      return 'Yesterday';
+    }
+    if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
+    return DateFormat('EEE').format(date);
   }
 
   Color _getEventColor(CalendarEvent event) {
@@ -471,11 +467,8 @@ class _DayViewState extends ConsumerState<DayView> {
     return a.startTime.isBefore(b.endTime) && a.endTime.isAfter(b.startTime);
   }
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year && 
-           date.month == now.month && 
-           date.day == now.day;
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   void _showEventDetails(BuildContext context, CalendarEvent event) {

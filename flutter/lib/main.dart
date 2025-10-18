@@ -4,17 +4,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/task.dart';
 import 'providers/task_provider.dart';
 import 'providers/calendar_provider.dart';
+import 'providers/firebase_task_provider.dart';
+import 'providers/firebase_event_provider.dart';
+import 'providers/auth_provider.dart';
+import 'services/firebase_service.dart';
+import 'screens/login_screen.dart';
 import 'widgets/task_creation_sheet.dart';
 import 'widgets/task_item.dart';
 import 'widgets/calendar/month_view.dart';
 import 'widgets/calendar/event_list.dart';
 import 'widgets/calendar/day_view.dart';
+import 'widgets/calendar/three_day_view.dart';
 
 /// Main entry point for the Calendar AI Flutter app.
 /// 
 /// This app provides a native iOS experience for task management,
 /// calendar viewing, and AI chat assistance.
-void main() {
+/// 
+/// Initializes Firebase before running the app.
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    // Initialize Firebase
+    await FirebaseService.initialize();
+    print('Firebase initialized successfully');
+  } catch (e) {
+    print('Firebase initialization error: $e');
+    print('App will run in offline mode with local data only');
+  }
+  
   runApp(
     const ProviderScope(
       child: CalendarAIApp(),
@@ -25,19 +44,45 @@ void main() {
 /// Root application widget.
 /// 
 /// Uses CupertinoApp for iOS-native feel across all platforms.
-class CalendarAIApp extends StatelessWidget {
+/// Watches authentication state to show login or main screen.
+class CalendarAIApp extends ConsumerWidget {
   const CalendarAIApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const CupertinoApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CupertinoApp(
       title: 'Calendar AI',
-      theme: CupertinoThemeData(
+      theme: const CupertinoThemeData(
         primaryColor: CupertinoColors.activeBlue,
         brightness: Brightness.light,
       ),
-      home: MainScreen(),
+      home: const AuthGate(),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+/// Authentication gate that shows login or main screen based on auth state
+class AuthGate extends ConsumerWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+
+    return authState.when(
+      data: (user) {
+        if (user == null) {
+          return const LoginScreen();
+        }
+        return const MainScreen();
+      },
+      loading: () => const CupertinoPageScaffold(
+        child: Center(
+          child: CupertinoActivityIndicator(),
+        ),
+      ),
+      error: (error, stack) => const LoginScreen(),
     );
   }
 }
@@ -274,12 +319,16 @@ class _CalendarTabState extends ConsumerState<CalendarTab> {
           },
           children: const {
             CalendarViewMode.month: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Text('Month', style: TextStyle(fontSize: 13)),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text('Month', style: TextStyle(fontSize: 12)),
+            ),
+            CalendarViewMode.threeDay: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text('3 Days', style: TextStyle(fontSize: 12)),
             ),
             CalendarViewMode.day: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Text('Day', style: TextStyle(fontSize: 13)),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text('Day', style: TextStyle(fontSize: 12)),
             ),
           },
         ),
@@ -322,13 +371,10 @@ class _CalendarTabState extends ConsumerState<CalendarTab> {
             ),
           ],
         );
+      case CalendarViewMode.threeDay:
+        return const ThreeDayView();
       case CalendarViewMode.day:
         return const DayView();
-      case CalendarViewMode.week:
-        // Week view not implemented yet
-        return const Center(
-          child: Text('Week view coming soon'),
-        );
     }
   }
 

@@ -136,7 +136,7 @@ final selectedDateProvider = StateProvider<DateTime>((ref) {
 });
 
 /// Provider for current calendar view mode
-enum CalendarViewMode { month, week, day }
+enum CalendarViewMode { month, threeDay, day }
 
 final calendarViewModeProvider = StateProvider<CalendarViewMode>((ref) {
   return CalendarViewMode.month;
