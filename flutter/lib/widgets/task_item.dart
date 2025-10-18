@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/task.dart';
-import '../providers/task_provider.dart';
+import '../providers/firebase_task_provider.dart';
 import '../services/task_parser_service.dart';
 import 'task_creation_sheet.dart';
 
@@ -111,8 +111,16 @@ class TaskItem extends ConsumerWidget {
     final isCompleted = task.status == TaskStatus.completed;
     
     return GestureDetector(
-      onTap: () {
-        ref.read(taskProvider.notifier).toggleTaskCompletion(task.id);
+      onTap: () async {
+        try {
+          final newStatus = !isCompleted;
+          await ref.read(firebaseTaskNotifierProvider.notifier).toggleCompletion(
+            task.id,
+            newStatus,
+          );
+        } catch (e) {
+          print('Error toggling task completion: $e');
+        }
       },
       child: Container(
         width: 28,
@@ -265,11 +273,41 @@ class TaskItem extends ConsumerWidget {
   Future<void> _editTask(BuildContext context, WidgetRef ref) async {
     final result = await showCupertinoModalPopup<Task>(
       context: context,
-      builder: (context) => TaskCreationSheet(existingTask: task),
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+        ),
+        child: TaskCreationSheet(existingTask: task),
+      ),
     );
     
     if (result != null) {
-      ref.read(taskProvider.notifier).updateTask(result);
+      try {
+        await ref.read(firebaseTaskNotifierProvider.notifier).updateTask(result);
+      } catch (e) {
+        print('Error updating task: $e');
+        // Show error to user
+        if (context.mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to update task: ${e.toString()}'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
     }
   }
 }

@@ -145,7 +145,8 @@ class TodosTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allTasks = ref.watch(taskProvider);
+    // Watch Firebase tasks stream
+    final tasksAsync = ref.watch(firebaseTasksProvider);
 
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
@@ -153,63 +154,95 @@ class TodosTab extends ConsumerWidget {
         trailing: Icon(CupertinoIcons.search),
       ),
       child: SafeArea(
-        child: Stack(
-          children: [
-            // Task list
-            allTasks.isEmpty
-                ? _buildEmptyState(context)
-                : CustomScrollView(
-                    slivers: [
-                      CupertinoSliverRefreshControl(
-                        onRefresh: () async {
-                          // Simulate refresh
-                          await Future.delayed(const Duration(seconds: 1));
-                        },
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.only(top: 8, bottom: 80),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              return TaskItem(task: allTasks[index]);
-                            },
-                            childCount: allTasks.length,
+        child: tasksAsync.when(
+          data: (tasks) => Stack(
+            children: [
+              // Task list
+              tasks.isEmpty
+                  ? _buildEmptyState(context)
+                  : CustomScrollView(
+                      slivers: [
+                        CupertinoSliverRefreshControl(
+                          onRefresh: () async {
+                            // Refresh is automatic via stream
+                            await Future.delayed(const Duration(milliseconds: 500));
+                          },
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 80),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                return TaskItem(task: tasks[index]);
+                              },
+                              childCount: tasks.length,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-            
-            // Floating action button
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () => _showTaskCreation(context, ref),
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: const BoxDecoration(
-                    color: CupertinoColors.activeBlue,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x40000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.add,
-                    color: CupertinoColors.white,
-                    size: 28,
+                      ],
+                    ),
+              
+              // Floating action button
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _showTaskCreation(context, ref),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(
+                      color: CupertinoColors.activeBlue,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x40000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.add,
+                      color: CupertinoColors.white,
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
+            ],
+          ),
+          loading: () => const Center(
+            child: CupertinoActivityIndicator(),
+          ),
+          error: (error, stack) => Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  CupertinoIcons.exclamationmark_triangle,
+                  size: 64,
+                  color: CupertinoColors.systemRed,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading tasks',
+                  style: CupertinoTheme.of(context)
+                      .textTheme
+                      .navLargeTitleTextStyle,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -277,11 +310,58 @@ class TodosTab extends ConsumerWidget {
     print('Result: $result');
     
     if (result != null) {
-      print('Adding task to provider: ${result.title}');
-      ref.read(taskProvider.notifier).addTask(result);
-      print('Task added successfully');
+      try {
+        print('Saving task to Firestore: ${result.title}');
+        await ref.read(firebaseTaskNotifierProvider.notifier).addTask(result);
+        print('Task saved successfully to Firestore');
+        
+        // Show success feedback
+        if (context.mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Success'),
+              content: const Text('Task created successfully'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          
+          // Auto-dismiss after 1 second
+          Future.delayed(const Duration(seconds: 1), () {
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
+          });
+        }
+      } catch (e) {
+        print('Error saving task to Firestore: $e');
+        
+        // Show error feedback
+        if (context.mounted) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to create task: ${e.toString()}'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
     } else {
-      print('Result was null, task not added');
+      print('Result was null, task not created');
     }
   }
 }

@@ -2,11 +2,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
+import '../services/family_service.dart';
 import 'firebase_task_provider.dart';
 
 /// Provider for AuthService
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService();
+});
+
+/// Provider for FamilyService
+final familyServiceProvider = Provider<FamilyService>((ref) {
+  return FamilyService();
 });
 
 /// Provider for Firebase Auth state changes
@@ -59,8 +65,30 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
     try {
       final profile = await _authService.getCurrentUserProfile();
       state = AsyncValue.data(profile);
+      
+      // Load family ID if user is authenticated
+      if (profile != null) {
+        await _loadFamilyId(profile.uid);
+      }
     } catch (e) {
       state = AsyncValue.data(null);
+    }
+  }
+
+  /// Load family ID for the user
+  Future<void> _loadFamilyId(String userId) async {
+    try {
+      final familyService = ref.read(familyServiceProvider);
+      final familyId = await familyService.findUserFamily(userId);
+      
+      if (familyId != null) {
+        print('Setting family ID: $familyId for user: $userId');
+        ref.read(currentFamilyIdProvider.notifier).state = familyId;
+      } else {
+        print('No family found for user: $userId');
+      }
+    } catch (e) {
+      print('Error loading family ID: $e');
     }
   }
 
@@ -71,10 +99,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
       final profile = await _authService.signInWithGoogle();
       state = AsyncValue.data(profile);
       
-      // Update family ID provider if available
-      if (profile.familyId != null) {
-        ref.read(currentFamilyIdProvider.notifier).state = profile.familyId;
-      }
+      // Load family ID from Firestore
+      await _loadFamilyId(profile.uid);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       rethrow;
@@ -88,10 +114,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
       final profile = await _authService.signInWithEmail(email, password);
       state = AsyncValue.data(profile);
       
-      // Update family ID provider if available
-      if (profile.familyId != null) {
-        ref.read(currentFamilyIdProvider.notifier).state = profile.familyId;
-      }
+      // Load family ID from Firestore
+      await _loadFamilyId(profile.uid);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       rethrow;

@@ -8,8 +8,8 @@ final taskFirestoreServiceProvider = Provider<TaskFirestoreService>((ref) {
   return TaskFirestoreService();
 });
 
-/// Provider for current family ID (placeholder - should be managed by auth/family context)
-/// TODO: Replace with actual family context from authentication
+/// Provider for current family ID
+/// Dynamically set by AuthProvider when user signs in
 final currentFamilyIdProvider = StateProvider<String?>((ref) => null);
 
 /// Provider for current user ID (from Firebase Auth)
