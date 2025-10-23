@@ -39,7 +39,8 @@ import {
   CheckCircle2,
   ChevronUp,
   ChevronDown,
-  Cpu
+  Cpu,
+  Edit
 } from 'lucide-react';
 import { PRIMARY_COLOR } from '@/config/branding';
 import { useEvents } from '@/contexts/EventContext';
@@ -47,6 +48,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { llmService, LLMModel } from '@/services/llmService';
 import { categoryBadgeClasses, getCategoryEmoji, getCategoryName } from '@/config/taskCategories';
+import TaskCreation from '@/components/TaskCreation';
 
 const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   idle: 'ממתין',
@@ -73,6 +75,10 @@ export default function TaskPlanning() {
   const [showPipelineDialog, setShowPipelineDialog] = useState(false);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(true);
+  
+  // Task creation dialog state
+  const [showTaskCreation, setShowTaskCreation] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Right side icon pane state
   const [activeRightPane, setActiveRightPane] = useState<'categories' | 'model' | 'guidance' | null>(null);
@@ -219,7 +225,56 @@ export default function TaskPlanning() {
     setTasks(updated);
   };
 
-const handleQuickAdd = async () => {
+  const handleTaskCreationSave = async (taskData: any) => {
+    if (editingTask) {
+      // Update existing task
+      taskService.updateTask(editingTask.id, taskData);
+      toast({
+        title: 'עודכן',
+        description: 'המשימה עודכנה בהצלחה'
+      });
+      setEditingTask(null);
+    } else {
+      // Create new task with the data from TaskCreation
+      const newTask = taskService.quickCreateTask(taskData.title, taskData.description || '');
+      
+      // Apply additional fields
+      if (taskData.category) {
+        taskService.updateTask(newTask.id, {
+          category: taskData.category,
+          deadline: taskData.deadline,
+          location: taskData.location,
+          urgency: taskData.urgency,
+          importance: taskData.importance,
+          priority: taskData.priority
+        });
+      }
+      
+      hydrateTasks();
+      setRunningTaskId(newTask.id);
+      try {
+        // Auto context load then categorization
+        await taskService.runPhase(newTask.id, 'context_loading', familyMembers, events);
+        await taskService.runPhase(newTask.id, 'categorizing', familyMembers, events);
+        hydrateTasks();
+        toast({
+          title: '✅ נוספה וסווגה',
+          description: `המשימה "${newTask.title}" סווגה אוטומטית.`
+        });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'שגיאה בסיווג';
+        toast({
+          title: 'שגיאת סיווג',
+          description: message,
+          variant: 'destructive'
+        });
+      } finally {
+        setRunningTaskId(null);
+      }
+    }
+  };
+
+  const handleQuickAdd = async () => {
     if (!quickTitle.trim()) {
       toast({
         title: 'שגיאה',
@@ -509,6 +564,17 @@ const handleQuickAdd = async () => {
           <div className="flex gap-2">
             <Button
               size="sm"
+              onClick={() => {
+                setEditingTask(null);
+                setShowTaskCreation(true);
+              }}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+            >
+              <Plus className="h-4 w-4 ml-1" />
+              משימה חדשה
+            </Button>
+            <Button
+              size="sm"
               disabled={isBatchRunning}
               onClick={runPipelineOnAllIdle}
               className="bg-green-600 hover:bg-green-700"
@@ -788,6 +854,17 @@ const handleQuickAdd = async () => {
         </div>
       )}
 
+      {/* Task Creation Dialog */}
+      <TaskCreation
+        open={showTaskCreation}
+        onClose={() => {
+          setShowTaskCreation(false);
+          setEditingTask(null);
+        }}
+        onSave={handleTaskCreationSave}
+        initialData={editingTask}
+      />
+
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4">
@@ -837,6 +914,10 @@ const handleQuickAdd = async () => {
                 familyMembers={familyMembers}
                 currentUser={currentUser}
                 onSuggestTime={handleSuggestTime}
+                onEditTask={(task) => {
+                  setEditingTask(task);
+                  setShowTaskCreation(true);
+                }}
               />
             ))}
           </div>
