@@ -1,0 +1,153 @@
+// Time Parser - Converts written times to TimeValue
+
+import { TimeValue } from '../types/mobileTask';
+
+export interface WrittenTimeMatch {
+  time: TimeValue;
+  text: string;
+  start: number;
+  end: number;
+}
+
+// English number words to digits
+const ENGLISH_NUMBERS: Record<string, number> = {
+  'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4,
+  'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+  'ten': 10, 'eleven': 11, 'twelve': 12,
+};
+
+// Hebrew number words to digits
+const HEBREW_NUMBERS: Record<string, number> = {
+  'אפס': 0, 'אחד': 1, 'אחת': 1, 'שתיים': 2, 'שלוש': 3, 'ארבע': 4,
+  'חמש': 5, 'שש': 6, 'שבע': 7, 'שמונה': 8, 'תשע': 9,
+  'עשר': 10, 'אחד עשרה': 11, 'שתיים עשרה': 12,
+};
+
+/**
+ * Parse English written time like "eight pm" or "three thirty"
+ */
+export function parseEnglishWrittenTime(text: string): TimeValue | null {
+  const lowerText = text.toLowerCase();
+  
+  // Pattern: "eight pm", "three am"
+  const simplePattern = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(am|pm)\b/i;
+  let match = lowerText.match(simplePattern);
+  
+  if (match) {
+    let hour = ENGLISH_NUMBERS[match[1]];
+    const isPM = match[2].toLowerCase() === 'pm';
+    
+    // Convert to 24-hour format
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    
+    return { hour, minute: 0 };
+  }
+  
+  // Pattern: "eight thirty", "three fifteen"
+  const compoundPattern = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(thirty|fifteen|forty-five|o'clock)\b/i;
+  match = lowerText.match(compoundPattern);
+  
+  if (match) {
+    const hour = ENGLISH_NUMBERS[match[1]];
+    let minute = 0;
+    
+    if (match[2] === 'thirty') minute = 30;
+    else if (match[2] === 'fifteen') minute = 15;
+    else if (match[2] === 'forty-five') minute = 45;
+    
+    return { hour, minute };
+  }
+  
+  return null;
+}
+
+/**
+ * Parse Hebrew written time like "בשמונה" or "בשמונה וחצי" with position info
+ */
+export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
+  // Pattern: "בשמונה בבוקר" (at eight in the morning)
+  const morningPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בבוקר/g;
+  let match = morningPattern.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "שמונה בערב" (eight in the evening) = 20:00
+  const eveningPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בערב/g;
+  match = eveningPattern.exec(text);
+  
+  if (match) {
+    let hour = HEBREW_NUMBERS[match[1]];
+    // Evening time: add 12 if hour < 12
+    if (hour < 12) hour += 12;
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "בשמונה וחצי" (at eight and a half)
+  const halfPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
+  match = halfPattern.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 30 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "בשמונה ורבע" (at eight and a quarter)
+  const quarterPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+ורבע/g;
+  match = quarterPattern.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 15 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "בשמונה" (at eight) - simple form
+  const simplePattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)(?!\s)/g;
+  match = simplePattern.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Parse any written time from text (English or Hebrew) with position info
+ */
+export function parseWrittenTime(text: string, language: 'he' | 'en'): WrittenTimeMatch | null {
+  if (language === 'he') {
+    return parseHebrewWrittenTime(text);
+  } else {
+    return parseEnglishWrittenTime(text) as WrittenTimeMatch | null;
+  }
+}

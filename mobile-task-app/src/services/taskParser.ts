@@ -32,6 +32,7 @@ import {
   separateOwnerAndInvolved,
 } from '../utils/inference';
 import { getTagEmoji } from '../utils/tagStyles';
+import { parseWrittenTime, WrittenTimeMatch } from '../utils/timeParser';
 
 interface Match {
   start: number;
@@ -185,7 +186,8 @@ export function parseTask(text: string): ParsedTask {
     }
   });
 
-  // 5. Time (HH:MM)
+  // 5. Time (HH:MM and written times)
+  // First try numeric times
   patterns.time.lastIndex = 0;
   while ((match = patterns.time.exec(text)) !== null) {
     // English: /at\s+(\d{1,2}):(\d{2}).../ -> groups [1] and [2]
@@ -218,6 +220,22 @@ export function parseTask(text: string): ParsedTask {
         type: 'time',
         value: specificTime,
         text: timeStr,
+      });
+    }
+  }
+  
+  // Try written times if no numeric time found yet
+  if (!specificTime) {
+    const writtenTimeMatch = parseWrittenTime(text, language);
+    if (writtenTimeMatch) {
+      specificTime = writtenTimeMatch.time;
+      // Add the written time to matches for highlighting
+      allMatches.push({
+        start: writtenTimeMatch.start,
+        end: writtenTimeMatch.end,
+        type: 'time',
+        value: writtenTimeMatch.time,
+        text: writtenTimeMatch.text,
       });
     }
   }
