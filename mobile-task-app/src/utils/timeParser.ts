@@ -120,6 +120,36 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     };
   }
   
+  // Pattern: "שמונה בבוקר" (eight in the morning) - without ב prefix
+  const morningPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בבוקר/g;
+  match = morningPattern2.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "שמונה בצהריים" (eight at noon)
+  const noonPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בצהריים/g;
+  match = noonPattern.exec(text);
+  
+  if (match) {
+    let hour = HEBREW_NUMBERS[match[1]];
+    // Noon time: if hour < 12, add 12
+    if (hour < 12) hour += 12;
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
   // Pattern: "בשמונה וחצי" (at eight and a half)
   const halfPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
   match = halfPattern.exec(text);

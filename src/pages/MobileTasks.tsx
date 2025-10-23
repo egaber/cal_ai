@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
@@ -65,29 +65,33 @@ export default function MobileTasks() {
       
       // Find the actual text segment that corresponds to this tag
       const matchingSegment = task.segments.find(seg => 
-        seg.type === oldTag.type && seg.text && task.rawText.includes(seg.text)
+        seg.type === oldTag.type && seg.value === oldTag.value
       );
       
       // Update the raw text by finding and replacing the old value
       console.log('BEFORE update - task.rawText:', task.rawText);
       console.log('Matching segment:', matchingSegment);
+      console.log('Old tag:', oldTag);
+      console.log('New value:', newValue);
       
-      if (matchingSegment && matchingSegment.text) {
-        // Use the actual text from the segment
-        task.rawText = task.rawText.replace(matchingSegment.text, newDisplayText);
-        console.log('✅ Replaced segment text:', matchingSegment.text, '→', newDisplayText);
-      } else {
-        // Fallback to old method
-        task.rawText = updateTextForTagChange(task.rawText, oldTag, newValue);
-      }
+      // Use smart text replacement that handles different formats
+      // Pass the segment text (actual Hebrew text) rather than the tag's displayText
+      task.rawText = updateTextForTagChange(task.rawText, oldTag, newValue, matchingSegment);
       
       console.log('AFTER update - task.rawText:', task.rawText);
       
-      // Reparse to update ONLY segments (highlighting)
-      // Keep the manually updated tags to preserve the change
+      // Reparse to update segments (highlighting) and get new tags
       const reparsed = parseTask(task.rawText);
       task.segments = reparsed.segments;
+      
+      // Update the tag in the tags array with the reparsed one
+      const newTag = reparsed.tags.find(t => t.type === oldTag.type);
+      if (newTag) {
+        task.tags[tagIndex] = newTag;
+      }
+      
       console.log('AFTER reparse - segments:', reparsed.segments);
+      console.log('AFTER reparse - tags:', reparsed.tags);
       
       // Also update the task's main properties
       updateTaskProperties(task, editingTag.tag.type, newValue);
@@ -167,11 +171,14 @@ export default function MobileTasks() {
     return hours[hour] || String(hour);
   };
 
-  const updateTextForTagChange = (rawText: string, oldTag: ExtractedTag, newValue: any): string => {
+  const updateTextForTagChange = (rawText: string, oldTag: ExtractedTag, newValue: any, segment?: any): string => {
     const oldDisplayText = oldTag.displayText;
     const newDisplayText = formatTagDisplay(oldTag.type, newValue);
     
-    console.log('updateTextForTagChange:', { rawText, oldDisplayText, newDisplayText, type: oldTag.type, oldValue: oldTag.value, newValue });
+    // Use the segment text if available (actual Hebrew text in the raw text)
+    const actualOldText = segment?.text || oldDisplayText;
+    
+    console.log('updateTextForTagChange:', { rawText, oldDisplayText, actualOldText, newDisplayText, type: oldTag.type, oldValue: oldTag.value, newValue });
     
     // Special handling for different tag types
     if (oldTag.type === 'time') {
@@ -186,11 +193,21 @@ export default function MobileTasks() {
       
       console.log('Time replacement attempt:', { oldHourHebrew, newHourHebrew, oldTimeOfDay, newTimeOfDay });
       
-      // Pattern 1: "שמונה בבוקר" -> "תשע בבוקר" or "תשע ערב"
-      const hebrewTimePattern = new RegExp(`${oldHourHebrew}\\s+(ב)?(${oldTimeOfDay}|צהריים|ערב|לילה)`, 'gi');
-      if (hebrewTimePattern.test(rawText)) {
-        console.log('✅ Pattern 1 matched (Hebrew phrase)');
-        const result = rawText.replace(hebrewTimePattern, `${newHourHebrew} ${newTimeOfDay}`);
+      // Pattern 1: "שמונה בבוקר" -> "תשע בבוקר" (with or without ב prefix on time word)
+      // First try with ב prefix on both hour and time-of-day
+      const hebrewTimePattern1 = new RegExp(`ב${oldHourHebrew}\\s+ב(${oldTimeOfDay}|צהריים|ערב|לילה)`, 'gi');
+      if (hebrewTimePattern1.test(rawText)) {
+        console.log('✅ Pattern 1a matched (ב + hour + ב + time-of-day)');
+        const result = rawText.replace(hebrewTimePattern1, `ב${newHourHebrew} ב${newTimeOfDay}`);
+        console.log('Result:', result);
+        return result;
+      }
+      
+      // Pattern 1b: "שמונה בבוקר" -> "תשע בבוקר" (no ב on hour, ב on time-of-day)
+      const hebrewTimePattern2 = new RegExp(`${oldHourHebrew}\\s+ב(${oldTimeOfDay}|צהריים|ערב|לילה)`, 'gi');
+      if (hebrewTimePattern2.test(rawText)) {
+        console.log('✅ Pattern 1b matched (hour + ב + time-of-day)');
+        const result = rawText.replace(hebrewTimePattern2, `${newHourHebrew} ב${newTimeOfDay}`);
         console.log('Result:', result);
         return result;
       }
@@ -242,12 +259,40 @@ export default function MobileTasks() {
       const newHebrewWord = timeBucketToHebrew(newValue as string);
       
       console.log('timeBucket replace:', { oldHebrewWord, newHebrewWord, rawText });
-      const result = rawText.replace(new RegExp(`\\b${oldHebrewWord}\\b`, 'g'), newHebrewWord);
-      console.log('timeBucket result:', result);
+      
+      // Try to find the word in the text (it might not have word boundaries in Hebrew)
+      if (rawText.includes(oldHebrewWord)) {
+        const result = rawText.replace(oldHebrewWord, newHebrewWord);
+        console.log('timeBucket result:', result);
+        return result;
+      }
+      
+      // Fallback: replace by display text
+      const result = rawText.replace(oldDisplayText, newDisplayText);
+      console.log('timeBucket fallback result:', result);
       return result;
     } else if (oldTag.type === 'involved' || oldTag.type === 'owner') {
-      // Replace family member names
-      return rawText.replace(new RegExp(`\\b${oldDisplayText}\\b`, 'g'), newDisplayText);
+      // Replace family member names - use the actual segment text (Hebrew)
+      console.log('Family member replace:', { actualOldText, oldDisplayText, newDisplayText, rawText });
+      
+      // Use the actual text from the segment (e.g., "את הילי")
+      if (actualOldText && rawText.includes(actualOldText)) {
+        const result = rawText.replace(actualOldText, `את ${newDisplayText}`);
+        console.log('Family member result (using segment):', result);
+        return result;
+      }
+      
+      // Fallback: Hebrew names don't have word boundaries, so just replace directly
+      if (rawText.includes(oldDisplayText)) {
+        const result = rawText.replace(oldDisplayText, newDisplayText);
+        console.log('Family member result:', result);
+        return result;
+      }
+      
+      // Final fallback to word boundary pattern
+      const result = rawText.replace(new RegExp(`\\b${oldDisplayText}\\b`, 'g'), newDisplayText);
+      console.log('Family member fallback result:', result);
+      return result;
     } else if (oldTag.type === 'transport') {
       // Replace drive time - look for patterns like "15min" or "15 דקות נסיעה"
       return rawText.replace(new RegExp(`${oldTag.value}\\s*(min|דקות נסיעה?)`, 'g'), `${newDisplayText}`);
@@ -392,14 +437,14 @@ export default function MobileTasks() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white" dir="rtl">
+    <div className="min-h-screen bg-white" dir="rtl">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
         <h1 className="text-2xl font-bold text-gray-900">המשימות שלי</h1>
       </div>
 
       {/* Task List */}
-      <div className="p-4 space-y-3 pb-24">
+      <div className="pb-24">
         {tasks.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <p className="text-lg">אין משימות עדיין</p>
@@ -407,80 +452,92 @@ export default function MobileTasks() {
           </div>
         ) : (
           tasks.map((task, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3"
-            >
-              <div className="flex gap-3 items-start">
-                {/* Checkbox - aligned with text top */}
-                <button
-                  onClick={() => handleToggleTask(index)}
-                  className="flex-shrink-0"
-                >
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    task.completed 
-                      ? 'bg-green-500 border-green-500' 
-                      : 'border-gray-300 hover:border-green-400'
-                  }`}>
-                    {task.completed && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </button>
+            <div key={index}>
+              <div className="px-6 py-4">
+                <div className="flex gap-3 items-start group">
+                  {/* Checkbox - aligned with text top */}
+                  <button
+                    onClick={() => handleToggleTask(index)}
+                    className="flex-shrink-0"
+                  >
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      task.completed 
+                        ? 'bg-green-500 border-green-500' 
+                        : 'border-gray-300 hover:border-green-400'
+                    }`}>
+                      {task.completed && (
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
 
-                {/* Task content */}
-                <div className="flex-1 space-y-3">
-                  {/* Task text with highlighting */}
-                  <div className={`text-base leading-relaxed ${task.completed ? 'line-through opacity-60' : ''}`}>
-                    {task.segments.map((segment, i) => {
-                      if (segment.type === 'text') {
-                        return <span key={i}>{segment.text}</span>;
-                      }
-                      
-                      let bgColor = 'bg-gray-100';
-                      if (segment.type === 'involved') bgColor = 'bg-purple-100';
-                      else if (segment.type === 'location') bgColor = 'bg-amber-100';
-                      else if (segment.type === 'time') bgColor = 'bg-green-100';
-                      else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100';
-                      else if (segment.type === 'priority') bgColor = 'bg-red-100';
-                      
-                      return (
-                        <span key={i} className={`${bgColor} px-1 rounded`}>
-                          {segment.text}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* Tags with white background and colorful text - CLICKABLE */}
-                  {task.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {task.tags.map((tag) => {
-                        let textColor = 'text-gray-700';
-                        if (tag.type === 'involved') textColor = 'text-purple-600';
-                        else if (tag.type === 'location') textColor = 'text-amber-600';
-                        else if (tag.type === 'time') textColor = 'text-green-600';
-                        else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
-                        else if (tag.type === 'priority') textColor = 'text-red-600';
-                        else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                  {/* Task content */}
+                  <div className="flex-1 space-y-3">
+                    {/* Task text with highlighting */}
+                    <div className={`text-base leading-relaxed ${task.completed ? 'line-through opacity-60' : ''}`}>
+                      {task.segments.map((segment, i) => {
+                        if (segment.type === 'text') {
+                          return <span key={i}>{segment.text}</span>;
+                        }
+                        
+                        let bgColor = 'bg-gray-100';
+                        if (segment.type === 'involved') bgColor = 'bg-purple-100';
+                        else if (segment.type === 'location') bgColor = 'bg-amber-100';
+                        else if (segment.type === 'time') bgColor = 'bg-green-100';
+                        else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100';
+                        else if (segment.type === 'priority') bgColor = 'bg-red-100';
                         
                         return (
-                          <button
-                            key={tag.id}
-                            onClick={() => handleTagClick(index, tag)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
-                          >
-                            <span>{tag.emoji}</span>
-                            <span>{tag.displayText}</span>
-                          </button>
+                          <span key={i} className={`${bgColor} px-1 rounded`}>
+                            {segment.text}
+                          </span>
                         );
                       })}
                     </div>
-                  )}
+
+                    {/* Tags with white background and colorful text - CLICKABLE */}
+                    {task.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {task.tags.map((tag) => {
+                          let textColor = 'text-gray-700';
+                          if (tag.type === 'involved') textColor = 'text-purple-600';
+                          else if (tag.type === 'location') textColor = 'text-amber-600';
+                          else if (tag.type === 'time') textColor = 'text-green-600';
+                          else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
+                          else if (tag.type === 'priority') textColor = 'text-red-600';
+                          else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                          
+                          return (
+                            <button
+                              key={tag.id}
+                              onClick={() => handleTagClick(index, tag)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
+                            >
+                              <span>{tag.emoji}</span>
+                              <span>{tag.displayText}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtle delete button - appears on hover */}
+                  <button
+                    onClick={() => handleDeleteTask(index)}
+                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
+                  </button>
                 </div>
               </div>
+              
+              {/* Divider between tasks */}
+              {index < tasks.length - 1 && (
+                <div className="mx-6 border-b border-gray-200"></div>
+              )}
             </div>
           ))
         )}

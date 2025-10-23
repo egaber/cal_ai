@@ -11,6 +11,29 @@ interface TagEditorProps {
 }
 
 export function TagEditor({ tag, onUpdate, onRemove, onClose }: TagEditorProps) {
+  // Get tag styling based on type
+  const getTagStyle = () => {
+    switch (tag.type) {
+      case 'timeBucket':
+        return { color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', title: 'מתי?' };
+      case 'time':
+        return { color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200', title: 'שעה' };
+      case 'involved':
+      case 'owner':
+        return { color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', title: tag.type === 'owner' ? 'בעלים' : 'מעורבים' };
+      case 'transport':
+        return { color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', title: 'נסיעה' };
+      case 'priority':
+        return { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', title: 'עדיפות' };
+      case 'location':
+        return { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', title: 'מיקום' };
+      default:
+        return { color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200', title: 'ערוך' };
+    }
+  };
+
+  const style = getTagStyle();
+
   const renderEditor = () => {
     switch (tag.type) {
       case 'timeBucket':
@@ -30,7 +53,7 @@ export function TagEditor({ tag, onUpdate, onRemove, onClose }: TagEditorProps) 
         return <PriorityEditor value={tag.value as PriorityLevel} onUpdate={onUpdate} onRemove={onRemove} />;
       
       case 'location':
-        return <div className="p-4 text-center text-gray-500">Location editor coming soon</div>;
+        return <LocationEditor value={tag.value as string} onUpdate={onUpdate} onRemove={onRemove} />;
       
       default:
         return <div className="p-4 text-center text-gray-500">Editor not available</div>;
@@ -40,25 +63,38 @@ export function TagEditor({ tag, onUpdate, onRemove, onClose }: TagEditorProps) 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end" onClick={onClose}>
       <div
-        className="bg-white rounded-t-3xl w-full max-h-[70vh] flex flex-col"
+        className="bg-white rounded-t-3xl w-full max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >
         {/* Handle bar */}
-        <div className="flex justify-center py-3">
+        <div className="flex justify-center py-3 bg-white">
           <div className="w-12 h-1 bg-gray-300 rounded-full" />
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-lg font-semibold">ערוך תג</h3>
-          <button onClick={onClose} className="p-1">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+        {/* Header - looks like a large tag */}
+        <div className={`px-6 py-5 ${style.bg}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`w-14 h-14 rounded-2xl ${style.bg} border-2 ${style.border} flex items-center justify-center`}>
+                <span className="text-3xl">{tag.emoji}</span>
+              </div>
+              <div>
+                <h3 className={`text-2xl font-bold ${style.color}`}>{style.title}</h3>
+                <p className={`text-base ${style.color} opacity-70 mt-1`}>{tag.displayText}</p>
+              </div>
+            </div>
+            <button 
+              onClick={onClose} 
+              className={`p-2 rounded-full transition-colors ${style.bg} hover:bg-white border ${style.border}`}
+            >
+              <X className={`w-5 h-5 ${style.color}`} />
+            </button>
+          </div>
         </div>
 
-        {/* Editor content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Editor content - continues the tag styling */}
+        <div className={`flex-1 overflow-y-auto ${style.bg}`}>
           {renderEditor()}
         </div>
       </div>
@@ -353,6 +389,105 @@ function PriorityEditor({ value, onUpdate, onRemove }: { value: PriorityLevel; o
         </button>
       ))}
       
+      <button
+        onClick={onRemove}
+        className="w-full p-4 rounded-lg border-2 border-red-200 text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+      >
+        <X className="w-5 h-5" />
+        <span>הסר תג</span>
+      </button>
+    </div>
+  );
+}
+
+// Location Editor
+function LocationEditor({ value, onUpdate, onRemove }: { value: string; onUpdate: (v: string) => void; onRemove: () => void }) {
+  const [customLocation, setCustomLocation] = React.useState(value || '');
+  const [recentLocations] = React.useState<string[]>([
+    'גן ילדים של אלון',
+    'בית ספר של יעל',
+  ]);
+  const [favoriteLocations] = React.useState<string[]>([
+    'הבית',
+    'עבודה',
+    'סופר',
+    'פארק',
+  ]);
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Custom location input */}
+      <div>
+        <label className="text-sm text-gray-600 mb-2 block">כתוב מיקום:</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={customLocation}
+            onChange={(e) => setCustomLocation(e.target.value)}
+            placeholder="הכנס מיקום..."
+            className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-amber-500"
+          />
+          <button
+            onClick={() => customLocation && onUpdate(customLocation)}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors"
+          >
+            אישור
+          </button>
+        </div>
+      </div>
+
+      {/* Favorite locations */}
+      {favoriteLocations.length > 0 && (
+        <div>
+          <label className="text-sm text-gray-600 mb-2 block">מועדפים:</label>
+          <div className="grid grid-cols-2 gap-2">
+            {favoriteLocations.map((location) => (
+              <button
+                key={location}
+                onClick={() => onUpdate(location)}
+                className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${
+                  value === location
+                    ? 'border-amber-500 bg-amber-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <MapPin className="w-4 h-4 text-amber-600" />
+                <span className="text-sm font-medium">{location}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent locations */}
+      {recentLocations.length > 0 && (
+        <div>
+          <label className="text-sm text-gray-600 mb-2 block">אחרונים:</label>
+          <div className="space-y-2">
+            {recentLocations.map((location) => (
+              <button
+                key={location}
+                onClick={() => onUpdate(location)}
+                className={`w-full p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${
+                  value === location
+                    ? 'border-amber-500 bg-amber-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-medium">{location}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Map placeholder */}
+      <div className="p-8 bg-gray-100 rounded-lg text-center">
+        <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">מפה בקרוב</p>
+      </div>
+
       <button
         onClick={onRemove}
         className="w-full p-4 rounded-lg border-2 border-red-200 text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
