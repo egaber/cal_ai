@@ -20,6 +20,7 @@ import {
   PRIORITY_PATTERN,
   DATE_PATTERNS,
   TIME_PATTERN_24H,
+  HEBREW_PATTERNS,
 } from '../utils/patterns';
 import {
   inferDrivingNeeds,
@@ -169,22 +170,79 @@ export function parseTask(text: string): ParsedTask {
     }
   });
 
-  // 4. Locations - extract from capture group [2]
+  // 4a. Known locations first - extract from capture group [2]
+  const knownLocationMatches: Match[] = [];
   Object.entries(patterns.locations).forEach(([placeName, pattern]) => {
     pattern.lastIndex = 0;
     while ((match = pattern.exec(text)) !== null) {
       location = placeName;
       const actualText = match[2] || match[0];
       const startOffset = match[0].indexOf(actualText);
-      allMatches.push({
+      const matchObj = {
         start: match.index + startOffset,
         end: match.index + startOffset + actualText.length,
-        type: 'location',
+        type: 'location' as const,
         value: placeName,
         text: actualText,
-      });
+      };
+      allMatches.push(matchObj);
+      knownLocationMatches.push(matchObj);
     }
   });
+
+  // 4b. Street addresses (Hebrew only) - smart detection AFTER known locations
+  // Match Hebrew words after "ב" that aren't known locations or common words
+  if (language === 'he') {
+    // Common Hebrew words starting with "ב" that are NOT street names
+    // NOTE: Don't include time numbers (בחמש, בשש, etc.) - they should be parsed as times
+    const commonWords = [
+      'בבוקר', 'בצהריים', 'בערב', 'בלילה', 'באחר', // time words  
+      'בשעה', // "at hour" - but NOT the numbers themselves
+      'בלי', 'בגדים', 'בגד', 'בעד', 'בעוד', 'בכל', 'בזמן', 'במקום', // common prepositions/words
+      'ביום', 'בחודש', 'בשנה', 'בשבוע', // date words
+      'בקשר', 'באמצעות', 'בעזרת', 'בעקבות', // connecting words
+      'בדיוק', 'בערך', 'בכלל', 'בדרך', 'בעיקר', // adverbs
+      'בטוח', 'במיוחד', 'במקרה', 'בהחלט', // more common words
+      'באמת', 'בעצם', 'בקיצור', 'בסוף', 'בתחילה', // discourse markers
+      'להביא', 'להזכיר', 'להוריד', 'להעלות' // verbs (shouldn't match but just in case)
+    ];
+    
+    // Pattern: (start or space) + ב + Hebrew letters (3-20 chars) + optional space + optional number
+    const streetPattern = /(?:^|[\s])(ב([א-ת]{3,20})(?:\s+(\d{1,4}))?(?=\s|$))/g;
+    while ((match = streetPattern.exec(text)) !== null) {
+      const streetName = match[2]; // Group 2 is the street name without "ב"
+      const number = match[3]; // Group 3 is the optional number
+      const fullMatch = match[1]; // Group 1 is the complete match including "ב"
+      const fullMatchLower = fullMatch.toLowerCase();
+      
+      // Skip if it's a common word
+      if (commonWords.some(word => fullMatchLower === word || fullMatchLower.startsWith(word + ' '))) {
+        continue;
+      }
+      
+      // Find the actual start position of "ב" (accounting for preceding whitespace)
+      const actualStart = match.index + match[0].indexOf(fullMatch);
+      
+      // Check if this overlaps with a known location
+      const overlapsKnown = knownLocationMatches.some(
+        km => actualStart < km.end && (actualStart + fullMatch.length) > km.start
+      );
+      
+      // Only add if it's not a known location AND has a number (more likely to be an address)
+      // OR if it doesn't overlap and is not a common word
+      if (!overlapsKnown && number) {
+        const fullAddress = `${streetName} ${number}`;
+        location = fullAddress;
+        allMatches.push({
+          start: actualStart,
+          end: actualStart + fullMatch.length,
+          type: 'location',
+          value: fullAddress,
+          text: fullMatch,
+        });
+      }
+    }
+  }
 
   // 5. Time (HH:MM and written times)
   // First try numeric times

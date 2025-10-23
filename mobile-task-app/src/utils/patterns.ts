@@ -62,6 +62,15 @@ export const HEBREW_PATTERNS = {
   owner: /(^|[\s])(אני צריך|אני צריכה|אני חייב|אייל צריך|אלה צריכה)/gi,
   involved: /(^|[\s])(עם|ביחד עם|יחד עם|לקחת את)/gi,
   
+  // Street address patterns (Hebrew)
+  // Matches with number: "סחלב 6", "הרצל 123", "בן גוריון 45"
+  // Matches without number with "ב" prefix: "בברנר", "בהרצל"
+  streetAddressWithNumber: /([א-ת][א-ת\s]{2,20})\s+(\d{1,4})/g,
+  streetNameOnly: /ב([א-ת]{3,20})(?=\s|$)/g,
+  
+  // Location details (floor, room, etc.) - for future enhancement
+  locationDetails: /(קומה|מינוס|פלוס|חדר|דירה)\s+([א-ת\d\s]+)/g,
+  
   // Locations
   locations: {
     home: /(^|[\s])(בית|הבית|בבית|הביתה)([\s]|$)/gi,
