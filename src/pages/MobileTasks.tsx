@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
@@ -18,13 +18,216 @@ export default function MobileTasks() {
   const [recognition, setRecognition] = useState<any>(null);
   const [finalTranscriptRef, setFinalTranscriptRef] = useState('');
   const [editingTag, setEditingTag] = useState<{ taskIndex: number; tag: ExtractedTag } | null>(null);
+  const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
+  const [isAiEnhancing, setIsAiEnhancing] = useState(false);
 
   // Parse text in real-time
   const parsedTask = inputText ? parseTask(inputText) : null;
 
+  // AI Enhancement function
+  const handleAiEnhance = () => {
+    if (!inputText.trim()) return;
+    
+    setIsAiEnhancing(true);
+    
+    // Simulate AI processing
+    setTimeout(() => {
+      const text = inputText.toLowerCase();
+      
+      // Determine category based on keywords - broader search
+      let category = '';
+      let categoryIcon = '';
+      
+      if (text.includes('עבודה') || text.includes('פגישה') || text.includes('מייל') || text.includes('משרד') || 
+          text.includes('פרויקט') || text.includes('דוח') || text.includes('ישיבה')) {
+        category = 'עבודה';
+        categoryIcon = '💼';
+      } else if (text.includes('משפחה') || text.includes('ילדים') || text.includes('גן') || text.includes('בית ספר') ||
+                 text.includes('הורים') || text.includes('ילד') || text.includes('ילדה')) {
+        category = 'משפחה';
+        categoryIcon = '👨‍👩‍👧‍👦';
+      } else if (text.includes('קניות') || text.includes('סופר') || text.includes('קנה') || text.includes('לקנות') ||
+                 text.includes('חנות') || text.includes('קניון')) {
+        category = 'קניות';
+        categoryIcon = '🛒';
+      } else if (text.includes('בריאות') || text.includes('רופא') || text.includes('ספורט') || text.includes('כושר') ||
+                 text.includes('רפואה') || text.includes('חדר כושר') || text.includes('תרופה')) {
+        category = 'בריאות';
+        categoryIcon = '🏥';
+      } else if (text.includes('לימודים') || text.includes('שיעור') || text.includes('לימוד') || text.includes('לקרוא') ||
+                 text.includes('למד') || text.includes('קורס')) {
+        category = 'לימודים';
+        categoryIcon = '📚';
+      } else if (text.includes('נסיעה') || text.includes('דרך') || text.includes('הסעה') || text.includes('לנסוע') ||
+                 text.includes('טיול') || text.includes('נהיגה')) {
+        category = 'תחבורה';
+        categoryIcon = '🚗';
+      } else {
+        category = 'כללי';
+        categoryIcon = '📝';
+      }
+      
+      // Determine context-specific icon - very detailed and accurate
+      let contextIcon = '';
+      
+      // Food & Eating
+      if (text.includes('אכל') || text.includes('ארוחה') || text.includes('מסעדה')) {
+        contextIcon = '🍽️';
+      } else if (text.includes('בישול') || text.includes('לבשל') || text.includes('מתכון')) {
+        contextIcon = '👨‍🍳';
+      } else if (text.includes('קפה') || text.includes('בית קפה')) {
+        contextIcon = '☕';
+      } else if (text.includes('פיצה')) {
+        contextIcon = '🍕';
+      } else if (text.includes('עוגה') || text.includes('עוגיות') || text.includes('קינוח')) {
+        contextIcon = '🍰';
+      }
+      // Communication
+      else if (text.includes('טלפון') || text.includes('להתקשר') || text.includes('שיחה')) {
+        contextIcon = '📞';
+      } else if (text.includes('מייל') || text.includes('אימייל') || text.includes('דואר')) {
+        contextIcon = '📧';
+      } else if (text.includes('הודעה') || text.includes('וואטסאפ') || text.includes('whatsapp')) {
+        contextIcon = '💬';
+      }
+      // Home & Cleaning
+      else if (text.includes('ניקיון') || text.includes('לנקות')) {
+        contextIcon = '🧹';
+      } else if (text.includes('כביסה')) {
+        contextIcon = '👕';
+      } else if (text.includes('כלים') || text.includes('למדיח')) {
+        contextIcon = '🍽️';
+      } else if (text.includes('אשפה') || text.includes('זבל')) {
+        contextIcon = '🗑️';
+      }
+      // Health & Medical
+      else if (text.includes('רופא') || text.includes('רפואי') || text.includes('מרפאה')) {
+        contextIcon = '👨‍⚕️';
+      } else if (text.includes('תרופה') || text.includes('תרופות')) {
+        contextIcon = '💊';
+      } else if (text.includes('שיניים') || text.includes('רופא שיניים')) {
+        contextIcon = '🦷';
+      } else if (text.includes('ספורט') || text.includes('כושר') || text.includes('אימון')) {
+        contextIcon = '💪';
+      } else if (text.includes('ריצה') || text.includes('לרוץ')) {
+        contextIcon = '🏃';
+      }
+      // Reading & Writing
+      else if (text.includes('ספר') || text.includes('לקרוא')) {
+        contextIcon = '📖';
+      } else if (text.includes('כתב') || text.includes('לכתוב')) {
+        contextIcon = '✍️';
+      } else if (text.includes('מסמך') || text.includes('דוח')) {
+        contextIcon = '📄';
+      }
+      // Finance
+      else if (text.includes('תשלום') || text.includes('לשלם')) {
+        contextIcon = '💳';
+      } else if (text.includes('חשבון') || text.includes('בנק')) {
+        contextIcon = '🏦';
+      } else if (text.includes('כסף') || text.includes('כספים')) {
+        contextIcon = '💰';
+      }
+      // Events & Celebrations
+      else if (text.includes('יום הולדת') || text.includes('ימולדת')) {
+        contextIcon = '🎂';
+      } else if (text.includes('מתנה') || text.includes('מתנות')) {
+        contextIcon = '🎁';
+      } else if (text.includes('חתונה')) {
+        contextIcon = '💒';
+      } else if (text.includes('אירוע') || text.includes('מסיבה')) {
+        contextIcon = '🎉';
+      }
+      // Travel & Transportation
+      else if (text.includes('טיול') || text.includes('נופש') || text.includes('חופשה')) {
+        contextIcon = '✈️';
+      } else if (text.includes('מונית') || text.includes('טקסי')) {
+        contextIcon = '🚕';
+      } else if (text.includes('אוטובוס')) {
+        contextIcon = '🚌';
+      } else if (text.includes('רכבת')) {
+        contextIcon = '🚆';
+      } else if (text.includes('נהיגה') || text.includes('לנהוג') || text.includes('מכונית')) {
+        contextIcon = '🚗';
+      }
+      // Meeting & Work
+      else if (text.includes('פגישה') || text.includes('ישיבה')) {
+        contextIcon = '🤝';
+      } else if (text.includes('פרזנטציה') || text.includes('מצגת')) {
+        contextIcon = '📊';
+      } else if (text.includes('ועידה') || text.includes('כנס')) {
+        contextIcon = '🎤';
+      }
+      // Kids & Education
+      else if (text.includes('גן') || text.includes('גננת')) {
+        contextIcon = '🎨';
+      } else if (text.includes('בית ספר') || text.includes('בי"ס')) {
+        contextIcon = '🏫';
+      } else if (text.includes('שיעורי בית') || text.includes('שיעורים')) {
+        contextIcon = '📚';
+      } else if (text.includes('מורה')) {
+        contextIcon = '👨‍🏫';
+      }
+      // Shopping
+      else if (text.includes('סופר') || text.includes('סופרמרקט')) {
+        contextIcon = '🛒';
+      } else if (text.includes('ירקות') || text.includes('פירות')) {
+        contextIcon = '🥬';
+      } else if (text.includes('לחם')) {
+        contextIcon = '🍞';
+      } else if (text.includes('בשר')) {
+        contextIcon = '🥩';
+      } else if (text.includes('חלב') || text.includes('גבינה')) {
+        contextIcon = '🥛';
+      }
+      // Pets
+      else if (text.includes('כלב')) {
+        contextIcon = '🐕';
+      } else if (text.includes('חתול')) {
+        contextIcon = '🐱';
+      } else if (text.includes('וטרינר')) {
+        contextIcon = '🏥';
+      }
+      // Utilities & Services
+      else if (text.includes('חשמל') || text.includes('אור')) {
+        contextIcon = '💡';
+      } else if (text.includes('מים') || text.includes('אינסטלטור')) {
+        contextIcon = '💧';
+      } else if (text.includes('מזגן') || text.includes('מיזוג')) {
+        contextIcon = '❄️';
+      }
+      
+      // Build enhanced text - add only the content icon, NOT the category
+      let enhancedText = inputText;
+      
+      // Add context icon at the beginning if found and not already there
+      if (contextIcon && !enhancedText.includes(contextIcon)) {
+        enhancedText = `${contextIcon} ${enhancedText}`;
+      }
+      
+      // DO NOT add category to text - it will be added as a separate tag
+      // Instead, add a special marker that the parser will recognize
+      if (category) {
+        enhancedText = `${enhancedText} @category:${category}:${categoryIcon}`;
+      }
+      
+      setInputText(enhancedText);
+      setIsAiEnhancing(false);
+    }, 1000);
+  };
+
   const handleAddTask = () => {
     if (parsedTask && inputText.trim()) {
-      setTasks([...tasks, { ...parsedTask, completed: false }]);
+      if (editingTaskIndex !== null) {
+        // Update existing task
+        const updatedTasks = [...tasks];
+        updatedTasks[editingTaskIndex] = { ...parsedTask, completed: tasks[editingTaskIndex].completed };
+        setTasks(updatedTasks);
+        setEditingTaskIndex(null);
+      } else {
+        // Add new task
+        setTasks([...tasks, { ...parsedTask, completed: false }]);
+      }
       setInputText('');
       setFinalTranscriptRef('');
       setIsAddingTask(false);
@@ -39,6 +242,22 @@ export default function MobileTasks() {
 
   const handleDeleteTask = (index: number) => {
     setTasks(tasks.filter((_, i) => i !== index));
+  };
+
+  const handleTaskClick = (index: number) => {
+    setEditingTaskIndex(index);
+    setInputText(tasks[index].rawText);
+    setIsAddingTask(true);
+  };
+
+  const handleSegmentClick = (taskIndex: number, segment: any) => {
+    // Find the tag that corresponds to this segment
+    const task = tasks[taskIndex];
+    const matchingTag = task.tags.find(tag => tag.type === segment.type);
+    
+    if (matchingTag) {
+      setEditingTag({ taskIndex, tag: matchingTag });
+    }
   };
 
   const handleTagClick = (taskIndex: number, tag: ExtractedTag) => {
@@ -119,7 +338,10 @@ export default function MobileTasks() {
 
   const formatTagDisplay = (type: string, value: any): string => {
     if (type === 'time' && typeof value === 'object') {
-      return `${String(value.hour).padStart(2, '0')}:${String(value.minute).padStart(2, '0')}`;
+      // Support both { hour, minute } and { hours, minutes } formats
+      const hour = (value as any).hour ?? (value as any).hours ?? 0;
+      const minute = (value as any).minute ?? (value as any).minutes ?? 0;
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     }
     if (type === 'transport') {
       return `${value}min`;
@@ -134,6 +356,28 @@ export default function MobileTasks() {
       return member?.nameHe || String(value);
     }
     return String(value);
+  };
+
+  // Get color for category tags
+  const getCategoryColor = (categoryName: string): { text: string; bg: string; border: string } => {
+    const lowerCategory = categoryName.toLowerCase();
+    
+    if (lowerCategory === 'עבודה') {
+      return { text: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' };
+    } else if (lowerCategory === 'משפחה') {
+      return { text: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' };
+    } else if (lowerCategory === 'קניות') {
+      return { text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+    } else if (lowerCategory === 'בריאות') {
+      return { text: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' };
+    } else if (lowerCategory === 'לימודים') {
+      return { text: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' };
+    } else if (lowerCategory === 'תחבורה') {
+      return { text: 'text-cyan-700', bg: 'bg-cyan-50', border: 'border-cyan-200' };
+    } else {
+      // Default for 'כללי' and others
+      return { text: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200' };
+    }
   };
 
   const FAMILY_MEMBERS = [
@@ -162,13 +406,16 @@ export default function MobileTasks() {
   };
 
   const hourToHebrew = (hour: number): string => {
+    // Normalize hour to 0-23 range
+    const normalizedHour = ((hour % 24) + 24) % 24;
+    
     const hours: Record<number, string> = {
       0: 'חצות', 1: 'אחת', 2: 'שתיים', 3: 'שלוש', 4: 'ארבע', 5: 'חמש',
       6: 'שש', 7: 'שבע', 8: 'שמונה', 9: 'תשע', 10: 'עשר', 11: 'אחת עשרה',
       12: 'שתיים עשרה', 13: 'אחת', 14: 'שתיים', 15: 'שלוש', 16: 'ארבע',
       17: 'חמש', 18: 'שש', 19: 'שבע', 20: 'שמונה', 21: 'תשע', 22: 'עשר', 23: 'אחת עשרה'
     };
-    return hours[hour] || String(hour);
+    return hours[normalizedHour] || String(normalizedHour);
   };
 
   const updateTextForTagChange = (rawText: string, oldTag: ExtractedTag, newValue: any, segment?: any): string => {
@@ -475,8 +722,11 @@ export default function MobileTasks() {
 
                   {/* Task content */}
                   <div className="flex-1 space-y-3">
-                    {/* Task text with highlighting */}
-                    <div className={`text-base leading-relaxed ${task.completed ? 'line-through opacity-60' : ''}`}>
+                    {/* Task text with highlighting - clickable */}
+                    <div 
+                      className={`text-base leading-relaxed cursor-pointer hover:bg-gray-50 rounded p-1 -m-1 transition-colors ${task.completed ? 'line-through opacity-60' : ''}`}
+                      onClick={() => handleTaskClick(index)}
+                    >
                       {task.segments.map((segment, i) => {
                         if (segment.type === 'text') {
                           return <span key={i}>{segment.text}</span>;
@@ -488,9 +738,17 @@ export default function MobileTasks() {
                         else if (segment.type === 'time') bgColor = 'bg-green-100';
                         else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100';
                         else if (segment.type === 'priority') bgColor = 'bg-red-100';
+                        else if (segment.type === 'recurring') bgColor = 'bg-cyan-100';
                         
                         return (
-                          <span key={i} className={`${bgColor} px-1 rounded`}>
+                          <span 
+                            key={i} 
+                            className={`${bgColor} px-1 rounded cursor-pointer hover:opacity-80 active:scale-95 transition-all`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSegmentClick(index, segment);
+                            }}
+                          >
                             {segment.text}
                           </span>
                         );
@@ -502,18 +760,31 @@ export default function MobileTasks() {
                       <div className="flex flex-wrap gap-2">
                         {task.tags.map((tag) => {
                           let textColor = 'text-gray-700';
-                          if (tag.type === 'involved') textColor = 'text-purple-600';
-                          else if (tag.type === 'location') textColor = 'text-amber-600';
-                          else if (tag.type === 'time') textColor = 'text-green-600';
-                          else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
-                          else if (tag.type === 'priority') textColor = 'text-red-600';
-                          else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                          let bgColor = 'bg-white';
+                          let borderColor = 'border-gray-200';
+                          
+                          // Check if this is a category tag (hashtag)
+                          if (tag.type === 'tag') {
+                            const categoryColors = getCategoryColor(tag.displayText);
+                            textColor = categoryColors.text;
+                            bgColor = categoryColors.bg;
+                            borderColor = categoryColors.border;
+                          } else {
+                            // Standard tag colors
+                            if (tag.type === 'involved') textColor = 'text-purple-600';
+                            else if (tag.type === 'location') textColor = 'text-amber-600';
+                            else if (tag.type === 'time') textColor = 'text-green-600';
+                            else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
+                            else if (tag.type === 'priority') textColor = 'text-red-600';
+                            else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                            else if (tag.type === 'recurring') textColor = 'text-cyan-600';
+                          }
                           
                           return (
                             <button
                               key={tag.id}
                               onClick={() => handleTagClick(index, tag)}
-                              className={`inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
+                              className={`inline-flex items-center gap-1 px-2 py-1 ${bgColor} border ${borderColor} rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
                             >
                               <span>{tag.emoji}</span>
                               <span>{tag.displayText}</span>
@@ -570,8 +841,11 @@ export default function MobileTasks() {
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b">
-              <h2 className="text-lg font-semibold">משימה חדשה</h2>
-              <button onClick={() => setIsAddingTask(false)}>
+              <h2 className="text-lg font-semibold">{editingTaskIndex !== null ? 'ערוך משימה' : 'משימה חדשה'}</h2>
+              <button onClick={() => {
+                setIsAddingTask(false);
+                setEditingTaskIndex(null);
+              }}>
                 <X className="w-6 h-6 text-gray-500" />
               </button>
             </div>
@@ -616,17 +890,29 @@ export default function MobileTasks() {
                     <div className="flex flex-wrap gap-2">
                       {parsedTask.tags.map((tag) => {
                         let textColor = 'text-gray-700';
-                        if (tag.type === 'involved') textColor = 'text-purple-600';
-                        else if (tag.type === 'location') textColor = 'text-amber-600';
-                        else if (tag.type === 'time') textColor = 'text-green-600';
-                        else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
-                        else if (tag.type === 'priority') textColor = 'text-red-600';
-                        else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                        let bgColor = 'bg-white';
+                        let borderColor = 'border-gray-200';
+                        
+                        // Check if this is a category tag (hashtag)
+                        if (tag.type === 'tag') {
+                          const categoryColors = getCategoryColor(tag.displayText);
+                          textColor = categoryColors.text;
+                          bgColor = categoryColors.bg;
+                          borderColor = categoryColors.border;
+                        } else {
+                          // Standard tag colors
+                          if (tag.type === 'involved') textColor = 'text-purple-600';
+                          else if (tag.type === 'location') textColor = 'text-amber-600';
+                          else if (tag.type === 'time') textColor = 'text-green-600';
+                          else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
+                          else if (tag.type === 'priority') textColor = 'text-red-600';
+                          else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                        }
                         
                         return (
                           <span
                             key={tag.id}
-                            className={`inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-lg text-sm ${textColor} font-medium`}
+                            className={`inline-flex items-center gap-1 px-3 py-1 ${bgColor} border ${borderColor} rounded-lg text-sm ${textColor} font-medium`}
                           >
                             <span>{tag.emoji}</span>
                             <span>{tag.displayText}</span>
@@ -641,35 +927,52 @@ export default function MobileTasks() {
 
             {/* Bottom actions */}
             <div className="p-4 border-t bg-white space-y-3">
-              {/* Voice button */}
-              <button
-                onClick={isListening ? stopVoiceRecognition : startVoiceRecognition}
-                className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
-                  isListening
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {isListening ? (
-                  <>
-                    <MicOff className="w-5 h-5" />
-                    <span>עצור הקלטה</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-5 h-5" />
-                    <span>דבר</span>
-                  </>
-                )}
-              </button>
+              {/* AI and Voice buttons row */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* AI Enhancement button */}
+                <button
+                  onClick={handleAiEnhance}
+                  disabled={!inputText.trim() || isAiEnhancing}
+                  className={`py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
+                    isAiEnhancing
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  <Sparkles className={`w-5 h-5 ${isAiEnhancing ? 'animate-pulse' : ''}`} />
+                  <span>{isAiEnhancing ? 'מעבד...' : 'AI'}</span>
+                </button>
 
-              {/* Add button */}
+                {/* Voice button */}
+                <button
+                  onClick={isListening ? stopVoiceRecognition : startVoiceRecognition}
+                  className={`py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
+                    isListening
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {isListening ? (
+                    <>
+                      <MicOff className="w-5 h-5" />
+                      <span>עצור</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-5 h-5" />
+                      <span>דבר</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Add/Update button */}
               <Button
                 onClick={handleAddTask}
                 disabled={!inputText.trim()}
                 className="w-full py-3 text-base font-medium"
               >
-                הוסף משימה
+                {editingTaskIndex !== null ? 'עדכן משימה' : 'הוסף משימה'}
               </Button>
             </div>
           </div>

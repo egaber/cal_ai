@@ -1,29 +1,33 @@
 // Detection Patterns for Mobile Task Parser
 
-import { FamilyMember, KnownPlace } from '../types/mobileTask';
+import { FamilyMember, KnownLocation, LocationInfo } from '../types/mobileTask';
 
 // Family members configuration
 export const FAMILY_MEMBERS: FamilyMember[] = [
-  { name: 'Eyal', nameHe: 'אייל', age: undefined, isChild: false, needsSupervision: false },
-  { name: 'Ella', nameHe: 'אלה', age: undefined, isChild: false, needsSupervision: false },
-  { name: 'Hilly', nameHe: 'הילי', age: 11, isChild: true, needsSupervision: false }, // 11 years old - independent
-  { name: 'Yael', nameHe: 'יעל', age: 5.5, isChild: true, needsSupervision: true },
-  { name: 'Alon', nameHe: 'אלון', age: 3, isChild: true, needsSupervision: true },
+  { name: 'Eyal', displayName: 'Eyal', displayNameHebrew: 'אייל', age: undefined, isChild: false, needsSupervision: false },
+  { name: 'Ella', displayName: 'Ella', displayNameHebrew: 'אלה', age: undefined, isChild: false, needsSupervision: false },
+  { name: 'Hilly', displayName: 'Hilly', displayNameHebrew: 'הילי', age: 11, isChild: true, needsSupervision: false }, // 11 years old - independent
+  { name: 'Yael', displayName: 'Yael', displayNameHebrew: 'יעל', age: 5.5, isChild: true, needsSupervision: true },
+  { name: 'Alon', displayName: 'Alon', displayNameHebrew: 'אלון', age: 3, isChild: true, needsSupervision: true },
 ];
 
-// Known places configuration
+// Known places configuration with driving requirements
+export interface KnownPlace extends LocationInfo {
+  requiresDriving: boolean;
+}
+
 export const KNOWN_PLACES: KnownPlace[] = [
-  { name: 'home', nameHe: 'בית', drivingTimeFromHome: 0, requiresDriving: false },
-  { name: 'kindergarten', nameHe: 'גן', drivingTimeFromHome: 15, requiresDriving: true },
-  { name: 'school', nameHe: 'בית ספר', drivingTimeFromHome: 10, requiresDriving: true },
-  { name: 'work', nameHe: 'עבודה', drivingTimeFromHome: 20, requiresDriving: true },
-  { name: 'supermarket', nameHe: 'סופר', drivingTimeFromHome: 5, requiresDriving: false },
-  { name: 'mall', nameHe: 'קניון', drivingTimeFromHome: 15, requiresDriving: true },
-  { name: 'park', nameHe: 'פארק', drivingTimeFromHome: 10, requiresDriving: false },
-  { name: 'doctor', nameHe: 'רופא', drivingTimeFromHome: 12, requiresDriving: true },
-  { name: 'dentist', nameHe: 'רופא שיניים', drivingTimeFromHome: 12, requiresDriving: true },
-  { name: 'gym', nameHe: 'חדר כושר', drivingTimeFromHome: 8, requiresDriving: false },
-  { name: 'pool', nameHe: 'בריכה', drivingTimeFromHome: 15, requiresDriving: true },
+  { name: 'home', displayName: 'Home', displayNameHebrew: 'בית', drivingTimeFromHome: 0, requiresDriving: false },
+  { name: 'kindergarten', displayName: 'Kindergarten', displayNameHebrew: 'גן', drivingTimeFromHome: 15, requiresDriving: true },
+  { name: 'school', displayName: 'School', displayNameHebrew: 'בית ספר', drivingTimeFromHome: 10, requiresDriving: true },
+  { name: 'work', displayName: 'Work', displayNameHebrew: 'עבודה', drivingTimeFromHome: 20, requiresDriving: true },
+  { name: 'home', displayName: 'Supermarket', displayNameHebrew: 'סופר', drivingTimeFromHome: 5, requiresDriving: false },
+  { name: 'home', displayName: 'Mall', displayNameHebrew: 'קניון', drivingTimeFromHome: 15, requiresDriving: true },
+  { name: 'home', displayName: 'Park', displayNameHebrew: 'פארק', drivingTimeFromHome: 10, requiresDriving: false },
+  { name: 'home', displayName: 'Doctor', displayNameHebrew: 'רופא', drivingTimeFromHome: 12, requiresDriving: true },
+  { name: 'home', displayName: 'Dentist', displayNameHebrew: 'רופא שיניים', drivingTimeFromHome: 12, requiresDriving: true },
+  { name: 'home', displayName: 'Gym', displayNameHebrew: 'חדר כושר', drivingTimeFromHome: 8, requiresDriving: false },
+  { name: 'home', displayName: 'Pool', displayNameHebrew: 'בריכה', drivingTimeFromHome: 15, requiresDriving: true },
 ];
 
 // Hebrew patterns
@@ -90,11 +94,23 @@ export const HEBREW_PATTERNS = {
   transport: /(^|[\s])(להסיע|לקחת|להביא|לאסוף|להוריד)/gi,
   driving: /(^|[\s])(נסיעה|נהיגה|לנסוע|לנהוג)/gi,
   
-  // Recurring patterns
+  // Recurring patterns - organized by type
   recurring: {
     daily: /(^|[\s])(כל יום|יומי|יומיומי|מדי יום)/gi,
+    morning: /(^|[\s])(כל בוקר)/gi,
+    evening: /(^|[\s])(כל ערב)/gi,
+    afternoon: /(^|[\s])(כל צהריים|אחר הצהריים)/gi,
+    night: /(^|[\s])(כל לילה)/gi,
     weekly: /(^|[\s])(כל שבוע|שבועי|מדי שבוע)/gi,
     monthly: /(^|[\s])(כל חודש|חודשי|מדי חודש)/gi,
+    // Specific weekdays - FULL PHRASE
+    sunday: /(^|[\s])(כל יום ראשון)/gi,
+    monday: /(^|[\s])(כל יום שני)/gi,
+    tuesday: /(^|[\s])(כל יום שלישי)/gi,
+    wednesday: /(^|[\s])(כל יום רביעי)/gi,
+    thursday: /(^|[\s])(כל יום חמישי)/gi,
+    friday: /(^|[\s])(כל יום שישי)/gi,
+    saturday: /(^|[\s])(כל שבת)/gi,
   },
   
   // Task type
@@ -157,11 +173,23 @@ export const ENGLISH_PATTERNS = {
   transport: /\b(take|bring|pick up|drop off|drive)\b/gi,
   driving: /\b(drive|driving)\b/gi,
   
-  // Recurring patterns
+  // Recurring patterns - organized by type
   recurring: {
     daily: /\b(daily|every day|each day)\b/gi,
+    morning: /\b(every morning)\b/gi,
+    evening: /\b(every evening)\b/gi,
+    afternoon: /\b(every afternoon)\b/gi,
+    night: /\b(every night)\b/gi,
     weekly: /\b(weekly|every week|each week)\b/gi,
     monthly: /\b(monthly|every month|each month)\b/gi,
+    // Specific weekdays - FULL PHRASE
+    sunday: /\b(every sunday)\b/gi,
+    monday: /\b(every monday)\b/gi,
+    tuesday: /\b(every tuesday)\b/gi,
+    wednesday: /\b(every wednesday)\b/gi,
+    thursday: /\b(every thursday)\b/gi,
+    friday: /\b(every friday)\b/gi,
+    saturday: /\b(every saturday)\b/gi,
   },
   
   // Task type
@@ -231,7 +259,7 @@ export function getKnownPlace(location: string): KnownPlace | undefined {
   
   return KNOWN_PLACES.find(place => {
     const placeName = place.name.toLowerCase();
-    const placeNameHe = place.nameHe.toLowerCase();
+    const placeNameHe = place.displayNameHebrew.toLowerCase();
     
     return (
       normalizedLocation.includes(placeName) ||

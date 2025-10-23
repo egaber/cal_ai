@@ -48,6 +48,19 @@ export function parseTask(text: string): ParsedTask {
     return createEmptyTask(text);
   }
 
+  // Check for category marker and extract it
+  let categoryName: string | undefined;
+  let categoryIcon: string | undefined;
+  const categoryPattern = /@category:([^:]+):(.+?)(?:\s|$)/;
+  const categoryMatch = text.match(categoryPattern);
+  
+  if (categoryMatch) {
+    categoryName = categoryMatch[1];
+    categoryIcon = categoryMatch[2];
+    // Remove the category marker from the text
+    text = text.replace(categoryPattern, '').trim();
+  }
+
   const language = detectLanguage(text);
   const patterns = getPatterns(language, text);
   const allMatches: Match[] = [];
@@ -65,9 +78,8 @@ export function parseTask(text: string): ParsedTask {
   let hasReminderKeyword = false;
   let hasTaskKeyword = false;
   let hasTransportAction = false;
-  let hasDaily = false;
-  let hasWeekly = false;
-  let hasMonthly = false;
+  let detectedRecurring: RecurringPattern = 'none';
+  const detectedWeekdays: number[] = []; // Collect all detected weekdays
 
   // 1. Priority (P1, P2, P3)
   let match: RegExpExecArray | null;
@@ -304,15 +316,71 @@ export function parseTask(text: string): ParsedTask {
     hasTransportAction = true;
   }
 
-  // 7. Recurring patterns
-  if (patterns.recurring.daily.test(text)) {
-    hasDaily = true;
+  // 7. Recurring patterns - detect and highlight
+  // IMPORTANT: Check specific patterns BEFORE general patterns to avoid false matches
+  // Map of pattern key to RecurringPattern value
+  const recurringMap: Record<string, RecurringPattern> = {
+    // Specific weekdays FIRST (these contain "כל יום" but are more specific)
+    sunday: 'weekday-0',
+    monday: 'weekday-1',
+    tuesday: 'weekday-2',
+    wednesday: 'weekday-3',
+    thursday: 'weekday-4',
+    friday: 'weekday-5',
+    saturday: 'weekday-6',
+    // Time-of-day specific (also more specific than general "daily")
+    morning: 'morning',
+    evening: 'evening',
+    afternoon: 'afternoon',
+    night: 'night',
+    // General patterns LAST
+    daily: 'daily',
+    weekly: 'weekly',
+    monthly: 'monthly',
+  };
+  
+  // Check each recurring pattern type IN ORDER (specific to general)
+  for (const [key, recurringType] of Object.entries(recurringMap)) {
+    const pattern = patterns.recurring[key];
+    if (!pattern) continue;
+    
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      // If it's a weekday, collect it
+      if (recurringType.startsWith('weekday-')) {
+        const dayNum = parseInt(recurringType.split('-')[1]);
+        if (!detectedWeekdays.includes(dayNum)) {
+          detectedWeekdays.push(dayNum);
+        }
+      }
+      
+      // Keep track of the most specific recurring pattern found
+      // Priority: specific weekdays > time-of-day > general patterns
+      if (detectedRecurring === 'none' || 
+          recurringType.startsWith('weekday-') || 
+          (recurringType !== 'daily' && recurringType !== 'weekly' && recurringType !== 'monthly')) {
+        detectedRecurring = recurringType;
+      }
+      
+      const actualText = match[2] || match[0];
+      const startOffset = match[0].indexOf(actualText);
+      allMatches.push({
+        start: match.index + startOffset,
+        end: match.index + startOffset + actualText.length,
+        type: 'recurring',
+        value: recurringType,
+        text: actualText,
+      });
+    }
   }
-  if (patterns.recurring.weekly.test(text)) {
-    hasWeekly = true;
-  }
-  if (patterns.recurring.monthly.test(text)) {
-    hasMonthly = true;
+  
+  // After collecting all weekdays, determine final recurring pattern
+  if (detectedWeekdays.length > 1) {
+    // Multiple weekdays detected - use 'weekdays' type
+    detectedRecurring = 'weekdays';
+  } else if (detectedWeekdays.length === 1) {
+    // Single weekday - keep the weekday-N pattern
+    detectedRecurring = `weekday-${detectedWeekdays[0]}` as RecurringPattern;
   }
 
   // 8. Task type keywords
@@ -396,7 +464,7 @@ export function parseTask(text: string): ParsedTask {
     hasAction: hasTransportAction || hasTaskKeyword,
   });
 
-  const recurring = inferRecurring({ hasDaily, hasWeekly, hasMonthly });
+  const recurring = detectedRecurring;
 
   // Build tags
   const tags: ExtractedTag[] = [];
@@ -481,13 +549,59 @@ export function parseTask(text: string): ParsedTask {
   }
 
   if (recurring !== 'none') {
+    // Format display text for recurring patterns
+    let recurringDisplayText: string = recurring;
+    let recurringValue: RecurringPattern | number[] = recurring;
+    
+    const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    
+    if (recurring === 'weekdays' && detectedWeekdays.length > 0) {
+      // Multiple weekdays - show them all compactly
+      const dayNamesShort = detectedWeekdays
+        .sort((a, b) => a - b)
+        .map(num => dayNames[num])
+        .join(', ');
+      recurringDisplayText = dayNamesShort;
+      recurringValue = detectedWeekdays; // Store as array
+    } else if (recurring.startsWith('weekday-')) {
+      // Single weekday
+      const dayNum = parseInt(recurring.split('-')[1]);
+      recurringDisplayText = `יום ${dayNames[dayNum]}`;
+    } else if (recurring === 'morning') {
+      recurringDisplayText = 'בוקר';
+    } else if (recurring === 'evening') {
+      recurringDisplayText = 'ערב';
+    } else if (recurring === 'afternoon') {
+      recurringDisplayText = 'צהריים';
+    } else if (recurring === 'night') {
+      recurringDisplayText = 'לילה';
+    } else if (recurring === 'daily') {
+      recurringDisplayText = 'יומי';
+    } else if (recurring === 'weekly') {
+      recurringDisplayText = 'שבועי';
+    } else if (recurring === 'monthly') {
+      recurringDisplayText = 'חודשי';
+    }
+    
     tags.push({
       id: `tag-${tagId++}`,
       type: 'recurring',
-      displayText: recurring,
-      value: recurring,
+      displayText: recurringDisplayText,
+      value: recurringValue,
       emoji: getTagEmoji('recurring'),
       editable: true,
+    });
+  }
+
+  // Add category tag if detected from AI
+  if (categoryName && categoryIcon) {
+    tags.push({
+      id: `tag-${tagId++}`,
+      type: 'tag',
+      displayText: categoryName,
+      value: categoryName,
+      emoji: categoryIcon,
+      editable: false,
     });
   }
 

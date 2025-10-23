@@ -3,7 +3,7 @@
 import { 
   FamilyMember, 
   FamilyMemberName, 
-  KnownPlace, 
+  KnownLocation, 
   TimeBucket,
   RecurringPattern 
 } from '../types/mobileTask';
@@ -92,8 +92,8 @@ export function inferTimeBucket(params: {
   // Explicit time bucket keywords
   if (hasToday) return 'today';
   if (hasTomorrow) return 'tomorrow';
-  if (hasNextWeek) return 'next-week';
-  if (hasThisWeek) return 'this-week';
+  if (hasNextWeek) return 'nextWeek';
+  if (hasThisWeek) return 'thisWeek';
   
   // Infer from specific date
   if (specificDate) {
@@ -125,7 +125,7 @@ export function inferTimeBucket(params: {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     
     if (taskDate >= startOfWeek && taskDate <= endOfWeek) {
-      return 'this-week';
+      return 'thisWeek';
     }
     
     // Check if it's next week
@@ -135,7 +135,7 @@ export function inferTimeBucket(params: {
     endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
     
     if (taskDate >= startOfNextWeek && taskDate <= endOfNextWeek) {
-      return 'next-week';
+      return 'nextWeek';
     }
   }
   

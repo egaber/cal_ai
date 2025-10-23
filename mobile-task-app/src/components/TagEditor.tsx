@@ -3,6 +3,21 @@ import { X, Clock, Calendar, Users, MapPin, Car, AlertCircle } from 'lucide-reac
 import { ExtractedTag, FamilyMemberName, TimeBucket, TimeValue, PriorityLevel } from '../types/mobileTask';
 import { FAMILY_MEMBERS } from '../utils/patterns';
 
+const TIME_BUCKET_LABELS: Record<TimeBucket, string> = {
+  today: 'היום',
+  tomorrow: 'מחר',
+  'this-week': 'השבוע',
+  'next-week': 'שבוע הבא',
+  unlabeled: 'ללא תיוג',
+};
+
+type TagVisual = {
+  color: string;
+  bg: string;
+  border: string;
+  title: string;
+};
+
 interface TagEditorProps {
   tag: ExtractedTag;
   onUpdate: (newValue: any) => void;
@@ -27,6 +42,8 @@ export function TagEditor({ tag, onUpdate, onRemove, onClose }: TagEditorProps) 
         return { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', title: 'עדיפות' };
       case 'location':
         return { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', title: 'מיקום' };
+      case 'recurring':
+        return { color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200', title: 'חזרתיות' };
       default:
         return { color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200', title: 'ערוך' };
     }
@@ -54,6 +71,9 @@ export function TagEditor({ tag, onUpdate, onRemove, onClose }: TagEditorProps) 
       
       case 'location':
         return <LocationEditor value={tag.value as string} onUpdate={onUpdate} onRemove={onRemove} />;
+      
+      case 'recurring':
+        return <RecurringEditor value={tag.value as any} onUpdate={onUpdate} onRemove={onRemove} />;
       
       default:
         return <div className="p-4 text-center text-gray-500">Editor not available</div>;
@@ -139,13 +159,173 @@ function TimeBucketEditor({ value, onUpdate, onRemove }: { value: TimeBucket; on
   );
 }
 
+// Recurring Editor
+function RecurringEditor({ value, onUpdate, onRemove }: { value: string | number[]; onUpdate: (v: string | number[]) => void; onRemove: () => void }) {
+  const [selectedDays, setSelectedDays] = React.useState<number[]>([]);
+  const [recurringType, setRecurringType] = React.useState<string>('none');
+
+  // Initialize from value
+  React.useEffect(() => {
+    if (Array.isArray(value)) {
+      // Array of weekday numbers
+      setSelectedDays(value);
+      setRecurringType('weekdays');
+    } else if (typeof value === 'string') {
+      if (value.startsWith('weekday-')) {
+        const dayNum = parseInt(value.split('-')[1]);
+        setSelectedDays([dayNum]);
+        setRecurringType('weekdays');
+      } else if (['morning', 'evening', 'afternoon', 'night'].includes(value)) {
+        setRecurringType('time-of-day');
+      } else {
+        setRecurringType(value);
+      }
+    }
+  }, [value]);
+
+  const dayNames = [
+    { num: 0, name: 'ראשון', short: 'א' },
+    { num: 1, name: 'שני', short: 'ב' },
+    { num: 2, name: 'שלישי', short: 'ג' },
+    { num: 3, name: 'רביעי', short: 'ד' },
+    { num: 4, name: 'חמישי', short: 'ה' },
+    { num: 5, name: 'שישי', short: 'ו' },
+    { num: 6, name: 'שבת', short: 'ש' },
+  ];
+
+  const toggleDay = (dayNum: number) => {
+    const newDays = selectedDays.includes(dayNum)
+      ? selectedDays.filter(d => d !== dayNum)
+      : [...selectedDays, dayNum].sort();
+    setSelectedDays(newDays);
+  };
+
+  const handleConfirm = () => {
+    if (recurringType === 'weekdays' && selectedDays.length === 1) {
+      onUpdate(`weekday-${selectedDays[0]}`);
+    } else if (recurringType === 'weekdays' && selectedDays.length > 1) {
+      // Multiple days - return the array
+      onUpdate(selectedDays);
+    } else {
+      onUpdate(recurringType);
+    }
+  };
+
+  const isWeekdaysMode = recurringType === 'weekdays';
+  const needsConfirmButton = isWeekdaysMode && selectedDays.length > 0;
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Quick options */}
+      <div>
+        <label className="text-sm text-gray-600 mb-2 block">בחר תדירות:</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => { setRecurringType('daily'); if (!isWeekdaysMode) onUpdate('daily'); }}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              recurringType === 'daily'
+                ? 'border-cyan-500 bg-cyan-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <span className="text-sm font-medium">כל יום</span>
+          </button>
+          <button
+            onClick={() => { setRecurringType('weekly'); if (!isWeekdaysMode) onUpdate('weekly'); }}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              recurringType === 'weekly'
+                ? 'border-cyan-500 bg-cyan-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <span className="text-sm font-medium">כל שבוע</span>
+          </button>
+          <button
+            onClick={() => { setRecurringType('monthly'); if (!isWeekdaysMode) onUpdate('monthly'); }}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              recurringType === 'monthly'
+                ? 'border-cyan-500 bg-cyan-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <span className="text-sm font-medium">כל חודש</span>
+          </button>
+          <button
+            onClick={() => setRecurringType('weekdays')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              recurringType === 'weekdays'
+                ? 'border-cyan-500 bg-cyan-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <span className="text-sm font-medium">ימים ספציפיים</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Weekday selector - shows when "specific days" is selected */}
+      {isWeekdaysMode && (
+        <div>
+          <label className="text-sm text-gray-600 mb-2 block">
+            בחר ימים (ניתן לבחור כמה שרוצה):
+          </label>
+          <div className="grid grid-cols-7 gap-2">
+            {dayNames.map((day) => (
+              <button
+                key={day.num}
+                onClick={() => toggleDay(day.num)}
+                className={`aspect-square rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
+                  selectedDays.includes(day.num)
+                    ? 'border-cyan-500 bg-cyan-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className="text-xs font-bold">{day.short}</span>
+                <span className="text-[10px] mt-0.5">{day.name}</span>
+              </button>
+            ))}
+          </div>
+          
+          {selectedDays.length > 0 && (
+            <div className="mt-3 p-3 bg-cyan-50 rounded-lg text-sm text-cyan-700">
+              נבחרו {selectedDays.length} ימים
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirm button - only shows for multiple day selection */}
+      {needsConfirmButton && (
+        <button
+          onClick={handleConfirm}
+          className="w-full p-4 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 transition-colors"
+        >
+          אישור
+        </button>
+      )}
+
+      <button
+        onClick={onRemove}
+        className="w-full p-4 rounded-lg border-2 border-red-200 text-red-600 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+      >
+        <X className="w-5 h-5" />
+        <span>הסר תג</span>
+      </button>
+    </div>
+  );
+}
+
 // Time Editor
 function TimeEditor({ value, onUpdate, onRemove }: { value: TimeValue; onUpdate: (v: TimeValue) => void; onRemove: () => void }) {
-  const [hour, setHour] = React.useState(value.hour || 0);
-  const [minute, setMinute] = React.useState(value.minute || 0);
+  // Support both formats: { hour, minute } and { hours, minutes }
+  const initialHour = (value as any)?.hour ?? (value as any)?.hours ?? 0;
+  const initialMinute = (value as any)?.minute ?? (value as any)?.minutes ?? 0;
+  
+  const [hour, setHour] = React.useState<number>(initialHour);
+  const [minute, setMinute] = React.useState<number>(initialMinute);
 
   const handleUpdate = () => {
-    onUpdate({ hour, minute });
+    onUpdate({ hours: hour, minutes: minute, displayText: `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}` });
   };
 
   return (

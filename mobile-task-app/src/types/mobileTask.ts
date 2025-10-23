@@ -1,6 +1,83 @@
-// Mobile Task App - Type Definitions
+/**
+ * Mobile Task Type Definitions
+ * 
+ * Core types for the mobile task management app with real-time parsing,
+ * tag extraction, and smart inference capabilities.
+ */
 
-export type TimeBucket = 'today' | 'tomorrow' | 'this-week' | 'next-week' | 'unlabeled';
+// ============================================================================
+// FAMILY MEMBERS
+// ============================================================================
+
+export type FamilyMemberName = 'Eyal' | 'Ella' | 'Hilly' | 'Yael' | 'Alon';
+
+export interface FamilyMember {
+  name: FamilyMemberName;
+  displayName: string;
+  displayNameHebrew: string;
+  age?: number;
+  isChild: boolean;
+  needsSupervision: boolean;
+}
+
+// ============================================================================
+// TIME & DATES
+// ============================================================================
+
+export type TimeBucket = 'today' | 'tomorrow' | 'thisWeek' | 'nextWeek' | 'unlabeled';
+
+export interface TimeValue {
+  hours: number;
+  minutes: number;
+  displayText: string; // e.g., "8:00", "14:30"
+}
+
+// ============================================================================
+// LOCATIONS
+// ============================================================================
+
+export type KnownLocation = 'home' | 'kindergarten' | 'school' | 'work';
+
+export interface LocationInfo {
+  name: KnownLocation;
+  displayName: string;
+  displayNameHebrew: string;
+  drivingTimeFromHome?: number; // in minutes
+}
+
+// ============================================================================
+// RECURRING PATTERNS
+// ============================================================================
+
+export type RecurringPattern = 
+  | 'daily' 
+  | 'weekly' 
+  | 'monthly' 
+  | 'weekday-0' // Sunday
+  | 'weekday-1' // Monday
+  | 'weekday-2' // Tuesday
+  | 'weekday-3' // Wednesday
+  | 'weekday-4' // Thursday
+  | 'weekday-5' // Friday
+  | 'weekday-6' // Saturday
+  | 'morning'
+  | 'evening'
+  | 'afternoon'
+  | 'night'
+  | 'weekdays' // Multiple specific days
+  | 'none';
+
+export type RecurringValue = RecurringPattern | number[]; // Array of day numbers for multiple days
+
+// ============================================================================
+// PRIORITY
+// ============================================================================
+
+export type PriorityLevel = 'P1' | 'P2' | 'P3';
+
+// ============================================================================
+// TAGS
+// ============================================================================
 
 export type TagType = 
   | 'timeBucket'
@@ -9,158 +86,102 @@ export type TagType =
   | 'owner'
   | 'involved'
   | 'location'
-  | 'transport'
   | 'priority'
   | 'recurring'
-  | 'reminder';
-
-export type FamilyMemberName = 'Eyal' | 'Ella' | 'Hilly' | 'Yael' | 'Alon';
-
-export type PriorityLevel = 'P1' | 'P2' | 'P3';
-
-export type RecurringPattern = 'daily' | 'weekly' | 'monthly' | 'none';
-
-export interface FamilyMember {
-  name: FamilyMemberName;
-  nameHe?: string; // Hebrew name
-  age?: number;
-  isChild: boolean;
-  needsSupervision: boolean;
-}
-
-export interface KnownPlace {
-  name: string;
-  nameHe: string;
-  drivingTimeFromHome: number; // minutes
-  requiresDriving: boolean;
-}
-
-export interface TimeValue {
-  hour: number; // 0-23
-  minute: number; // 0-59
-}
-
-export interface ParsedSegment {
-  text: string;
-  type: 'text' | TagType;
-  value?: Date | TimeValue | FamilyMemberName | PriorityLevel | RecurringPattern | string;
-  start: number;
-  end: number;
-}
+  | 'needsDriving';
 
 export interface ExtractedTag {
   id: string;
   type: TagType;
   displayText: string;
-  value: Date | TimeValue | FamilyMemberName | PriorityLevel | RecurringPattern | string | boolean | number;
+  value: Date | TimeValue | FamilyMemberName | PriorityLevel | RecurringPattern | string | boolean | number | number[];
   emoji: string;
   editable: boolean;
+  inferred?: boolean; // Was this tag auto-inferred by the system?
+}
+
+// ============================================================================
+// PARSED TASK
+// ============================================================================
+
+export interface TextSegment {
+  text: string;
+  highlighted: boolean;
+  type?: 'priority' | 'timeBucket' | 'time' | 'owner' | 'involved' | 'location' | 'recurring';
 }
 
 export interface ParsedTask {
-  // Raw text
   rawText: string;
-  
-  // Parsed segments for visual display
-  segments: ParsedSegment[];
-  
-  // Extracted tags
+  segments: TextSegment[];
   tags: ExtractedTag[];
-  
-  // Structured data
-  timeBucket: TimeBucket;
-  specificTime?: TimeValue;
-  specificDate?: Date;
-  owner?: FamilyMemberName;
-  involvedMembers: FamilyMemberName[];
-  location?: string;
-  priority?: PriorityLevel;
-  recurring?: RecurringPattern;
-  isReminder: boolean;
-  
-  // Inferred data
-  requiresDriving: boolean;
-  drivingDuration?: number;
-  drivingFrom?: string;
-  drivingTo?: string;
+  language: 'hebrew' | 'english' | 'mixed';
 }
+
+// ============================================================================
+// TASK CATEGORIES (for AI enhancement)
+// ============================================================================
+
+export type TaskCategory = 
+  | 'work'
+  | 'family'
+  | 'health'
+  | 'shopping'
+  | 'education'
+  | 'home'
+  | 'transport'
+  | 'personal'
+  | 'other';
+
+// ============================================================================
+// STORED TASK
+// ============================================================================
 
 export interface MobileTask {
   id: string;
-  title: string;
+  text: string; // Original text
+  cleanText?: string; // AI-improved text
+  parsedData: ParsedTask;
   
-  // Time organization
+  // Extracted values
   timeBucket: TimeBucket;
-  specificTime?: TimeValue;
   specificDate?: Date;
-  
-  // People
+  specificTime?: TimeValue;
   owner?: FamilyMemberName;
-  involvedMembers: FamilyMemberName[];
-  
-  // Location & transportation
-  location?: string;
-  requiresDriving: boolean;
-  drivingDuration?: number;
-  drivingFrom?: string;
-  drivingTo?: string;
-  
-  // Properties
+  involvedPeople: FamilyMemberName[];
+  location?: KnownLocation;
   priority?: PriorityLevel;
-  recurring?: RecurringPattern;
-  isReminder: boolean;
+  recurring?: RecurringValue;
+  needsDriving: boolean;
   
-  // Tags for display
-  tags: ExtractedTag[];
+  // AI enhancement
+  category?: TaskCategory;
+  aiSuggestions?: {
+    improvedText?: string;
+    suggestedTags?: ExtractedTag[];
+    confidence?: number;
+  };
   
   // Metadata
-  completed: boolean;
   createdAt: Date;
   updatedAt: Date;
-  
-  // Raw parsed data for re-editing
-  parsedData?: ParsedTask;
+  completed: boolean;
+  completedAt?: Date;
 }
 
-export interface ParserConfig {
-  language: 'he' | 'en' | 'auto';
-  enableInference: boolean;
-  familyMembers: FamilyMember[];
-  knownPlaces: KnownPlace[];
-}
+// ============================================================================
+// FILTER OPTIONS
+// ============================================================================
 
-export interface ParsingResult {
-  success: boolean;
-  parsedTask: ParsedTask;
-  confidence: number; // 0-1
-  warnings: string[];
-}
+export type FilterType = 
+  | 'all'
+  | 'my-tasks'
+  | 'by-family'
+  | 'today'
+  | 'this-week'
+  | 'by-priority';
 
-// Voice recognition types
-export interface VoiceRecognitionResult {
-  transcript: string;
-  isFinal: boolean;
-  confidence: number;
-}
-
-export interface VoiceRecognitionConfig {
-  language: 'he-IL' | 'en-US';
-  continuous: boolean;
-  interimResults: boolean;
-}
-
-// UI State types
-export interface TaskInputState {
-  text: string;
-  isRecording: boolean;
-  parsedTask?: ParsedTask;
-  cursorPosition: number;
-}
-
-export interface TaskListState {
-  tasks: MobileTask[];
-  selectedBucket?: TimeBucket;
-  expandedBuckets: TimeBucket[];
-  isLoading: boolean;
-  error?: string;
+export interface TaskFilter {
+  type: FilterType;
+  familyMember?: FamilyMemberName;
+  priority?: PriorityLevel;
 }
