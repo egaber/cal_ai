@@ -4,6 +4,7 @@ import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobile
 import { Mic, MicOff, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
+import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
 
 interface TaskWithStatus extends ParsedTask {
   completed: boolean;
@@ -25,6 +26,7 @@ export default function MobileTasks() {
     if (parsedTask && inputText.trim()) {
       setTasks([...tasks, { ...parsedTask, completed: false }]);
       setInputText('');
+      setFinalTranscriptRef('');
       setIsAddingTask(false);
     }
   };
@@ -122,8 +124,21 @@ export default function MobileTasks() {
       // Convert English to Hebrew for display
       return timeBucketToHebrew(value);
     }
+    if (type === 'involved' || type === 'owner') {
+      // Convert family member names to Hebrew
+      const member = FAMILY_MEMBERS.find(m => m.name === value);
+      return member?.nameHe || String(value);
+    }
     return String(value);
   };
+
+  const FAMILY_MEMBERS = [
+    { name: 'Eyal', nameHe: 'אייל' },
+    { name: 'Ella', nameHe: 'אלה' },
+    { name: 'Hilly', nameHe: 'הילי' },
+    { name: 'Yael', nameHe: 'יעל' },
+    { name: 'Alon', nameHe: 'אלון' },
+  ];
 
   const timeBucketToHebrew = (bucket: string): string => {
     const mapping: Record<string, string> = {
@@ -304,12 +319,18 @@ export default function MobileTasks() {
       return;
     }
 
+    // Clear previous text when starting new recording
+    setInputText('');
+    setFinalTranscriptRef('');
+
     const SpeechRecognition = (window as any).webkitSpeechRecognition;
     const recognitionInstance = new SpeechRecognition();
     
     recognitionInstance.continuous = true;
     recognitionInstance.interimResults = true;
     recognitionInstance.lang = 'he-IL';
+
+    let silenceTimer: NodeJS.Timeout | null = null;
 
     recognitionInstance.onresult = (event: any) => {
       let interimTranscript = '';
@@ -326,16 +347,35 @@ export default function MobileTasks() {
       
       // Update the final transcript ref if we have new final text
       if (newFinalTranscript && newFinalTranscript !== finalTranscriptRef) {
-        setFinalTranscriptRef(newFinalTranscript);
-        setInputText(newFinalTranscript);
+        // Apply name corrections to the final transcript
+        const corrected = correctFamilyNames(newFinalTranscript);
+        setFinalTranscriptRef(corrected);
+        setInputText(corrected);
       } else if (interimTranscript) {
-        // Show final + interim (streaming)
-        setInputText(finalTranscriptRef + interimTranscript);
+        // Show final + interim (streaming) - correct interim as well for preview
+        const correctedInterim = correctFamilyNames(finalTranscriptRef + interimTranscript);
+        setInputText(correctedInterim);
       }
+
+      // Reset silence timer - user is speaking
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+      }
+
+      // Start new silence timer - stop after 3 seconds of no speech
+      silenceTimer = setTimeout(() => {
+        console.log('3 seconds of silence detected - stopping recording');
+        if (recognitionInstance) {
+          recognitionInstance.stop();
+        }
+      }, 3000);
     };
 
     recognitionInstance.onend = () => {
       setIsListening(false);
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+      }
     };
 
     recognitionInstance.start();
@@ -371,11 +411,11 @@ export default function MobileTasks() {
               key={index}
               className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3"
             >
-              <div className="flex gap-3">
-                {/* Checkbox */}
+              <div className="flex gap-3 items-start">
+                {/* Checkbox - aligned with text top */}
                 <button
                   onClick={() => handleToggleTask(index)}
-                  className="flex-shrink-0 mt-0.5"
+                  className="flex-shrink-0"
                 >
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                     task.completed 
@@ -430,7 +470,7 @@ export default function MobileTasks() {
                           <button
                             key={tag.id}
                             onClick={() => handleTagClick(index, tag)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-full text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
+                            className={`inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
                           >
                             <span>{tag.emoji}</span>
                             <span>{tag.displayText}</span>
@@ -439,14 +479,6 @@ export default function MobileTasks() {
                       })}
                     </div>
                   )}
-
-                  {/* Delete button */}
-                  <button
-                    onClick={() => handleDeleteTask(index)}
-                    className="text-red-500 text-sm hover:text-red-700"
-                  >
-                    מחק
-                  </button>
                 </div>
               </div>
             </div>
@@ -457,7 +489,10 @@ export default function MobileTasks() {
       {/* Add Task Button (Fixed) - positioned above bottom nav */}
       {!isAddingTask && (
         <button
-          onClick={() => setIsAddingTask(true)}
+          onClick={() => {
+            setInputText('');
+            setIsAddingTask(true);
+          }}
           className="fixed bottom-20 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors z-50"
         >
           <Plus className="w-6 h-6" />
@@ -534,7 +569,7 @@ export default function MobileTasks() {
                         return (
                           <span
                             key={tag.id}
-                            className={`inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-full text-sm ${textColor} font-medium`}
+                            className={`inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-lg text-sm ${textColor} font-medium`}
                           >
                             <span>{tag.emoji}</span>
                             <span>{tag.displayText}</span>

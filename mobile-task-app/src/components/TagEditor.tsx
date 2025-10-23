@@ -173,13 +173,14 @@ function FamilyMemberEditor({ value, onUpdate, onRemove, type }: { value: Family
   const [selectedMembers, setSelectedMembers] = React.useState<FamilyMemberName[]>(
     type === 'involved' && Array.isArray(value) ? value : [value]
   );
+  const [multiSelectMode, setMultiSelectMode] = React.useState(false);
 
   const toggleMember = (memberName: FamilyMemberName) => {
-    if (type === 'owner') {
-      // For owner, just select one
+    if (type === 'owner' || !multiSelectMode) {
+      // For owner, or single-select mode: immediately update and close
       onUpdate(memberName);
     } else {
-      // For involved, allow multiple
+      // For involved in multi-select mode: toggle selection
       const isSelected = selectedMembers.includes(memberName);
       const newSelection = isSelected
         ? selectedMembers.filter(m => m !== memberName)
@@ -189,16 +190,19 @@ function FamilyMemberEditor({ value, onUpdate, onRemove, type }: { value: Family
     }
   };
 
+  const handleMultiSelectToggle = () => {
+    setMultiSelectMode(!multiSelectMode);
+  };
+
   const handleDone = () => {
     if (type === 'involved' && selectedMembers.length > 0) {
-      // For involved, we'll need to handle this differently
       // For now, just update with the first selected
       onUpdate(selectedMembers[0]);
     }
   };
 
   const isSelected = (memberName: FamilyMemberName) => {
-    if (type === 'owner') {
+    if (!multiSelectMode) {
       return value === memberName;
     }
     return selectedMembers.includes(memberName);
@@ -206,9 +210,20 @@ function FamilyMemberEditor({ value, onUpdate, onRemove, type }: { value: Family
 
   return (
     <div className="p-4 space-y-3">
-      <p className="text-sm text-gray-600 mb-3">
-        {type === 'owner' ? 'בחר בעלים:' : 'בחר מעורבים (ניתן לבחור כמה):'}
-      </p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-gray-600">
+          {type === 'owner' ? 'בחר בעלים:' : multiSelectMode ? 'בחר מעורבים (כמה שרוצה):' : 'בחר מעורב:'}
+        </p>
+        {type === 'involved' && (
+          <button
+            onClick={handleMultiSelectToggle}
+            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+          >
+            {multiSelectMode ? 'בחירה בודדת' : 'בחירה מרובה'}
+          </button>
+        )}
+      </div>
+
       {FAMILY_MEMBERS.map((member) => (
         <button
           key={member.name}
@@ -216,35 +231,37 @@ function FamilyMemberEditor({ value, onUpdate, onRemove, type }: { value: Family
           className={`w-full p-4 rounded-lg border-2 flex items-center gap-3 transition-all ${
             isSelected(member.name as FamilyMemberName)
               ? 'border-purple-500 bg-purple-50'
-              : 'border-gray-200 hover:border-gray-300'
+              : 'border-gray-200 hover:border-gray-300 active:scale-98'
           }`}
         >
-          <div className="w-6 h-6 rounded border-2 flex items-center justify-center transition-colors">
-            {isSelected(member.name as FamilyMemberName) && (
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </div>
+          {multiSelectMode && (
+            <div className="w-6 h-6 rounded border-2 flex items-center justify-center transition-colors">
+              {isSelected(member.name as FamilyMemberName) && (
+                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+          )}
           <Users className="w-5 h-5 text-purple-600" />
-          <span className="text-base font-medium">{member.name}</span>
+          <span className="text-base font-medium">{member.nameHe || member.name}</span>
           {member.isChild && <span className="text-xs text-gray-500">(ילד/ה)</span>}
         </button>
       ))}
       
-      {type === 'involved' && selectedMembers.length > 1 && (
-        <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-          נבחרו {selectedMembers.length} אנשים: {selectedMembers.join(', ')}
-        </div>
-      )}
-
-      {type === 'involved' && selectedMembers.length > 1 && (
-        <button
-          onClick={handleDone}
-          className="w-full p-4 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-        >
-          סיים
-        </button>
+      {multiSelectMode && selectedMembers.length > 1 && (
+        <>
+          <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+            נבחרו {selectedMembers.length} אנשים: {selectedMembers.join(', ')}
+          </div>
+          
+          <button
+            onClick={handleDone}
+            className="w-full p-4 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+          >
+            אישור
+          </button>
+        </>
       )}
       
       <button

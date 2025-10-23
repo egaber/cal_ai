@@ -22,6 +22,7 @@ export type RecurringPattern = 'daily' | 'weekly' | 'monthly' | 'none';
 
 export interface FamilyMember {
   name: FamilyMemberName;
+  nameHe?: string; // Hebrew name
   age?: number;
   isChild: boolean;
   needsSupervision: boolean;

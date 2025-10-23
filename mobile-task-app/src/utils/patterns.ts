@@ -4,11 +4,11 @@ import { FamilyMember, KnownPlace } from '../types/mobileTask';
 
 // Family members configuration
 export const FAMILY_MEMBERS: FamilyMember[] = [
-  { name: 'Eyal', age: undefined, isChild: false, needsSupervision: false },
-  { name: 'Ella', age: undefined, isChild: false, needsSupervision: false },
-  { name: 'Hilly', age: 11, isChild: true, needsSupervision: false }, // 11 years old - independent
-  { name: 'Yael', age: 5.5, isChild: true, needsSupervision: true },
-  { name: 'Alon', age: 3, isChild: true, needsSupervision: true },
+  { name: 'Eyal', nameHe: 'אייל', age: undefined, isChild: false, needsSupervision: false },
+  { name: 'Ella', nameHe: 'אלה', age: undefined, isChild: false, needsSupervision: false },
+  { name: 'Hilly', nameHe: 'הילי', age: 11, isChild: true, needsSupervision: false }, // 11 years old - independent
+  { name: 'Yael', nameHe: 'יעל', age: 5.5, isChild: true, needsSupervision: true },
+  { name: 'Alon', nameHe: 'אלון', age: 3, isChild: true, needsSupervision: true },
 ];
 
 // Known places configuration
