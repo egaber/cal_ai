@@ -24,39 +24,63 @@ const HEBREW_NUMBERS: Record<string, number> = {
 };
 
 /**
- * Parse English written time like "eight pm" or "three thirty"
+ * Parse English written time like "eight pm" or "three thirty" with position info
  */
-export function parseEnglishWrittenTime(text: string): TimeValue | null {
-  const lowerText = text.toLowerCase();
-  
+export function parseEnglishWrittenTime(text: string): WrittenTimeMatch | null {
   // Pattern: "eight pm", "three am"
-  const simplePattern = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(am|pm)\b/i;
-  let match = lowerText.match(simplePattern);
+  const amPmPattern = /(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(am|pm)/gi;
+  let match = amPmPattern.exec(text);
   
   if (match) {
-    let hour = ENGLISH_NUMBERS[match[1]];
+    let hour = ENGLISH_NUMBERS[match[1].toLowerCase()];
     const isPM = match[2].toLowerCase() === 'pm';
     
     // Convert to 24-hour format
     if (isPM && hour < 12) hour += 12;
     if (!isPM && hour === 12) hour = 0;
     
-    return { hour, minute: 0 };
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
   }
   
-  // Pattern: "eight thirty", "three fifteen"
-  const compoundPattern = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(thirty|fifteen|forty-five|o'clock)\b/i;
-  match = lowerText.match(compoundPattern);
+  // Pattern: "six fifteen", "three thirty", "eight forty-five"
+  const compoundPattern = /(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(thirty|fifteen|forty-five|o'clock)/gi;
+  match = compoundPattern.exec(text);
   
   if (match) {
-    const hour = ENGLISH_NUMBERS[match[1]];
+    const hour = ENGLISH_NUMBERS[match[1].toLowerCase()];
     let minute = 0;
     
-    if (match[2] === 'thirty') minute = 30;
-    else if (match[2] === 'fifteen') minute = 15;
-    else if (match[2] === 'forty-five') minute = 45;
+    const minuteWord = match[2].toLowerCase();
+    if (minuteWord === 'thirty') minute = 30;
+    else if (minuteWord === 'fifteen') minute = 15;
+    else if (minuteWord === 'forty-five') minute = 45;
     
-    return { hour, minute };
+    return {
+      time: { hour, minute },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "at eight", "on eight" - standalone hour with time preposition
+  const standalonePattern = /(at|on)\s+(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?!\s+(?:am|pm|thirty|fifteen|forty-five|o'clock))/gi;
+  match = standalonePattern.exec(text);
+  
+  if (match) {
+    const hour = ENGLISH_NUMBERS[match[2].toLowerCase()];
+    
+    return {
+      time: { hour, minute: 0 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
   }
   
   return null;
@@ -148,6 +172,6 @@ export function parseWrittenTime(text: string, language: 'he' | 'en'): WrittenTi
   if (language === 'he') {
     return parseHebrewWrittenTime(text);
   } else {
-    return parseEnglishWrittenTime(text) as WrittenTimeMatch | null;
+    return parseEnglishWrittenTime(text);
   }
 }
