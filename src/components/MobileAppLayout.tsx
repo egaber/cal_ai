@@ -4,7 +4,7 @@ import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
 import { Calendar, ListTodo, Sparkles, MessageSquare } from 'lucide-react';
 import MobileIndex from '@/pages/MobileIndex';
-import TaskPlanning from '@/pages/TaskPlanning';
+import MobileTasks from '@/pages/MobileTasks';
 import { AIAssistant } from '@/components/AIAssistant';
 import { CalendarService } from '@/services/calendarService';
 
@@ -39,9 +39,9 @@ const MobileAppLayout = () => {
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 -z-10" />
       
       {/* Main Content Area - Takes remaining space */}
-      <main className="flex-1 min-h-0">
+      <main className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'calendar' && <MobileIndex />}
-        {activeTab === 'tasks' && <TaskPlanning />}
+        {activeTab === 'tasks' && <MobileTasks />}
         {activeTab === 'ai' && (
           <AIAssistant
             calendarService={new CalendarService({
