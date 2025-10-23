@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, ListTodo, Languages, Sparkles, Sun, Moon } from 'lucide-react';
 import Index from '@/pages/Index';
 import TaskPlanning from '@/pages/TaskPlanning';
+import MobileTaskDemo from '@/pages/MobileTaskDemo';
 
 const AppLayout = () => {
   const { language, toggleRTL, isRTL } = useRTL();
@@ -21,6 +22,11 @@ const AppLayout = () => {
 
   const [activeTab, setActiveTab] = useState<'calendar' | 'tasks'>(getActiveTab());
   const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // Check if we're on the demo page (after hooks)
+  if (location.pathname === '/demo' || location.pathname === '/mobile-task-demo') {
+    return <MobileTaskDemo />;
+  }
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
