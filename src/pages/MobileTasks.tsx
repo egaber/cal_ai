@@ -5,6 +5,7 @@ import { Mic, MicOff, Plus, X, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
+import { llmService } from '@/services/llmService';
 
 interface TaskWithStatus extends ParsedTask {
   completed: boolean;
@@ -24,15 +25,27 @@ export default function MobileTasks() {
   // Parse text in real-time
   const parsedTask = inputText ? parseTask(inputText) : null;
 
-  // AI Enhancement function
-  const handleAiEnhance = () => {
+  // AI Enhancement function - using real AI with fallback
+  const handleAiEnhance = async () => {
     if (!inputText.trim()) return;
     
     setIsAiEnhancing(true);
     
-    // Simulate AI processing
-    setTimeout(() => {
-      const text = inputText.toLowerCase();
+    try {
+      // Try to use real AI first
+      const aiResult = await enhanceWithRealAI(inputText);
+      
+      if (aiResult) {
+        setInputText(aiResult);
+        setIsAiEnhancing(false);
+        return;
+      }
+    } catch (error) {
+      console.error('AI enhancement error:', error);
+    }
+    
+    // Fallback to hardcoded logic
+    const text = inputText.toLowerCase();
       
       // Determine category based on keywords - broader search
       let category = '';
@@ -213,7 +226,71 @@ export default function MobileTasks() {
       
       setInputText(enhancedText);
       setIsAiEnhancing(false);
-    }, 1000);
+  };
+
+  // Real AI enhancement using LLM service
+  const enhanceWithRealAI = async (text: string): Promise<string | null> => {
+    try {
+      const systemPrompt = `You are a task enhancement assistant for a Hebrew task management app. Your job is to analyze task text and add:
+1. A context-specific emoji at the beginning (like 🛒 for shopping, 📞 for calling, etc.)
+2. A category marker at the end in this EXACT format: @category:CategoryName:CategoryEmoji
+
+Available categories and their emojis:
+- עבודה:💼 (work-related tasks, meetings, emails)
+- משפחה:👨‍👩‍👧‍👦 (family activities, kids, school)
+- קניות:🛒 (shopping, groceries, purchases)
+- בריאות:🏥 (health, doctors, medicine, fitness)
+- לימודים:📚 (learning, courses, studying)
+- תחבורה:🚗 (transportation, travel, driving)
+- כללי:📝 (general tasks that don't fit other categories)
+
+Rules:
+1. Keep the original text unchanged
+2. Add ONE emoji at the start that matches the task content (be specific - 🥛 for milk, 📞 for calling, etc.)
+3. Add the category marker at the end in EXACT format: @category:CategoryName:CategoryEmoji
+4. Return ONLY the enhanced text, no explanations
+
+Example:
+Input: "קנה חלב"
+Output: "🥛 קנה חלב @category:קניות:🛒"
+
+Input: "להתקשר לרופא"
+Output: "📞 להתקשר לרופא @category:בריאות:🏥"`;
+
+      const messages = [
+        { role: 'user' as const, content: `Task to enhance: "${text}"
+
+Return the enhanced text with emoji and category marker.` }
+      ];
+
+      const models = await llmService.getAvailableModels();
+      if (models.length === 0) {
+        return null; // No models available, use fallback
+      }
+
+      const response = await llmService.chat({
+        messages,
+        model: models[0],
+        systemPrompt
+      });
+
+      if (response.error || !response.content) {
+        return null;
+      }
+
+      // Clean up response - remove quotes if present
+      let enhanced = response.content.trim().replace(/^["']|["']$/g, '');
+      
+      // Verify the response has the category marker
+      if (!enhanced.includes('@category:')) {
+        return null; // Invalid response, use fallback
+      }
+
+      return enhanced;
+    } catch (error) {
+      console.error('Error in AI enhancement:', error);
+      return null;
+    }
   };
 
   const handleAddTask = () => {
@@ -358,25 +435,25 @@ export default function MobileTasks() {
     return String(value);
   };
 
-  // Get color for category tags
+  // Get color for category tags (no background, just colored text)
   const getCategoryColor = (categoryName: string): { text: string; bg: string; border: string } => {
     const lowerCategory = categoryName.toLowerCase();
     
     if (lowerCategory === 'עבודה') {
-      return { text: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' };
+      return { text: 'text-blue-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'משפחה') {
-      return { text: 'text-pink-700', bg: 'bg-pink-50', border: 'border-pink-200' };
+      return { text: 'text-pink-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'קניות') {
-      return { text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+      return { text: 'text-emerald-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'בריאות') {
-      return { text: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' };
+      return { text: 'text-rose-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'לימודים') {
-      return { text: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' };
+      return { text: 'text-violet-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'תחבורה') {
-      return { text: 'text-cyan-700', bg: 'bg-cyan-50', border: 'border-cyan-200' };
+      return { text: 'text-cyan-600', bg: 'bg-transparent', border: 'border-transparent' };
     } else {
       // Default for 'כללי' and others
-      return { text: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200' };
+      return { text: 'text-gray-600', bg: 'bg-transparent', border: 'border-transparent' };
     }
   };
 
@@ -767,8 +844,8 @@ export default function MobileTasks() {
                           if (tag.type === 'tag') {
                             const categoryColors = getCategoryColor(tag.displayText);
                             textColor = categoryColors.text;
-                            bgColor = categoryColors.bg;
-                            borderColor = categoryColors.border;
+                            bgColor = 'bg-transparent';
+                            borderColor = 'border-transparent';
                           } else {
                             // Standard tag colors
                             if (tag.type === 'involved') textColor = 'text-purple-600';
@@ -784,10 +861,16 @@ export default function MobileTasks() {
                             <button
                               key={tag.id}
                               onClick={() => handleTagClick(index, tag)}
-                              className={`inline-flex items-center gap-1 px-2 py-1 ${bgColor} border ${borderColor} rounded-lg text-xs ${textColor} font-medium hover:shadow-md transition-shadow active:scale-95`}
+                              className={`inline-flex items-center gap-1 ${
+                                tag.type === 'tag' ? 'px-0' : 'px-2 py-1'
+                              } ${bgColor} border ${borderColor} ${
+                                tag.type === 'tag' ? '' : 'rounded-lg'
+                              } text-xs ${textColor} font-medium ${
+                                tag.type === 'tag' ? 'hover:opacity-70' : 'hover:shadow-md'
+                              } transition-all active:scale-95`}
                             >
                               <span>{tag.emoji}</span>
-                              <span>{tag.displayText}</span>
+                              <span>{tag.type === 'tag' ? `#${tag.displayText}` : tag.displayText}</span>
                             </button>
                           );
                         })}
@@ -897,8 +980,8 @@ export default function MobileTasks() {
                         if (tag.type === 'tag') {
                           const categoryColors = getCategoryColor(tag.displayText);
                           textColor = categoryColors.text;
-                          bgColor = categoryColors.bg;
-                          borderColor = categoryColors.border;
+                          bgColor = 'bg-transparent';
+                          borderColor = 'border-transparent';
                         } else {
                           // Standard tag colors
                           if (tag.type === 'involved') textColor = 'text-purple-600';
@@ -912,10 +995,14 @@ export default function MobileTasks() {
                         return (
                           <span
                             key={tag.id}
-                            className={`inline-flex items-center gap-1 px-3 py-1 ${bgColor} border ${borderColor} rounded-lg text-sm ${textColor} font-medium`}
+                            className={`inline-flex items-center gap-1 ${
+                              tag.type === 'tag' ? 'px-0' : 'px-3 py-1'
+                            } ${bgColor} border ${borderColor} ${
+                              tag.type === 'tag' ? '' : 'rounded-lg'
+                            } text-sm ${textColor} font-medium`}
                           >
                             <span>{tag.emoji}</span>
-                            <span>{tag.displayText}</span>
+                            <span>{tag.type === 'tag' ? `#${tag.displayText}` : tag.displayText}</span>
                           </span>
                         );
                       })}
