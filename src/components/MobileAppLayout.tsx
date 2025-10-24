@@ -1,18 +1,23 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
+import { useEvents } from '@/contexts/EventContext';
+import { useFamily } from '@/contexts/FamilyContext';
 import { Calendar, ListTodo, Sparkles, MessageSquare } from 'lucide-react';
 import MobileIndex from '@/pages/MobileIndex';
 import MobileTasks from '@/pages/MobileTasks';
 import { AIAssistant } from '@/components/AIAssistant';
 import { CalendarService } from '@/services/calendarService';
+import { CalendarEvent } from '@/types/calendar';
 
 const MobileAppLayout = () => {
   const { language } = useRTL();
   const t = useTranslation(language);
   const location = useLocation();
   const navigate = useNavigate();
+  const { events, createEvent, updateEvent, deleteEvent } = useEvents();
+  const { family } = useFamily();
   
   // Determine active tab from URL or default to calendar
   const getActiveTab = () => {
@@ -22,6 +27,46 @@ const MobileAppLayout = () => {
 
   const [activeTab, setActiveTab] = useState(getActiveTab());
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Get today's and this week's events
+  const currentDate = new Date();
+  const todayStart = new Date(currentDate);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(currentDate);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const weekEnd = new Date(currentDate);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const todayEvents = events.filter(event => {
+    const eventStart = new Date(event.startTime);
+    return eventStart >= todayStart && eventStart <= todayEnd;
+  });
+
+  const weekEvents = events.filter(event => {
+    const eventStart = new Date(event.startTime);
+    return eventStart >= currentDate && eventStart <= weekEnd;
+  });
+
+  // Create CalendarService with real operations
+  const calendarService = useMemo(() => new CalendarService({
+    createEvent: (eventData: Omit<CalendarEvent, 'id'>) => {
+      console.log('Creating event via AI:', eventData);
+      createEvent(eventData);
+    },
+    updateEvent: (eventId: string, updates: Partial<CalendarEvent>) => {
+      console.log('Updating event via AI:', eventId, updates);
+      updateEvent(eventId, updates);
+    },
+    deleteEvent: (eventId: string) => {
+      console.log('Deleting event via AI:', eventId);
+      deleteEvent(eventId);
+    },
+    moveEvent: (eventId: string, newStartTime: string, newEndTime: string) => {
+      console.log('Moving event via AI:', eventId, newStartTime, newEndTime);
+      updateEvent(eventId, { startTime: newStartTime, endTime: newEndTime });
+    },
+  }), [createEvent, updateEvent, deleteEvent]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -44,16 +89,11 @@ const MobileAppLayout = () => {
         {activeTab === 'tasks' && <MobileTasks />}
         {activeTab === 'ai' && (
           <AIAssistant
-            calendarService={new CalendarService({
-              createEvent: () => {},
-              updateEvent: () => {},
-              deleteEvent: () => {},
-              moveEvent: () => {},
-            })}
-            currentDate={new Date()}
-            todayEvents={[]}
-            weekEvents={[]}
-            familyMembers={[]}
+            calendarService={calendarService}
+            currentDate={currentDate}
+            todayEvents={todayEvents}
+            weekEvents={weekEvents}
+            familyMembers={family?.members || []}
             onMemoryUpdate={() => {}}
           />
         )}

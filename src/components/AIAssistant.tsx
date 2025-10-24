@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Sparkles, Settings, Wrench } from "lucide-react";
+import { Send, Sparkles, Settings, Wrench, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,6 +74,28 @@ export const AIAssistant = ({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('ai_chat_history');
+    if (savedHistory) {
+      try {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          setChatHistory(parsed);
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+    }
+  }, []);
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+    }
+  }, [chatHistory]);
 
   // Auto-scroll to bottom when chat history changes
   useEffect(() => {
@@ -341,12 +363,15 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
 
       // Check if there are tool calls to execute
       if (response.toolCalls && response.toolCalls.length > 0) {
+        console.log('🔧 Executing tool calls:', response.toolCalls);
+        
         // Execute each tool call
         const toolResults: string[] = [];
         let createdEvent: CalendarEvent | undefined;
         let createdEventMember: FamilyMember | undefined;
         
         for (const toolCall of response.toolCalls) {
+          console.log('🔧 Processing tool:', toolCall.tool, 'with params:', toolCall.parameters);
           // If this is a create_meeting call, extract AI tip from the response
           if (toolCall.tool === 'create_meeting' && response.content) {
             // Try to extract any tips/suggestions from the AI's response
@@ -359,6 +384,12 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
           }
           
           const result = calendarService.executeToolCall(toolCall);
+          console.log('🔧 Tool result:', result);
+          
+          // Log event details for debugging
+          if (result.success && result.data) {
+            console.log('📅 Event data:', JSON.stringify(result.data, null, 2));
+          }
           
           if (result.success) {
             toolResults.push(`✓ ${result.message}`);
@@ -450,13 +481,32 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
           </div>
         </div>
 
-        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Settings className="h-4 w-4" />
+        <div className="flex items-center gap-1">
+          {chatHistory.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setChatHistory([]);
+                localStorage.removeItem('ai_chat_history');
+                toast({
+                  title: "New conversation",
+                  description: "Chat history cleared",
+                });
+              }}
+              title="New conversation"
+            >
+              <RotateCcw className="h-4 w-4" />
             </Button>
-          </DialogTrigger>
-          <DialogContent>
+          )}
+          
+          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
             <DialogHeader>
               <DialogTitle>AI Settings</DialogTitle>
               <DialogDescription>
@@ -505,7 +555,8 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Model Selection - Fixed below header for mobile */}
@@ -577,8 +628,10 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                     if (msg.event) {
                       // Remove ```json...``` blocks
                       displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
-                      // Remove any standalone JSON objects
-                      displayContent = displayContent.replace(/\{[\s\S]*?"tool"[\s\S]*?\}/g, '').trim();
+                      // Remove tool call JSON objects (look for ones with "tool" and "parameters")
+                      displayContent = displayContent.replace(/\{\s*"tool"[\s\S]*?"parameters"[\s\S]*?\}/g, '').trim();
+                      // Remove any remaining brackets that are alone
+                      displayContent = displayContent.replace(/^\s*[[\]]\s*$/gm, '').trim();
                     }
                     
                     return displayContent ? (

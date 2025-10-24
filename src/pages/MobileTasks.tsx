@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X, Trash2, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
@@ -872,6 +872,31 @@ Return the enhanced text with emoji and category marker.` }
 
                   {/* Task content */}
                   <div className="flex-1 space-y-3">
+                    {/* Scheduled indicator badge - shows if task is scheduled */}
+                    {task.scheduledEventId && (
+                      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md w-fit">
+                        <CalendarCheck className="w-3.5 h-3.5" />
+                        <span className="font-medium">
+                          {task.scheduledAt ? `נקבע ב-${new Date(task.scheduledAt).toLocaleDateString('he-IL', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}` : 'נקבע'}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Navigate to calendar and highlight the event
+                            console.log('Navigate to calendar event:', task.scheduledEventId);
+                          }}
+                          className="text-green-700 hover:text-green-800 underline"
+                        >
+                          לוח שנה ←
+                        </button>
+                      </div>
+                    )}
+                    
                     {/* Task text with highlighting - clickable */}
                     <div 
                       className={`text-base leading-relaxed cursor-pointer hover:bg-gray-50 rounded p-1 -m-1 transition-colors ${task.completed ? 'line-through opacity-60' : ''}`}

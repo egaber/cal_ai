@@ -211,7 +211,7 @@ export const MobileCalendarView = ({
       <div className="absolute top-0 right-0 bottom-0 w-20 bg-white/95 backdrop-blur border-l border-gray-200 pointer-events-none overflow-hidden">
         <div
           className="h-full overflow-y-scroll hide-scrollbar"
-          ref={(el) => {
+          ref={useRef((el: HTMLDivElement | null) => {
             if (el && scrollContainerRef.current) {
               // Sync scroll position with main calendar
               const syncScroll = () => {
@@ -220,9 +220,10 @@ export const MobileCalendarView = ({
                 }
               };
               scrollContainerRef.current.addEventListener('scroll', syncScroll);
-              return () => scrollContainerRef.current?.removeEventListener('scroll', syncScroll);
+              // Store cleanup function but don't return it from ref callback
+              el.dataset.cleanup = 'registered';
             }
-          }}
+          }).current}
         >
           {HOURS.map((hour) => (
             <div

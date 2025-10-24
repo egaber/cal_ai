@@ -62,12 +62,6 @@ class AzureOpenAIHandler {
         provider: 'azure-openai'
       },
       {
-        id: 'gpt-5-mini-2',
-        name: 'GPT-5 Mini 2',
-        vendor: 'OpenAI (Azure)',
-        provider: 'azure-openai'
-      },
-      {
         id: 'grok-4-fast-reasoning',
         name: 'Grok 4 Fast Reasoning',
         vendor: 'xAI (Azure)',
@@ -125,6 +119,9 @@ class AzureOpenAIHandler {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || 'No response';
 
+      console.log('[Azure OpenAI] Response content:', content);
+      console.log('[Azure OpenAI] Response content length:', content.length);
+
       return { 
         content,
         toolCalls: this.extractToolCalls(content)
@@ -139,20 +136,96 @@ class AzureOpenAIHandler {
   }
 
   private extractToolCalls(content: string): ToolCall[] | undefined {
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
+    console.log('🔍 Extracting tool calls from content (length:', content.length, ')');
+    
+    const toolCalls: ToolCall[] = [];
+    
+    // First try: JSON inside code fence
+    const codeFenceMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (codeFenceMatch) {
+      console.log('✅ Found JSON in code fence');
       try {
-        const parsed = JSON.parse(jsonMatch[1]);
+        const parsed = JSON.parse(codeFenceMatch[1]);
         if (parsed.tool && parsed.parameters) {
-          return [parsed];
+          console.log('✅ Parsed single tool call:', parsed.tool);
+          toolCalls.push(parsed);
+        } else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
+          console.log('✅ Parsed multiple tool calls:', parsed.length);
+          toolCalls.push(...parsed);
         }
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].tool) {
-          return parsed;
-        }
-      } catch {
-        // Not valid JSON, continue
+      } catch (e) {
+        console.log('❌ Failed to parse JSON from code fence:', e);
       }
     }
+    
+    // If we found tool calls in code fence, return them
+    if (toolCalls.length > 0) {
+      console.log('✅ Returning', toolCalls.length, 'tool calls from code fence');
+      return toolCalls;
+    }
+    
+    // Second try: Extract JSON objects that contain "tool" and "parameters"
+    // Use a more sophisticated approach that handles nested braces properly
+    let braceLevel = 0;
+    let jsonStart = -1;
+    let inString = false;
+    let escapeNext = false;
+    
+    for (let i = 0; i < content.length; i++) {
+      const char = content[i];
+      
+      // Handle string literals to avoid counting braces inside strings
+      if (char === '\\' && !escapeNext) {
+        escapeNext = true;
+        continue;
+      }
+      
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+      }
+      
+      escapeNext = false;
+      
+      if (inString) continue;
+      
+      // Track opening braces
+      if (char === '{') {
+        if (braceLevel === 0) {
+          jsonStart = i;
+        }
+        braceLevel++;
+      } else if (char === '}') {
+        braceLevel--;
+        
+        // When we close a top-level object, try to parse it
+        if (braceLevel === 0 && jsonStart !== -1) {
+          const jsonStr = content.substring(jsonStart, i + 1);
+          
+          // Only try to parse if it looks like it has "tool" and "parameters"
+          if (jsonStr.includes('"tool"') && jsonStr.includes('"parameters"')) {
+            console.log('✅ Found potential JSON object with tool');
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.tool && parsed.parameters && typeof parsed.parameters === 'object') {
+                console.log('✅ Parsed tool call:', parsed.tool);
+                toolCalls.push(parsed);
+              }
+            } catch (e) {
+              console.log('❌ Failed to parse JSON:', e);
+            }
+          }
+          
+          jsonStart = -1;
+        }
+      }
+    }
+    
+    if (toolCalls.length > 0) {
+      console.log('✅ Returning', toolCalls.length, 'tool calls');
+      return toolCalls;
+    }
+    
+    console.log('❌ No tool calls found');
     return undefined;
   }
 }
@@ -473,11 +546,17 @@ export class LLMService {
 
   async getAvailableModels(): Promise<LLMModel[]> {
     const models: LLMModel[] = [];
+    const modelIds = new Set<string>();
 
     // Add Azure OpenAI models if API key is set
     if (this.azureOpenAIHandler) {
       const azureModels = this.azureOpenAIHandler.getAvailableModels();
-      models.push(...azureModels);
+      azureModels.forEach(model => {
+        if (!modelIds.has(model.id)) {
+          modelIds.add(model.id);
+          models.push(model);
+        }
+      });
     }
 
     // Azure xAI models are now included in Azure OpenAI handler (same endpoint/key)
@@ -485,12 +564,22 @@ export class LLMService {
     // Add Gemini models if API key is set
     if (this.geminiHandler) {
       const geminiModels = this.geminiHandler.getAvailableModels();
-      models.push(...geminiModels);
+      geminiModels.forEach(model => {
+        if (!modelIds.has(model.id)) {
+          modelIds.add(model.id);
+          models.push(model);
+        }
+      });
     }
 
     // Add local models
     const localModels = await this.localHandler.getModels();
-    models.push(...localModels);
+    localModels.forEach(model => {
+      if (!modelIds.has(model.id)) {
+        modelIds.add(model.id);
+        models.push(model);
+      }
+    });
 
     return models;
   }
