@@ -622,32 +622,35 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
 
     const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
 
+    // Generate a consistent event ID based on task ID
+    const eventId = `task-event-${taskId}`;
+
     // Create event data with sourceTask link
     const eventData: Omit<CalendarEvent, 'id'> & { sourceTask?: string } = {
-      title: `📋 Task: ${taskId.substring(0, 20)}...`, // Temporary title, will be updated by AI Assistant
+      title: `📋 ${taskId.substring(0, 40)}`, // Show task ID in title
       startTime: startDate.toISOString(),
       endTime: endDate.toISOString(),
       memberId: memberId,
       category: category,
       priority: priority,
       emoji: emoji,
-      description: `Scheduled from task. ${reasoning}`,
+      description: `Scheduled from task.\n\n${reasoning}`,
       aiTip: reasoning,
       sourceTask: taskId  // Link back to the task
     };
 
     this.operations.createEvent(eventData);
 
-    // Create a temporary event object with a generated ID for display
+    // Create event object with the consistent ID
     const createdEvent: CalendarEvent = {
       ...eventData,
-      id: `event_${Date.now()}` // Temporary ID for display
+      id: eventId
     };
 
     return {
       success: true,
-      message: `Scheduled task "${taskId}" from ${startDate.toLocaleString()} to ${endDate.toLocaleString()}. ${reasoning}`,
-      data: { event: createdEvent, taskId }
+      message: `✅ Scheduled task from ${startDate.toLocaleTimeString()} to ${endDate.toLocaleTimeString()}. ${reasoning}`,
+      data: { event: createdEvent, taskId, eventId }
     };
   }
 }

@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EventCard } from "@/components/EventCard";
 import { getGeminiApiKey, getAzureOpenAIApiKey } from "@/config/gemini";
 import { buildCategoryPromptList } from "@/config/taskCategories";
+import { todoTaskService } from "@/services/todoTaskService";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -225,9 +226,12 @@ export const AIAssistant = ({
         familyMembers,
       });
 
+      // Get todo tasks context
+      const todosContext = await todoTaskService.getTodosForAI();
+
       // Create system prompt with calendar tools information + centralized category list
       const categoriesList = buildCategoryPromptList();
-      const systemPrompt = `You are an AI calendar assistant with intelligent scheduling capabilities. You help users manage the calendar by creating, moving, editing, and deleting meetings while providing smart suggestions.
+      const systemPrompt = `You are an AI calendar assistant with intelligent scheduling capabilities. You help users manage the calendar by creating, moving, editing, and deleting meetings while providing smart suggestions. You also help with task scheduling and management.
 
 IMPORTANT - When creating events, you MUST:
 1. Always include an appropriate "emoji" parameter (not "type") that matches the chosen category or specific activity
@@ -267,7 +271,7 @@ INTELLIGENT FEATURES:
 
 Available Tools:
 
-1. create_meeting - Create a new meeting/event
+1. create_meeting - Create a new meeting/event (for calendar events)
    Required:
    - title (string)
    - startTime (ISO 8601)
@@ -291,13 +295,32 @@ Available Tools:
 4. delete_meeting
    Required: eventId
 
+5. schedule_task - Schedule a todo task by creating a calendar event
+   Required: taskId, suggestedStartTime, duration, memberId, category, priority, emoji, reasoning
+   Use this when user asks to schedule a task from their todo list.
+
+TASK SCHEDULING INTELLIGENCE:
+When scheduling tasks, you must:
+1. Analyze current calendar to find optimal time slots
+2. Consider task priority and deadline
+3. Avoid conflicts with existing events
+4. Include buffer time between events (at least 15 min)
+5. Respect user preferences (morning person vs. night person)
+6. Group similar tasks together when possible
+7. Provide clear reasoning for scheduling decisions
+
 Return ONLY JSON tool calls when performing actions. Plain natural language otherwise.
 
 Calendar Context:
 ${calendarContext}
 
+Todo Tasks:
+${todosContext}
+
 Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-Interpret relative times like "today at 6pm" using today's date (${currentDate.toLocaleDateString()}) and local time (18:00).`;
+Interpret relative times like "today at 6pm" using today's date (${currentDate.toLocaleDateString()}) and local time (18:00).
+
+When user asks about tasks or to schedule their tasks, analyze the todo list above and create smart scheduling suggestions considering priorities, deadlines, and calendar availability.`;
 
       const response = await llmService.chat({
         messages: [...chatHistory, userMessage],
@@ -344,6 +367,23 @@ Interpret relative times like "today at 6pm" using today's date (${currentDate.t
             if (toolCall.tool === 'create_meeting' && result.data) {
               createdEvent = result.data as CalendarEvent;
               createdEventMember = familyMembers.find(m => m.id === createdEvent?.memberId);
+            }
+            
+            // If this was a schedule_task call, update the task with the event ID
+            if (toolCall.tool === 'schedule_task' && result.data) {
+              const data = result.data as { event: CalendarEvent; taskId: string; eventId: string };
+              createdEvent = data.event;
+              createdEventMember = familyMembers.find(m => m.id === createdEvent?.memberId);
+              
+              // Update the task in Firestore with the event ID
+              try {
+                await todoTaskService.updateTodoInFirestore(data.taskId, {
+                  scheduledEventId: data.eventId,
+                  scheduledAt: new Date().toISOString()
+                });
+              } catch (error) {
+                console.error('Failed to update task with event ID:', error);
+              }
             }
             
             toast({
