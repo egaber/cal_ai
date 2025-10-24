@@ -61,7 +61,22 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
   // Use family members from FamilyContext
   const familyMembers = family?.members || [];
 
-  const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
+  // Initialize with all member IDs by default
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(() => {
+    const savedSettings = StorageService.loadSettings();
+    if (savedSettings?.selectedMembers) {
+      return savedSettings.selectedMembers;
+    }
+    // Default to all members
+    return familyMembers.map(m => m.id);
+  });
+
+  // Update selectedMembers when familyMembers change (on first load)
+  useEffect(() => {
+    if (familyMembers.length > 0 && selectedMembers.length === 0) {
+      setSelectedMembers(familyMembers.map(m => m.id));
+    }
+  }, [familyMembers]);
   const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent, loading: eventsLoading } = useEvents();
   // Use cloud events directly
   const events = cloudEvents;

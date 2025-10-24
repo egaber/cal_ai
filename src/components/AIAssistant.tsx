@@ -28,6 +28,7 @@ import { EventCard } from "@/components/EventCard";
 import { getGeminiApiKey, getAzureOpenAIApiKey } from "@/config/gemini";
 import { buildCategoryPromptList } from "@/config/taskCategories";
 import { todoTaskService } from "@/services/todoTaskService";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -55,6 +56,7 @@ export const AIAssistant = ({
   initialMessage,
   onNavigateToCalendar,
 }: AIAssistantProps) => {
+  const { user } = useAuth();
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<MessageWithEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +68,14 @@ export const AIAssistant = ({
   const { toast } = useToast();
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Initialize todo task service with user credentials
+  useEffect(() => {
+    if (user?.uid && user?.familyId) {
+      console.log('🔧 AIAssistant: Initializing todoTaskService with user:', user.uid, 'family:', user.familyId);
+      todoTaskService.initialize(user.uid, user.familyId);
+    }
+  }, [user]);
 
   // Detect mobile device
   useEffect(() => {

@@ -48,6 +48,23 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
   const familyMembers = family?.members || [];
   const events = cloudEvents;
 
+  // Initialize with all member IDs by default
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(() => {
+    const savedSettings = StorageService.loadSettings();
+    if (savedSettings?.selectedMembers) {
+      return savedSettings.selectedMembers;
+    }
+    // Default to all members
+    return familyMembers.map(m => m.id);
+  });
+
+  // Update selectedMembers when familyMembers change (on first load)
+  useEffect(() => {
+    if (familyMembers.length > 0 && selectedMembers.length === 0) {
+      setSelectedMembers(familyMembers.map(m => m.id));
+    }
+  }, [familyMembers, selectedMembers.length]);
+
   // Sync with parent's date when initialDate changes (but NOT if we have a targetEventId)
   useEffect(() => {
     if (initialDate && !targetEventId) {
@@ -90,12 +107,10 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     }
   };
 
-  const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
-
   useEffect(() => {
     const loadedSettings = StorageService.loadSettings();
 
-    if (loadedSettings) {
+    if (loadedSettings && loadedSettings.selectedMembers) {
       setSelectedMembers(loadedSettings.selectedMembers);
       if (loadedSettings.viewMode === 'day' || loadedSettings.viewMode === 'workweek') {
         setViewMode(loadedSettings.viewMode);
