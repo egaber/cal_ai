@@ -54,13 +54,18 @@ const PIPELINE_PHASES: TaskProcessingPhase[] = [
 
 class TaskService {
   private static STORAGE_KEY = 'calendar_ai_tasks';
+  private static CACHE_KEY_PREFIX = 'calendar_ai_tasks_cache_';
   private userId: string | null = null;
   private familyId: string | null = null;
+  private localCache: Task[] = [];
+  private isSyncing: boolean = false;
 
   // Initialize with user context for Firestore
   initialize(userId: string, familyId: string): void {
     this.userId = userId;
     this.familyId = familyId;
+    // Load from local cache immediately
+    this.localCache = this.loadFromCache();
     // Migrate localStorage tasks to Firestore on first init
     this.migrateLocalStorageToFirestore().catch(err => 
       console.error('Migration error:', err)
@@ -73,6 +78,47 @@ class TaskService {
       throw new Error('TaskService not initialized with user/family ID');
     }
     return `families/${this.familyId}/members/${this.userId}/tasks`;
+  }
+
+  // Get cache key for current user
+  private getCacheKey(): string {
+    if (!this.userId) return TaskService.STORAGE_KEY;
+    return `${TaskService.CACHE_KEY_PREFIX}${this.userId}`;
+  }
+
+  // Load tasks from local cache
+  private loadFromCache(): Task[] {
+    try {
+      const cacheKey = this.getCacheKey();
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    }
+    return [];
+  }
+
+  // Save tasks to local cache
+  private saveToCache(tasks: Task[]): void {
+    try {
+      const cacheKey = this.getCacheKey();
+      localStorage.setItem(cacheKey, JSON.stringify(tasks));
+      this.localCache = tasks;
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+    }
+  }
+
+  // Get cached tasks immediately (no async)
+  getCachedTasks(): Task[] {
+    return this.localCache;
+  }
+
+  // Check if currently syncing
+  getIsSyncing(): boolean {
+    return this.isSyncing;
   }
 
   // ---------- Firestore Operations ----------
@@ -103,20 +149,64 @@ class TaskService {
 
   // Save task to Firestore
   async saveTaskToFirestore(task: Task): Promise<void> {
-    if (!this.userId || !this.familyId) return;
+    if (!this.userId || !this.familyId) {
+      // Save to local cache if not initialized
+      const cached = this.loadFromCache();
+      const index = cached.findIndex(t => t.id === task.id);
+      if (index >= 0) {
+        cached[index] = task;
+      } else {
+        cached.push(task);
+      }
+      this.saveToCache(cached);
+      return;
+    }
     try {
+      this.isSyncing = true;
+      // Update local cache immediately
+      const cached = this.loadFromCache();
+      const index = cached.findIndex(t => t.id === task.id);
+      if (index >= 0) {
+        cached[index] = task;
+      } else {
+        cached.push(task);
+      }
+      this.saveToCache(cached);
+
+      // Then sync to Firestore
       const taskRef = doc(collection(db, this.getTasksCollection()), task.id);
       await setDoc(taskRef, this.toFirestore(task));
     } catch (error) {
       console.error('Error saving task to Firestore:', error);
       throw error;
+    } finally {
+      this.isSyncing = false;
     }
   }
 
   // Update task in Firestore
   async updateTaskInFirestore(taskId: string, updates: Partial<Task>): Promise<void> {
-    if (!this.userId || !this.familyId) return;
+    if (!this.userId || !this.familyId) {
+      // Update local cache if not initialized
+      const cached = this.loadFromCache();
+      const index = cached.findIndex(t => t.id === taskId);
+      if (index >= 0) {
+        cached[index] = { ...cached[index], ...updates, updatedAt: new Date().toISOString() };
+        this.saveToCache(cached);
+      }
+      return;
+    }
     try {
+      this.isSyncing = true;
+      // Update local cache immediately
+      const cached = this.loadFromCache();
+      const index = cached.findIndex(t => t.id === taskId);
+      if (index >= 0) {
+        cached[index] = { ...cached[index], ...updates, updatedAt: new Date().toISOString() };
+        this.saveToCache(cached);
+      }
+
+      // Then sync to Firestore
       const cleanUpdates: any = {};
       Object.keys(updates).forEach(key => {
         const value = (updates as any)[key];
@@ -132,18 +222,33 @@ class TaskService {
     } catch (error) {
       console.error('Error updating task in Firestore:', error);
       throw error;
+    } finally {
+      this.isSyncing = false;
     }
   }
 
   // Delete task from Firestore
   async deleteTaskFromFirestore(taskId: string): Promise<void> {
-    if (!this.userId || !this.familyId) return;
+    if (!this.userId || !this.familyId) {
+      // Delete from local cache if not initialized
+      const cached = this.loadFromCache();
+      this.saveToCache(cached.filter(t => t.id !== taskId));
+      return;
+    }
     try {
+      this.isSyncing = true;
+      // Update local cache immediately
+      const cached = this.loadFromCache();
+      this.saveToCache(cached.filter(t => t.id !== taskId));
+
+      // Then sync to Firestore
       const taskRef = doc(db, this.getTasksCollection(), taskId);
       await deleteDoc(taskRef);
     } catch (error) {
       console.error('Error deleting task from Firestore:', error);
       throw error;
+    } finally {
+      this.isSyncing = false;
     }
   }
 
@@ -166,30 +271,51 @@ class TaskService {
   }
 
   // Subscribe to real-time task updates
-  subscribeToTasks(callback: (tasks: Task[]) => void): () => void {
+  subscribeToTasks(callback: (tasks: Task[], syncing: boolean) => void): () => void {
     if (!this.userId || !this.familyId) {
       console.warn('Cannot subscribe: TaskService not initialized');
+      // Return cached tasks immediately
+      callback(this.loadFromCache(), false);
       return () => {};
     }
+    
+    // Return cached tasks immediately (non-blocking)
+    const cachedTasks = this.loadFromCache();
+    callback(cachedTasks, true);
+
     try {
       const tasksRef = collection(db, this.getTasksCollection());
       const q = query(tasksRef, orderBy('createdAt', 'desc'));
+      
       const unsubscribe = onSnapshot(
         q,
         (querySnapshot: QuerySnapshot) => {
+          this.isSyncing = true;
           const tasks: Task[] = [];
           querySnapshot.forEach((doc) => {
             tasks.push(this.fromFirestore({ id: doc.id, ...doc.data() }));
           });
-          callback(tasks);
+          
+          // Update cache with Firestore data
+          this.saveToCache(tasks);
+          
+          // Notify with synced data
+          this.isSyncing = false;
+          callback(tasks, false);
         },
         (error) => {
           console.error('Error subscribing to tasks:', error);
+          this.isSyncing = false;
+          // On error, return cached data
+          callback(this.loadFromCache(), false);
         }
       );
       return unsubscribe;
     } catch (error) {
       console.error('Error setting up task subscription:', error);
+      this.isSyncing = false;
+      // On error, return cached data
+      callback(this.loadFromCache(), false);
       return () => {};
     }
   }
@@ -235,26 +361,26 @@ class TaskService {
   }
 
   saveTasks(tasks: Task[]): void {
-    // Save to Firestore if initialized
+    // Always save to cache immediately (non-blocking)
+    this.saveToCache(tasks);
+    
+    // Save to Firestore if initialized (async, non-blocking)
     if (this.userId && this.familyId) {
       tasks.forEach(task => {
         this.saveTaskToFirestore(task).catch(err =>
           console.error(`Error saving task ${task.id}:`, err)
         );
       });
-    } else {
-      // Fallback to localStorage
-      try {
-        localStorage.setItem(TaskService.STORAGE_KEY, JSON.stringify(tasks));
-      } catch (error) {
-        console.error('Error saving tasks:', error);
-      }
     }
   }
 
   loadTasks(): Task[] {
-    // This is now synchronous fallback - use loadTasksFromFirestore for async
-    return this.loadRaw();
+    // Return cached tasks immediately (synchronous)
+    if (this.localCache.length > 0) {
+      return this.localCache;
+    }
+    // Fallback to loading from cache
+    return this.loadFromCache();
   }
 
   // ---------- Model Calculations ----------

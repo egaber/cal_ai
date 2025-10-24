@@ -91,6 +91,12 @@ service cloud.firestore {
           // Only the user can access their own tasks
           allow read, write: if isOwner(userId);
         }
+        
+        // User's todos (simple mobile tasks)
+        match /todos/{todoId} {
+          // Only the user can access their own todos
+          allow read, write: if isOwner(userId);
+        }
       }
     }
     

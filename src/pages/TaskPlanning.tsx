@@ -63,10 +63,62 @@ const PIPELINE_PHASE_LABELS: Record<TaskProcessingPhase, string> = {
   error: 'שגיאה'
 };
 
+// Helper to sort tasks
+const sortTasks = (taskList: Task[]): Task[] => {
+  const phaseOrder: TaskProcessingPhase[] = [
+    'idle',
+    'context_loading',
+    'categorizing',
+    'prioritizing',
+    'breaking_down',
+    'estimating',
+    'enhancing',
+    'smart_evaluating',
+    'complete',
+    'error'
+  ];
+
+  return [...taskList].sort((a, b) => {
+    const phaseDiff = phaseOrder.indexOf(a.processingPhase) - phaseOrder.indexOf(b.processingPhase);
+    if (phaseDiff !== 0) return phaseDiff;
+    return (b.priority || 0) - (a.priority || 0);
+  });
+};
+
+// Helper to load tasks from cache immediately (before component mounts)
+const getInitialTasks = (): Task[] => {
+  try {
+    // Try to get user-specific cache first
+    const authDataStr = localStorage.getItem('auth_user');
+    if (authDataStr) {
+      const authData = JSON.parse(authDataStr);
+      if (authData?.uid) {
+        const userCacheKey = `calendar_ai_tasks_cache_${authData.uid}`;
+        const cached = localStorage.getItem(userCacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      }
+    }
+    // Fallback to generic cache
+    const genericCache = localStorage.getItem('calendar_ai_tasks_cache_default');
+    if (genericCache) {
+      return JSON.parse(genericCache);
+    }
+  } catch (e) {
+    console.error('Error loading initial cache:', e);
+  }
+  return [];
+};
+
 export default function TaskPlanning() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    // Initialize with cached tasks IMMEDIATELY
+    const cached = getInitialTasks();
+    return sortTasks(cached);
+  });
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [quickTitle, setQuickTitle] = useState('');
   const [quickDescription, setQuickDescription] = useState('');
@@ -74,7 +126,7 @@ export default function TaskPlanning() {
   const [pipelineTask, setPipelineTask] = useState<Task | null>(null);
   const [showPipelineDialog, setShowPipelineDialog] = useState(false);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
-  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(true);
   
   // Task creation dialog state
   const [showTaskCreation, setShowTaskCreation] = useState(false);
@@ -93,47 +145,36 @@ export default function TaskPlanning() {
 
   // Initialize taskService and subscribe to Firestore
   useEffect(() => {
-    if (!currentUser?.uid || !currentUser?.familyId) return;
-
-    // Initialize task service with user context
-    taskService.initialize(currentUser.uid, currentUser.familyId);
-
-    // Subscribe to real-time task updates
-    const unsubscribe = taskService.subscribeToTasks((updatedTasks) => {
-      setTasks(sortTasks(updatedTasks));
-      setLoadingTasks(false);
-    });
-
     // Load family members
     const members = StorageService.loadFamilyMembers() || [];
     setFamilyMembers(members);
+
+    if (!currentUser?.uid || !currentUser?.familyId) {
+      setIsSyncing(false);
+      return;
+    }
+
+    // Initialize task service with user context (this loads the cache)
+    taskService.initialize(currentUser.uid, currentUser.familyId);
+    
+    // Refresh tasks from cache after initialization (in case user changed)
+    const cachedTasks = taskService.getCachedTasks();
+    if (cachedTasks.length > 0) {
+      setTasks(sortTasks(cachedTasks));
+    }
+    setIsSyncing(true); // Show as syncing while we connect to Firestore
+
+    // Subscribe to real-time task updates with sync status
+    const unsubscribe = taskService.subscribeToTasks((updatedTasks, syncing) => {
+      setTasks(sortTasks(updatedTasks));
+      setIsSyncing(syncing);
+    });
 
     return () => {
       unsubscribe();
     };
   }, [currentUser]);
 
-  // Sort tasks helper
-  const sortTasks = (taskList: Task[]): Task[] => {
-    const phaseOrder: TaskProcessingPhase[] = [
-      'idle',
-      'context_loading',
-      'categorizing',
-      'prioritizing',
-      'breaking_down',
-      'estimating',
-      'enhancing',
-      'smart_evaluating',
-      'complete',
-      'error'
-    ];
-
-    return [...taskList].sort((a, b) => {
-      const phaseDiff = phaseOrder.indexOf(a.processingPhase) - phaseOrder.indexOf(b.processingPhase);
-      if (phaseDiff !== 0) return phaseDiff;
-      return (b.priority || 0) - (a.priority || 0);
-    });
-  };
 
   useEffect(() => {
     try {
@@ -561,7 +602,13 @@ export default function TaskPlanning() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {isSyncing && (
+              <div className="flex items-center gap-1 text-xs text-blue-600">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                מסנכרן...
+              </div>
+            )}
             <Button
               size="sm"
               onClick={() => {
@@ -868,6 +915,14 @@ export default function TaskPlanning() {
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4">
+            {/* Sync status banner */}
+            {isSyncing && tasks.length > 0 && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-2 flex items-center gap-2 text-xs text-blue-700">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                מסנכרן משימות עם השרת...
+              </div>
+            )}
+
             {selectedCategory && (
               <div className="rounded-md border bg-white shadow-sm p-2 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
@@ -888,7 +943,7 @@ export default function TaskPlanning() {
               </div>
             )}
 
-            {filteredTasks.length === 0 && (
+            {filteredTasks.length === 0 && !isSyncing && (
               <div className="text-center py-12">
                 <Brain className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">
@@ -896,6 +951,7 @@ export default function TaskPlanning() {
                 </p>
               </div>
             )}
+            
             {filteredTasks.map(task => (
               <TaskCard
                 key={task.id}

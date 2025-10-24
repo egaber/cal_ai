@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
 import { Mic, MicOff, Plus, X, Trash2, Sparkles } from 'lucide-react';
@@ -6,13 +6,16 @@ import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
 import { llmService } from '@/services/llmService';
+import { todoTaskService, TodoTask } from '@/services/todoTaskService';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface TaskWithStatus extends ParsedTask {
-  completed: boolean;
-}
+// TaskWithStatus is now just an alias for TodoTask
+type TaskWithStatus = TodoTask;
 
 export default function MobileTasks() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskWithStatus[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -21,6 +24,35 @@ export default function MobileTasks() {
   const [editingTag, setEditingTag] = useState<{ taskIndex: number; tag: ExtractedTag } | null>(null);
   const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
+
+  // Load tasks from Firestore
+  const loadTasks = React.useCallback(async () => {
+    console.log('🔄 loadTasks called');
+    setIsLoading(true);
+    try {
+      const todos = await todoTaskService.loadTodosFromFirestore();
+      console.log('✅ Loaded todos:', todos.length, 'tasks');
+      setTasks(todos as TaskWithStatus[]);
+    } catch (error) {
+      console.error('❌ Error loading tasks:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initialize service and load tasks
+  useEffect(() => {
+    console.log('📍 useEffect triggered - user:', user?.uid, 'familyId:', user?.familyId);
+    if (!user?.uid || !user?.familyId) {
+      console.log('⏸️ Waiting for user with familyId...');
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('✨ Initializing service and loading tasks...');
+    todoTaskService.initialize(user.uid, user.familyId);
+    loadTasks();
+  }, [user, loadTasks]);
 
   // Parse text in real-time
   const parsedTask = inputText ? parseTask(inputText) : null;
@@ -293,17 +325,32 @@ Return the enhanced text with emoji and category marker.` }
     }
   };
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (parsedTask && inputText.trim()) {
       if (editingTaskIndex !== null) {
         // Update existing task
-        const updatedTasks = [...tasks];
-        updatedTasks[editingTaskIndex] = { ...parsedTask, completed: tasks[editingTaskIndex].completed };
-        setTasks(updatedTasks);
-        setEditingTaskIndex(null);
+        const existingTask = tasks[editingTaskIndex];
+        const updatedTask: TodoTask = {
+          ...existingTask,
+          ...parsedTask,
+        };
+        
+        try {
+          await todoTaskService.updateTodoInFirestore(updatedTask.id, updatedTask);
+          await loadTasks(); // Reload to get fresh data
+          setEditingTaskIndex(null);
+        } catch (error) {
+          console.error('Error updating task:', error);
+        }
       } else {
         // Add new task
-        setTasks([...tasks, { ...parsedTask, completed: false }]);
+        const newTodo = todoTaskService.createTodo(parsedTask, false);
+        try {
+          await todoTaskService.saveTodoToFirestore(newTodo);
+          await loadTasks(); // Reload to get fresh data
+        } catch (error) {
+          console.error('Error adding task:', error);
+        }
       }
       setInputText('');
       setFinalTranscriptRef('');
@@ -311,14 +358,26 @@ Return the enhanced text with emoji and category marker.` }
     }
   };
 
-  const handleToggleTask = (index: number) => {
-    setTasks(tasks.map((task, i) => 
-      i === index ? { ...task, completed: !task.completed } : task
-    ));
+  const handleToggleTask = async (index: number) => {
+    const task = tasks[index];
+    try {
+      await todoTaskService.updateTodoInFirestore(task.id, {
+        completed: !task.completed
+      });
+      await loadTasks();
+    } catch (error) {
+      console.error('Error toggling task:', error);
+    }
   };
 
-  const handleDeleteTask = (index: number) => {
-    setTasks(tasks.filter((_, i) => i !== index));
+  const handleDeleteTask = async (index: number) => {
+    const task = tasks[index];
+    try {
+      await todoTaskService.deleteTodoFromFirestore(task.id);
+      await loadTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
   const handleTaskClick = (index: number) => {
@@ -341,7 +400,7 @@ Return the enhanced text with emoji and category marker.` }
     setEditingTag({ taskIndex, tag });
   };
 
-  const handleTagUpdate = (newValue: any) => {
+  const handleTagUpdate = async (newValue: any) => {
     if (!editingTag) return;
     
     const updatedTasks = [...tasks];
@@ -393,11 +452,18 @@ Return the enhanced text with emoji and category marker.` }
       updateTaskProperties(task, editingTag.tag.type, newValue);
     }
     
-    setTasks(updatedTasks);
+    // Save to Firestore
+    try {
+      await todoTaskService.updateTodoInFirestore(task.id, task);
+      await loadTasks();
+    } catch (error) {
+      console.error('Error updating tag:', error);
+    }
+    
     setEditingTag(null);
   };
 
-  const handleTagRemove = () => {
+  const handleTagRemove = async () => {
     if (!editingTag) return;
     
     const updatedTasks = [...tasks];
@@ -409,7 +475,14 @@ Return the enhanced text with emoji and category marker.` }
     // Also clear the task's main property
     clearTaskProperty(task, editingTag.tag.type);
     
-    setTasks(updatedTasks);
+    // Save to Firestore
+    try {
+      await todoTaskService.updateTodoInFirestore(task.id, task);
+      await loadTasks();
+    } catch (error) {
+      console.error('Error removing tag:', error);
+    }
+    
     setEditingTag(null);
   };
 
@@ -769,7 +842,7 @@ Return the enhanced text with emoji and category marker.` }
 
       {/* Task List */}
       <div className="pb-24">
-        {tasks.length === 0 ? (
+      {tasks.length === 0 && !isLoading ? (
           <div className="text-center py-12 text-gray-500">
             <p className="text-lg">אין משימות עדיין</p>
             <p className="text-sm mt-2">לחץ על + כדי להוסיף משימה</p>

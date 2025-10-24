@@ -225,6 +225,50 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
       },
       required: ['eventId']
     }
+  },
+  {
+    name: 'schedule_task',
+    description: 'Schedule a todo task by creating a calendar event from it. Use this when the user asks to schedule a task or when analyzing tasks that need scheduling. Links the task to the created event.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: {
+          type: 'string',
+          description: 'The ID of the todo task to schedule'
+        },
+        suggestedStartTime: {
+          type: 'string',
+          description: 'ISO 8601 datetime string for when the task should be scheduled to start'
+        },
+        duration: {
+          type: 'number',
+          description: 'Duration in minutes for completing the task'
+        },
+        memberId: {
+          type: 'string',
+          description: 'The ID of the family member this task is assigned to'
+        },
+        category: {
+          type: 'string',
+          description: 'The category of the task',
+          enum: ['health', 'work', 'personal', 'family']
+        },
+        priority: {
+          type: 'string',
+          description: 'The priority level based on task urgency',
+          enum: ['low', 'medium', 'high']
+        },
+        emoji: {
+          type: 'string',
+          description: 'Emoji representing the task type'
+        },
+        reasoning: {
+          type: 'string',
+          description: 'AI explanation for why this time slot was chosen, considering conflicts, buffer time, and user preferences'
+        }
+      },
+      required: ['taskId', 'suggestedStartTime', 'duration', 'memberId', 'category', 'priority', 'emoji', 'reasoning']
+    }
   }
 ];
 
@@ -318,6 +362,9 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
         
         case 'delete_meeting':
           return this.handleDeleteMeeting(request.parameters);
+        
+        case 'schedule_task':
+          return this.handleScheduleTask(request.parameters);
         
         default:
           return {
@@ -541,6 +588,66 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
     return {
       success: true,
       message: `Deleted meeting`
+    };
+  }
+
+  private handleScheduleTask(params: Record<string, unknown>) {
+    // Validate required parameters
+    if (!params.taskId || !params.suggestedStartTime || !params.duration || !params.memberId) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameters: taskId, suggestedStartTime, duration, memberId'
+      };
+    }
+
+    const taskId = params.taskId as string;
+    const suggestedStartTime = params.suggestedStartTime as string;
+    const duration = params.duration as number;
+    const memberId = params.memberId as string;
+    const category = (params.category as CalendarEvent['category']) || 'personal';
+    const priority = (params.priority as CalendarEvent['priority']) || 'medium';
+    const emoji = params.emoji as string | undefined;
+    const reasoning = params.reasoning as string;
+
+    // Calculate end time based on duration
+    const startDate = new Date(suggestedStartTime);
+    if (isNaN(startDate.getTime())) {
+      return {
+        success: false,
+        message: '',
+        error: 'Invalid datetime format for suggestedStartTime'
+      };
+    }
+
+    const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+    // Create event data with sourceTask link
+    const eventData: Omit<CalendarEvent, 'id'> & { sourceTask?: string } = {
+      title: `📋 Task: ${taskId.substring(0, 20)}...`, // Temporary title, will be updated by AI Assistant
+      startTime: startDate.toISOString(),
+      endTime: endDate.toISOString(),
+      memberId: memberId,
+      category: category,
+      priority: priority,
+      emoji: emoji,
+      description: `Scheduled from task. ${reasoning}`,
+      aiTip: reasoning,
+      sourceTask: taskId  // Link back to the task
+    };
+
+    this.operations.createEvent(eventData);
+
+    // Create a temporary event object with a generated ID for display
+    const createdEvent: CalendarEvent = {
+      ...eventData,
+      id: `event_${Date.now()}` // Temporary ID for display
+    };
+
+    return {
+      success: true,
+      message: `Scheduled task "${taskId}" from ${startDate.toLocaleString()} to ${endDate.toLocaleString()}. ${reasoning}`,
+      data: { event: createdEvent, taskId }
     };
   }
 }
