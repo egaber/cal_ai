@@ -40,7 +40,9 @@ import {
   ChevronUp,
   ChevronDown,
   Cpu,
-  Edit
+  Edit,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 import { PRIMARY_COLOR } from '@/config/branding';
 import { useEvents } from '@/contexts/EventContext';
@@ -603,10 +605,15 @@ export default function TaskPlanning() {
           </div>
 
           <div className="flex gap-2 items-center">
-            {isSyncing && (
+            {isSyncing ? (
               <div className="flex items-center gap-1 text-xs text-blue-600">
                 <RefreshCw className="h-3 w-3 animate-spin" />
-                מסנכרן...
+                <span>מסנכרן...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-xs text-green-600" title="Tasks synced to cloud">
+                <Cloud className="h-3 w-3" />
+                <span>נשמר בענן</span>
               </div>
             )}
             <Button
@@ -970,10 +977,7 @@ export default function TaskPlanning() {
                 familyMembers={familyMembers}
                 currentUser={currentUser}
                 onSuggestTime={handleSuggestTime}
-                onEditTask={(task) => {
-                  setEditingTask(task);
-                  setShowTaskCreation(true);
-                }}
+                isSyncing={isSyncing}
               />
             ))}
           </div>
@@ -1094,6 +1098,7 @@ interface TaskCardProps {
   familyMembers: FamilyMember[];
   currentUser: UserProfile | null;
   onSuggestTime: (taskId: string) => void;
+  isSyncing?: boolean;
 }
 
 function TaskCard({
@@ -1108,7 +1113,8 @@ function TaskCard({
   onSetTotal,
   familyMembers,
   currentUser,
-  onSuggestTime
+  onSuggestTime,
+  isSyncing = false
 }: TaskCardProps) {
 const [showSmart, setShowSmart] = useState(false);
 const [expanded, setExpanded] = useState(false);
@@ -1160,8 +1166,8 @@ const [expanded, setExpanded] = useState(false);
       {/* TOP RESULT SECTION (AI RESULT) */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between w-full">
-          {/* Left: category chip */}
-          <div className="flex items-center">
+          {/* Left: category chip + cloud sync icon */}
+          <div className="flex items-center gap-2">
             <span
               className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-1 shrink-0 ${categoryBadgeClasses(
                 task.category
@@ -1170,6 +1176,14 @@ const [expanded, setExpanded] = useState(false);
               <span>{getCategoryEmoji(task.category)}</span>
               {getCategoryName(task.category)}
             </span>
+            {/* Cloud sync indicator per task */}
+            {!currentUser?.uid || !currentUser?.familyId ? (
+              <CloudOff className="h-3 w-3 text-gray-400" title="Local only - not synced" />
+            ) : isSyncing ? (
+              <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" title="Syncing..." />
+            ) : (
+              <Cloud className="h-3 w-3 text-green-500" title="Synced to cloud" />
+            )}
           </div>
           {/* Right: title area (all right-aligned: button, icon, title) */}
           <div className="flex items-center gap-2 flex-row-reverse flex-wrap text-right">

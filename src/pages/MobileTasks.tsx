@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
@@ -16,6 +16,7 @@ export default function MobileTasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(true);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -25,34 +26,33 @@ export default function MobileTasks() {
   const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
 
-  // Load tasks from Firestore
-  const loadTasks = React.useCallback(async () => {
-    console.log('🔄 loadTasks called');
-    setIsLoading(true);
-    try {
-      const todos = await todoTaskService.loadTodosFromFirestore();
-      console.log('✅ Loaded todos:', todos.length, 'tasks');
-      setTasks(todos as TaskWithStatus[]);
-    } catch (error) {
-      console.error('❌ Error loading tasks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Initialize service and load tasks
+  // Initialize service and subscribe to real-time updates
   useEffect(() => {
     console.log('📍 useEffect triggered - user:', user?.uid, 'familyId:', user?.familyId);
     if (!user?.uid || !user?.familyId) {
       console.log('⏸️ Waiting for user with familyId...');
       setIsLoading(false);
+      setIsSyncing(false);
       return;
     }
 
-    console.log('✨ Initializing service and loading tasks...');
+    console.log('✨ Initializing service and subscribing to real-time updates...');
     todoTaskService.initialize(user.uid, user.familyId);
-    loadTasks();
-  }, [user, loadTasks]);
+    
+    // Subscribe to real-time Firestore updates
+    const unsubscribe = todoTaskService.subscribeToTodos((todos, syncing) => {
+      console.log('✅ Real-time update:', todos.length, 'tasks, syncing:', syncing);
+      setTasks(todos as TaskWithStatus[]);
+      setIsSyncing(syncing);
+      setIsLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('🔌 Unsubscribing from todos');
+      unsubscribe();
+    };
+  }, [user]);
 
   // Parse text in real-time
   const parsedTask = inputText ? parseTask(inputText) : null;
@@ -337,7 +337,7 @@ Return the enhanced text with emoji and category marker.` }
         
         try {
           await todoTaskService.updateTodoInFirestore(updatedTask.id, updatedTask);
-          await loadTasks(); // Reload to get fresh data
+          // Real-time subscription will auto-update the UI
           setEditingTaskIndex(null);
         } catch (error) {
           console.error('Error updating task:', error);
@@ -347,7 +347,7 @@ Return the enhanced text with emoji and category marker.` }
         const newTodo = todoTaskService.createTodo(parsedTask, false);
         try {
           await todoTaskService.saveTodoToFirestore(newTodo);
-          await loadTasks(); // Reload to get fresh data
+          // Real-time subscription will auto-update the UI
         } catch (error) {
           console.error('Error adding task:', error);
         }
@@ -364,7 +364,7 @@ Return the enhanced text with emoji and category marker.` }
       await todoTaskService.updateTodoInFirestore(task.id, {
         completed: !task.completed
       });
-      await loadTasks();
+      // Real-time subscription will auto-update the UI
     } catch (error) {
       console.error('Error toggling task:', error);
     }
@@ -374,7 +374,7 @@ Return the enhanced text with emoji and category marker.` }
     const task = tasks[index];
     try {
       await todoTaskService.deleteTodoFromFirestore(task.id);
-      await loadTasks();
+      // Real-time subscription will auto-update the UI
     } catch (error) {
       console.error('Error deleting task:', error);
     }
@@ -455,7 +455,7 @@ Return the enhanced text with emoji and category marker.` }
     // Save to Firestore
     try {
       await todoTaskService.updateTodoInFirestore(task.id, task);
-      await loadTasks();
+      // Real-time subscription will auto-update the UI
     } catch (error) {
       console.error('Error updating tag:', error);
     }
@@ -478,7 +478,7 @@ Return the enhanced text with emoji and category marker.` }
     // Save to Firestore
     try {
       await todoTaskService.updateTodoInFirestore(task.id, task);
-      await loadTasks();
+      // Real-time subscription will auto-update the UI
     } catch (error) {
       console.error('Error removing tag:', error);
     }
@@ -837,7 +837,29 @@ Return the enhanced text with emoji and category marker.` }
     <div className="min-h-screen bg-white" dir="rtl">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-gray-900">המשימות שלי</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">המשימות שלי</h1>
+          
+          {/* Cloud Sync Indicator */}
+          <div className="flex items-center gap-2">
+            {!user?.uid || !user?.familyId ? (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400" title="מצב מקומי">
+                <CloudOff className="h-4 w-4" />
+                <span>מקומי</span>
+              </div>
+            ) : isSyncing ? (
+              <div className="flex items-center gap-1.5 text-xs text-blue-500" title="מסנכרן...">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>מסנכרן</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-green-600" title="מסונכרן לענן">
+                <Cloud className="h-4 w-4" />
+                <span>מסונכרן</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Task List */}
