@@ -428,3 +428,19 @@
     scrollbar-width: none;
   }
 }
+
+/* Event Highlight Animation */
+@keyframes pulseHighlight {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-highlight {
+  animation: pulseHighlight 1s ease-in-out 2;
+}

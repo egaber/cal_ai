@@ -27,6 +27,8 @@ const MobileAppLayout = () => {
 
   const [activeTab, setActiveTab] = useState(getActiveTab());
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [targetEventId, setTargetEventId] = useState<string | null>(null);
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Get today's and this week's events
   const currentDate = new Date();
@@ -85,7 +87,14 @@ const MobileAppLayout = () => {
       
       {/* Main Content Area - Takes remaining space */}
       <main className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'calendar' && <MobileIndex />}
+        {activeTab === 'calendar' && (
+          <MobileIndex 
+            targetEventId={targetEventId}
+            onEventTargeted={() => setTargetEventId(null)}
+            initialDate={calendarDate}
+            onDateChange={setCalendarDate}
+          />
+        )}
         {activeTab === 'tasks' && <MobileTasks />}
         {activeTab === 'ai' && (
           <AIAssistant
@@ -95,6 +104,20 @@ const MobileAppLayout = () => {
             weekEvents={weekEvents}
             familyMembers={family?.members || []}
             onMemoryUpdate={() => {}}
+            onNavigateToCalendar={(eventId) => {
+              // Find the event to get its date
+              const targetEvent = events.find(e => e.id === eventId);
+              if (targetEvent) {
+                const eventDate = new Date(targetEvent.startTime);
+                // Set the calendar date first
+                setCalendarDate(eventDate);
+              }
+              // Set the target event ID for highlighting
+              setTargetEventId(eventId);
+              // Switch to calendar tab
+              setActiveTab('calendar');
+              navigate('/');
+            }}
           />
         )}
       </main>

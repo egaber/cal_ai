@@ -9,17 +9,25 @@ import { useEvents } from "@/contexts/EventContext";
 import { useFamily } from "@/contexts/FamilyContext";
 import { StorageService } from "@/services/storageService";
 import { generateRecurringEvents } from "@/utils/recurrenceUtils";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
-const MobileIndex = () => {
+interface MobileIndexProps {
+  targetEventId?: string | null;
+  onEventTargeted?: () => void;
+  initialDate?: Date;
+  onDateChange?: (date: Date) => void;
+}
+
+const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange }: MobileIndexProps) => {
   const { toast } = useToast();
   const { family } = useFamily();
   const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent } = useEvents();
   
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(initialDate || new Date());
+  const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'day' | 'workweek'>('day');
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEventPopoverOpen, setIsEventPopoverOpen] = useState(false);
@@ -40,6 +48,48 @@ const MobileIndex = () => {
   const familyMembers = family?.members || [];
   const events = cloudEvents;
 
+  // Sync with parent's date when initialDate changes (but NOT if we have a targetEventId)
+  useEffect(() => {
+    if (initialDate && !targetEventId) {
+      setCurrentDate(initialDate);
+    }
+  }, [initialDate, targetEventId]);
+
+  // Handle navigation to target event - takes priority over initialDate
+  useEffect(() => {
+    if (targetEventId && events.length > 0) {
+      const targetEvent = events.find(e => e.id === targetEventId);
+      if (targetEvent) {
+        const eventDate = new Date(targetEvent.startTime);
+        console.log('Navigating to event date:', eventDate);
+        // Navigate to the event's date
+        setCurrentDate(eventDate);
+        // Also notify parent to update its state
+        if (onDateChange) {
+          onDateChange(eventDate);
+        }
+        // Highlight the event with animation
+        setHighlightEventId(targetEventId);
+        // Clear highlight after animation
+        setTimeout(() => {
+          setHighlightEventId(null);
+        }, 2000);
+        // Notify parent that we've handled the target
+        if (onEventTargeted) {
+          onEventTargeted();
+        }
+      }
+    }
+  }, [targetEventId, events, onEventTargeted, onDateChange]);
+
+  // Notify parent when date changes internally
+  const handleDateChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+    if (onDateChange) {
+      onDateChange(newDate);
+    }
+  };
+
   const [selectedMembers, setSelectedMembers] = useState<string[]>(['1']);
 
   useEffect(() => {
@@ -58,12 +108,13 @@ const MobileIndex = () => {
   }, [selectedMembers, viewMode]);
 
   const handleNavigate = (direction: 'prev' | 'next' | 'today' | Date) => {
+    let newDate: Date;
     if (direction === 'today') {
-      setCurrentDate(new Date());
+      newDate = new Date();
     } else if (direction instanceof Date) {
-      setCurrentDate(direction);
+      newDate = direction;
     } else {
-      const newDate = new Date(currentDate);
+      newDate = new Date(currentDate);
       if (direction === 'prev') {
         if (viewMode === 'workweek') {
           newDate.setDate(currentDate.getDate() - 3);
@@ -77,8 +128,8 @@ const MobileIndex = () => {
           newDate.setDate(currentDate.getDate() + 1);
         }
       }
-      setCurrentDate(newDate);
     }
+    handleDateChange(newDate);
   };
 
   const handleToggleMember = (memberId: string) => {
@@ -372,8 +423,24 @@ const MobileIndex = () => {
         {/* Controls Row */}
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => handleNavigate('prev')} 
+              className="h-7 w-7 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => handleNavigate('today')} className="h-7 px-2 text-xs">
               Today
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => handleNavigate('next')} 
+              className="h-7 w-7 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-1">
               <button
@@ -542,10 +609,11 @@ const MobileIndex = () => {
           onEventClick={handleEventClick}
           onEventUpdate={handleEventUpdate}
           onTimeSlotClick={handleTimeSlotClick}
-          onDateChange={(date) => setCurrentDate(date)}
+          onDateChange={(date) => handleDateChange(date)}
           inlineDraft={inlineDraft || undefined}
           onInlineSave={handleInlineEventSave}
           onInlineCancel={() => setInlineDraft(null)}
+          highlightEventId={highlightEventId}
         />
       </div>
 

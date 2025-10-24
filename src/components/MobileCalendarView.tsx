@@ -15,6 +15,7 @@ interface MobileCalendarViewProps {
   inlineDraft?: { date: Date; hour: number; minute: number };
   onInlineSave?: (title: string, isAllDay?: boolean) => void;
   onInlineCancel?: () => void;
+  highlightEventId?: string | null;
 }
 
 const TIME_SLOT_HEIGHT = 80;
@@ -30,6 +31,7 @@ export const MobileCalendarView = ({
   inlineDraft,
   onInlineSave,
   onInlineCancel,
+  highlightEventId,
 }: MobileCalendarViewProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -152,20 +154,28 @@ export const MobileCalendarView = ({
                           const layout = eventLayouts.get(event.id);
                           
                           return (
-                            <DraggableEventCard
+                            <div
                               key={event.id}
-                              event={event}
-                              onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
-                              onMove={onEventUpdate}
-                              gridHeight={24 * TIME_SLOT_HEIGHT}
-                              columnWidth={100}
-                              timeSlotHeight={TIME_SLOT_HEIGHT}
-                              columnIndex={0}
-                              dates={[date]}
-                              member={member}
-                              familyMembers={familyMembers}
-                              layout={layout}
-                            />
+                              className={`${
+                                highlightEventId === event.id
+                                  ? 'animate-pulse-highlight'
+                                  : ''
+                              }`}
+                            >
+                              <DraggableEventCard
+                                event={event}
+                                onClick={(e) => onEventClick(event, e.clientX, e.clientY)}
+                                onMove={onEventUpdate}
+                                gridHeight={24 * TIME_SLOT_HEIGHT}
+                                columnWidth={100}
+                                timeSlotHeight={TIME_SLOT_HEIGHT}
+                                columnIndex={0}
+                                dates={[date]}
+                                member={member}
+                                familyMembers={familyMembers}
+                                layout={layout}
+                              />
+                            </div>
                           );
                         })}
 
