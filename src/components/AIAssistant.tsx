@@ -31,6 +31,7 @@ import { todoTaskService, TodoTask } from "@/services/todoTaskService";
 import { useAuth } from "@/contexts/AuthContext";
 import { TaskList } from "@/components/TaskList";
 import { TaskCard } from "@/components/TaskCard";
+import { modelConfigService } from "@/services/modelConfigService";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -98,9 +99,6 @@ export const AIAssistant = ({
   const [isLoading, setIsLoading] = useState(false);
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
-  const [geminiApiKey, setGeminiApiKey] = useState("");
-  const [azureOpenAIApiKey, setAzureOpenAIApiKey] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -205,18 +203,23 @@ export const AIAssistant = ({
     // Try to get Gemini API key from config first, then localStorage
     const geminiKey = getGeminiApiKey();
     if (geminiKey) {
-      setGeminiApiKey(geminiKey);
       llmService.setGeminiKey(geminiKey);
     }
 
     // Try to get Azure OpenAI API key (used for all Azure models)
     const azureOpenAIKey = getAzureOpenAIApiKey();
     if (azureOpenAIKey) {
-      setAzureOpenAIApiKey(azureOpenAIKey);
       llmService.setAzureOpenAIKey(azureOpenAIKey);
     }
 
     loadModels();
+
+    // Subscribe to model changes from settings
+    const unsubscribe = modelConfigService.subscribe(() => {
+      loadModels();
+    });
+
+    return unsubscribe;
   }, []);
 
   // Handle initial message when provided
@@ -235,35 +238,9 @@ export const AIAssistant = ({
     const availableModels = await llmService.getAvailableModels();
     setModels(availableModels);
     
-    if (availableModels.length > 0 && !selectedModel) {
-      setSelectedModel(availableModels[0]);
-    }
-  };
-
-  const handleSaveSettings = () => {
-    let saved = false;
-
-    if (geminiApiKey) {
-      localStorage.setItem('gemini_api_key', geminiApiKey);
-      llmService.setGeminiKey(geminiApiKey);
-      saved = true;
-    }
-
-    if (azureOpenAIApiKey) {
-      localStorage.setItem('azure_openai_api_key', azureOpenAIApiKey);
-      llmService.setAzureOpenAIKey(azureOpenAIApiKey);
-      saved = true;
-    }
-
-    if (saved) {
-      toast({
-        title: "Settings saved",
-        description: "API keys have been saved.",
-      });
-      loadModels(); // Reload models to include new providers
-    }
-    
-    setSettingsOpen(false);
+    // Use centralized model config to get the selected model
+    const model = modelConfigService.findModel(availableModels);
+    setSelectedModel(model);
   };
 
   const handleSendWithMessage = async (messageToSend: string) => {
@@ -675,92 +652,22 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
               <RotateCcw className="h-4 w-4" />
             </Button>
           )}
-          
-          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-            <DialogHeader>
-              <DialogTitle>AI Settings</DialogTitle>
-              <DialogDescription>
-                Configure your AI model preferences
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="gemini-key">Gemini API Key (Optional)</Label>
-                <Input
-                  id="gemini-key"
-                  type="password"
-                  placeholder="Enter your Gemini API key"
-                  value={geminiApiKey}
-                  onChange={(e) => setGeminiApiKey(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get your API key from{" "}
-                  <a
-                    href="https://makersuite.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    Google AI Studio
-                  </a>
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="azure-openai-key">Azure OpenAI API Key (Optional)</Label>
-                <Input
-                  id="azure-openai-key"
-                  type="password"
-                  placeholder="Enter your Azure OpenAI API key"
-                  value={azureOpenAIApiKey}
-                  onChange={(e) => setAzureOpenAIApiKey(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  For all Azure models: GPT-4.1, GPT-5 Mini, Grok 4, O3 Mini
-                </p>
-              </div>
-
-              <Button onClick={handleSaveSettings} className="w-full">
-                Save Settings
-              </Button>
-            </div>
-          </DialogContent>
-          </Dialog>
         </div>
       </div>
 
-      {/* Model Selection - Fixed below header for mobile */}
-      <div className={`flex-none bg-white dark:bg-slate-900 ${isMobile ? 'px-4 py-1.5 border-b border-slate-200/80 dark:border-slate-700/60' : ''}`}>
-        <Select
-          value={selectedModel?.id}
-          onValueChange={(value) => {
-            const model = models.find(m => m.id === value);
-            setSelectedModel(model || null);
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select a model" />
-          </SelectTrigger>
-          <SelectContent>
-            {models.length === 0 ? (
-              <SelectItem value="none" disabled>
-                No models available - configure settings
-              </SelectItem>
-            ) : (
-              models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {model.name} ({model.vendor})
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
+      {/* Model Display - Shows current model selection */}
+      <div className={`flex-none bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 ${isMobile ? 'px-4 py-2 border-b border-purple-200/50 dark:border-purple-700/30' : 'rounded-lg p-2 mb-2'}`}>
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+            <span className="font-medium text-purple-900 dark:text-purple-100">
+              {selectedModel ? `${selectedModel.name} (${selectedModel.vendor})` : 'No model selected'}
+            </span>
+          </div>
+          <span className="text-purple-600 dark:text-purple-400 text-[10px]">
+            Configure in Account Settings
+          </span>
+        </div>
       </div>
 
       {/* Conversation Area - Scrollable, takes all available space */}

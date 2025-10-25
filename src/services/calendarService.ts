@@ -1,4 +1,4 @@
-c// Calendar Service - provides tools for AI to control the calendar
+// Calendar Service - provides tools for AI to control the calendar
 
 import { CalendarEvent, FamilyMember, RecurrenceRule } from '@/types/calendar';
 

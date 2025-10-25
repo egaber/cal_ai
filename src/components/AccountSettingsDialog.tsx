@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,13 +10,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { UserProfile } from '@/types/user';
 import { FamilyMember } from '@/types/calendar';
 import { signOut } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
-import { Chrome, Mail, User, LogOut, Calendar, Shield, Users } from 'lucide-react';
+import { Chrome, Mail, User, LogOut, Calendar, Shield, Users, Sparkles, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { FamilyManagement } from './FamilyManagement';
+import { llmService, LLMModel } from '@/services/llmService';
+import { modelConfigService } from '@/services/modelConfigService';
+import { getGeminiApiKey, getAzureOpenAIApiKey } from '@/config/gemini';
 
 interface AccountSettingsDialogProps {
   open: boolean;
@@ -37,6 +49,77 @@ export function AccountSettingsDialog({
 }: AccountSettingsDialogProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  
+  // AI Model settings
+  const [models, setModels] = useState<LLMModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [azureOpenAIApiKey, setAzureOpenAIApiKey] = useState('');
+
+  // Load API keys and models
+  useEffect(() => {
+    if (open) {
+      // Load API keys from config/localStorage
+      const geminiKey = getGeminiApiKey();
+      if (geminiKey) {
+        setGeminiApiKey(geminiKey);
+        llmService.setGeminiKey(geminiKey);
+      }
+
+      const azureKey = getAzureOpenAIApiKey();
+      if (azureKey) {
+        setAzureOpenAIApiKey(azureKey);
+        llmService.setAzureOpenAIKey(azureKey);
+      }
+
+      loadModels();
+    }
+  }, [open]);
+
+  const loadModels = async () => {
+    const availableModels = await llmService.getAvailableModels();
+    setModels(availableModels);
+    
+    // Get the current selected model from central config
+    const currentModel = modelConfigService.findModel(availableModels);
+    setSelectedModel(currentModel);
+  };
+
+  const handleSaveAISettings = () => {
+    let saved = false;
+
+    if (geminiApiKey) {
+      localStorage.setItem('gemini_api_key', geminiApiKey);
+      llmService.setGeminiKey(geminiApiKey);
+      saved = true;
+    }
+
+    if (azureOpenAIApiKey) {
+      localStorage.setItem('azure_openai_api_key', azureOpenAIApiKey);
+      llmService.setAzureOpenAIKey(azureOpenAIApiKey);
+      saved = true;
+    }
+
+    if (selectedModel) {
+      modelConfigService.setSelectedModel(selectedModel);
+      saved = true;
+    }
+
+    if (saved) {
+      toast({
+        title: 'AI Settings saved',
+        description: 'Your AI model preferences have been saved.',
+      });
+      loadModels(); // Reload to update available models
+    }
+  };
+
+  const handleOpenWhatsApp = () => {
+    const phoneNumber = '14155238886';
+    const message = 'join knowledge-dog';
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   const handleSignOut = async () => {
     setLoading(true);
@@ -75,12 +158,12 @@ export function AccountSettingsDialog({
         <DialogHeader>
           <DialogTitle>Account Settings</DialogTitle>
           <DialogDescription>
-            Manage your account details, family members, and preferences
+            Manage your account details, family members, AI models, and preferences
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="account" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="account">
               <User className="h-4 w-4 mr-2" />
               Account
@@ -88,6 +171,10 @@ export function AccountSettingsDialog({
             <TabsTrigger value="family">
               <Users className="h-4 w-4 mr-2" />
               Family
+            </TabsTrigger>
+            <TabsTrigger value="ai">
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Models
             </TabsTrigger>
           </TabsList>
 
@@ -230,6 +317,123 @@ export function AccountSettingsDialog({
                 Family management not available
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="ai" className="mt-6 space-y-6">
+            {/* WhatsApp Connection Section */}
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100">
+              <div className="flex items-center gap-3 mb-4">
+                <MessageCircle className="w-6 h-6 text-green-600" />
+                <h2 className="text-lg font-semibold text-gray-900">WhatsApp Connection</h2>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Connect to our WhatsApp to receive updates and notifications directly on your phone
+              </p>
+
+              <button
+                onClick={handleOpenWhatsApp}
+                className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform active:scale-95 flex items-center justify-center gap-3"
+              >
+                <MessageCircle className="w-5 h-5" />
+                <span>Open in WhatsApp</span>
+              </button>
+
+              <p className="text-xs text-gray-500 mt-3 text-center">
+                Will send message to +1 (415) 523-8886
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Model Selection Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 mb-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                <h3 className="text-lg font-semibold text-gray-900">AI Model Selection</h3>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="model-select">Selected Model</Label>
+                <Select
+                  value={selectedModel?.id || ''}
+                  onValueChange={(value) => {
+                    const model = models.find(m => m.id === value);
+                    if (model) {
+                      setSelectedModel(model);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="model-select" className="w-full">
+                    <SelectValue placeholder="Select an AI model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No models available - configure API keys below
+                      </SelectItem>
+                    ) : (
+                      models.map((model) => (
+                        <SelectItem key={`${model.provider}-${model.id}`} value={model.id}>
+                          {model.name} ({model.vendor})
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Default priority: VS Code LM API (Copilot) → Azure GPT-4.1
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* API Keys Configuration */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-slate-700">API Configuration</h4>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="gemini-key">Gemini API Key (Optional)</Label>
+                  <Input
+                    id="gemini-key"
+                    type="password"
+                    placeholder="Enter your Gemini API key"
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Get your API key from{' '}
+                    <a
+                      href="https://makersuite.google.com/app/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Google AI Studio
+                    </a>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="azure-openai-key">Azure OpenAI API Key (Optional)</Label>
+                  <Input
+                    id="azure-openai-key"
+                    type="password"
+                    placeholder="Enter your Azure OpenAI API key"
+                    value={azureOpenAIApiKey}
+                    onChange={(e) => setAzureOpenAIApiKey(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For Azure models: GPT-4.1, GPT-5 Mini, Grok 4, O3 Mini
+                  </p>
+                </div>
+
+                <Button onClick={handleSaveAISettings} className="w-full">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Save AI Settings
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
 
