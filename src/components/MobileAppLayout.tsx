@@ -4,9 +4,10 @@ import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
 import { useEvents } from '@/contexts/EventContext';
 import { useFamily } from '@/contexts/FamilyContext';
-import { Calendar, ListTodo, Sparkles, MessageSquare } from 'lucide-react';
+import { Calendar, ListTodo, Sparkles, MessageSquare, Settings } from 'lucide-react';
 import MobileIndex from '@/pages/MobileIndex';
 import MobileTasks from '@/pages/MobileTasks';
+import MobileSettings from '@/pages/MobileSettings';
 import { AIAssistant } from '@/components/AIAssistant';
 import { CalendarService } from '@/services/calendarService';
 import { CalendarEvent } from '@/types/calendar';
@@ -22,6 +23,7 @@ const MobileAppLayout = () => {
   // Determine active tab from URL or default to calendar
   const getActiveTab = () => {
     if (location.pathname.includes('/tasks')) return 'tasks';
+    if (location.pathname.includes('/settings')) return 'settings';
     return 'calendar';
   };
 
@@ -88,6 +90,8 @@ const MobileAppLayout = () => {
       navigate('/tasks');
     } else if (tab === 'calendar') {
       navigate('/');
+    } else if (tab === 'settings') {
+      navigate('/settings');
     }
     // AI tab stays on same route but shows AI content
   };
@@ -108,6 +112,7 @@ const MobileAppLayout = () => {
           />
         )}
         {activeTab === 'tasks' && <MobileTasks />}
+        {activeTab === 'settings' && <MobileSettings />}
         {activeTab === 'ai' && (
           <AIAssistant
             calendarService={calendarService}
@@ -176,6 +181,20 @@ const MobileAppLayout = () => {
             <ListTodo className={`h-6 w-6 ${activeTab === 'tasks' ? 'scale-110' : ''}`} />
             <span className="text-[10px] font-medium">
               {t('nav.tasks')}
+            </span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('settings')}
+            className={`flex flex-col items-center gap-0.5 py-2 px-6 touch-target transition-all ${
+              activeTab === 'settings'
+                ? 'text-primary'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Settings className={`h-6 w-6 ${activeTab === 'settings' ? 'scale-110' : ''}`} />
+            <span className="text-[10px] font-medium">
+              הגדרות
             </span>
           </button>
         </div>
