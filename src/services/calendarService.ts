@@ -66,7 +66,10 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
         },
         memberIds: {
           type: 'array',
-          description: 'Optional: Array of family member IDs if multiple people are attending (e.g., ["1", "2", "3"] for a family event). If provided, memberId should be the first member in this array.'
+          description: 'Optional: Array of family member IDs if multiple people are attending (e.g., ["1", "2", "3"] for a family event). If provided, memberId should be the first member in this array.',
+          items: {
+            type: 'string'
+          }
         },
         category: {
           type: 'string',
@@ -145,7 +148,10 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
         },
         daysOfWeek: {
           type: 'array',
-          description: 'For weekly recurrence: days of week (0=Sunday, 1=Monday, etc.). Example: [1,3,5] for Mon, Wed, Fri'
+          description: 'For weekly recurrence: days of week (0=Sunday, 1=Monday, etc.). Example: [1,3,5] for Mon, Wed, Fri',
+          items: {
+            type: 'number'
+          }
         },
         dayOfMonth: {
           type: 'number',

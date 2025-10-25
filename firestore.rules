@@ -80,7 +80,20 @@ service cloud.firestore {
                        (request.auth.uid in resource.data.adminUserIds ||
                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.adminUserIds);
       
-      // Family-level memories (shared across family)
+      // Family-level memories (shared across family) - NEW UNIFIED MEMORY SYSTEM
+      match /memory/{memoryId} {
+        // Family members can read all family memories
+        allow read: if isFamilyMember(familyId);
+        
+        // Family members can create/update/delete memories
+        allow create, update, delete: if isFamilyMember(familyId);
+        
+        // Allow WhatsApp webhook to read/write memories (unauthenticated)
+        // This enables AI agents to learn from and create memories during conversations
+        allow read, write: if true;
+      }
+      
+      // Legacy family-level memories (can be deprecated later)
       match /memories/{document=**} {
         allow read, write: if isFamilyMember(familyId);
       }
