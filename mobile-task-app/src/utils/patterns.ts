@@ -32,11 +32,11 @@ export const KNOWN_PLACES: KnownPlace[] = [
 
 // Hebrew patterns
 export const HEBREW_PATTERNS = {
-  // Time buckets (removed \b word boundaries as they don't work with Hebrew)
-  today: /(^|[\s])(היום|הערב|עכשיו)([\s]|$)/gi,
-  tomorrow: /(^|[\s])(מחר)([\s]|$)/gi,
-  thisWeek: /(^|[\s])(השבוע|השבוע הזה|בשבוע)([\s]|$)/gi,
-  nextWeek: /(^|[\s])(שבוע הבא|בשבוע הבא)([\s]|$)/gi,
+  // Time buckets (capture group 2 contains the actual match)
+  today: /(^|[\s])(היום|הערב|עכשיו)([\s]|$)/i,
+  tomorrow: /(^|[\s])(מחר)([\s]|$)/i,
+  thisWeek: /(^|[\s])(השבוע|השבוע הזה|בשבוע)([\s]|$)/i,
+  nextWeek: /(^|[\s])(שבוע הבא|בשבוע הבא)([\s]|$)/i,
   
   // Days of week
   daysOfWeek: [
@@ -50,16 +50,17 @@ export const HEBREW_PATTERNS = {
   ],
   
   // Time expressions
-  time: /(^|[\s])(?:בשעה|ב-?|ב)\s*(\d{1,2}):(\d{2})/gi,
-  timeWords: /(^|[\s])(בבוקר|בצהריים|אחר הצהריים|בערב|בלילה)([\s]|$)/gi,
+  time: /(^|[\s])(?:בשעה|ב-?|ב)\s*(\d{1,2}):(\d{2})/i,
+  timeWords: /(^|[\s])(בבוקר|בצהריים|אחר הצהריים|בערב|בלילה)([\s]|$)/i,
   
-  // Family members (with Hebrew prefixes: ל=to, ש=that, את=with, של=of, ב=in)
+  // Family members (with Hebrew prefixes: ל=to, ש=that, את=with, של=of, ב=in, ו=and)
+  // Now accepts punctuation after names: , . ! ? ) : etc.
   familyMembers: {
-    eyal: /(^|[\s])([לשבכ]?את\s+)?([לשבכ]?)(אייל|eyalg?)([\s]|$)/gi,
-    ella: /(^|[\s])([לשבכ]?את\s+)?([לשבכ]?)(אלה|ella)([\s]|$)/gi,
-    hilly: /(^|[\s])([לשבכ]?את\s+)?([לשבכ]?)(הילי|hilly)([\s]|$)/gi,
-    yael: /(^|[\s])([לשבכ]?את\s+)?([לשבכ]?)(יעל|yael)([\s]|$)/gi,
-    alon: /(^|[\s])([לשבכ]?את\s+)?([לשבכ]?)(אלון|alon)([\s]|$)/gi,
+    eyal: /(^|[\s])([לשבכ]?את\s+)?([לשבכו]?)(אייל|eyalg?)([\s,.!?):;]|$)/gi,
+    ella: /(^|[\s])([לשבכ]?את\s+)?([לשבכו]?)(אלה|ella)([\s,.!?):;]|$)/gi,
+    hilly: /(^|[\s])([לשבכ]?את\s+)?([לשבכו]?)(הילי|hilly)([\s,.!?):;]|$)/gi,
+    yael: /(^|[\s])([לשבכ]?את\s+)?([לשבכו]?)(יעל|yael)([\s,.!?):;]|$)/gi,
+    alon: /(^|[\s])([לשבכ]?את\s+)?([לשבכו]?)(אלון|alon)([\s,.!?):;]|$)/gi,
   },
   
   // Ownership and involvement
@@ -75,42 +76,45 @@ export const HEBREW_PATTERNS = {
   // Location details (floor, room, etc.) - for future enhancement
   locationDetails: /(קומה|מינוס|פלוס|חדר|דירה)\s+([א-ת\d\s]+)/g,
   
-  // Locations
+  // Locations (capture group 2 contains the actual match)
   locations: {
-    home: /(^|[\s])(בית|הבית|בבית|הביתה)([\s]|$)/gi,
-    kindergarten: /(^|[\s])(גן|הגן|גן ילדים|לגן|בגן)([\s]|$)/gi,
-    school: /(^|[\s])(בית ספר|בית הספר|לבית ספר|ביה"ס|בביה"ס|לביה"ס)([\s]|$)/gi,
-    work: /(^|[\s])(עבודה|למשרד|משרד|העבודה|לעבודה)([\s]|$)/gi,
-    supermarket: /(^|[\s])(סופר|סופרמרקט|לסופר|בסופר)([\s]|$)/gi,
-    mall: /(^|[\s])(קניון|לקניון|בקניון)([\s]|$)/gi,
-    park: /(^|[\s])(פארק|לפארק|בפארק|גינה|לגינה|בגינה)([\s]|$)/gi,
-    doctor: /(^|[\s])(רופא|לרופא|אצל הרופא|קופ"ח|קופת חולים)([\s]|$)/gi,
-    dentist: /(^|[\s])(רופא שיניים|שיניים|לרופא שיניים)([\s]|$)/gi,
-    gym: /(^|[\s])(חדר כושר|כושר|לחדר כושר|בחדר כושר|מכון כושר)([\s]|$)/gi,
-    pool: /(^|[\s])(בריכה|לבריכה|בבריכה)([\s]|$)/gi,
+    home: /(^|[\s])(בית|הבית|בבית|הביתה)([\s]|$)/i,
+    kindergarten: /(^|[\s])(גן|הגן|גן ילדים|לגן|בגן)([\s]|$)/i,
+    school: /(^|[\s])([מב]?בית ספר|בית הספר|לבית ספר|ביה"ס|בביה"ס|לביה"ס)([\s]|$)/i,
+    work: /(^|[\s])(עבודה|למשרד|משרד|העבודה|לעבודה)([\s]|$)/i,
+    supermarket: /(^|[\s])(סופר|סופרמרקט|לסופר|בסופר)([\s]|$)/i,
+    mall: /(^|[\s])(קניון|לקניון|בקניון)([\s]|$)/i,
+    park: /(^|[\s])(פארק|לפארק|בפארק|גינה|לגינה|בגינה)([\s]|$)/i,
+    doctor: /(^|[\s])(רופא|לרופא|אצל הרופא|קופ"ח|קופת חולים)([\s]|$)/i,
+    dentist: /(^|[\s])(רופא שיניים|שיניים|לרופא שיניים)([\s]|$)/i,
+    gym: /(^|[\s])(חדר כושר|כושר|לחדר כושר|בחדר כושר|מכון כושר)([\s]|$)/i,
+    pool: /(^|[\s])(בריכה|לבריכה|בבריכה)([\s]|$)/i,
   },
   
   // Transportation
   transport: /(^|[\s])(להסיע|לקחת|להביא|לאסוף|להוריד)/gi,
   driving: /(^|[\s])(נסיעה|נהיגה|לנסוע|לנהוג)/gi,
   
-  // Recurring patterns - organized by type
+  // Recurring patterns - organized by type (capture group 2 contains the actual match)
   recurring: {
-    daily: /(^|[\s])(כל יום|יומי|יומיומי|מדי יום)/gi,
-    morning: /(^|[\s])(כל בוקר)/gi,
-    evening: /(^|[\s])(כל ערב)/gi,
-    afternoon: /(^|[\s])(כל צהריים|אחר הצהריים)/gi,
-    night: /(^|[\s])(כל לילה)/gi,
-    weekly: /(^|[\s])(כל שבוע|שבועי|מדי שבוע)/gi,
-    monthly: /(^|[\s])(כל חודש|חודשי|מדי חודש)/gi,
-    // Specific weekdays - FULL PHRASE
-    sunday: /(^|[\s])(כל יום ראשון)/gi,
-    monday: /(^|[\s])(כל יום שני)/gi,
-    tuesday: /(^|[\s])(כל יום שלישי)/gi,
-    wednesday: /(^|[\s])(כל יום רביעי)/gi,
-    thursday: /(^|[\s])(כל יום חמישי)/gi,
-    friday: /(^|[\s])(כל יום שישי)/gi,
-    saturday: /(^|[\s])(כל שבת)/gi,
+    daily: /(^|[\s])(כל יום|יומי|יומיומי|מדי יום)/i,
+    morning: /(^|[\s])(כל בוקר)/i,
+    evening: /(^|[\s])(כל ערב)/i,
+    afternoon: /(^|[\s])(כל צהריים|אחר הצהריים)/i,
+    night: /(^|[\s])(כל לילה)/i,
+    weekly: /(^|[\s])(כל שבוע|שבועי|מדי שבוע)/i,
+    monthly: /(^|[\s])(כל חודש|חודשי|מדי חודש)/i,
+    // Specific weekdays - FULL PHRASE (capture group 2 contains the actual match)
+    sunday: /(^|[\s])(כל יום ראשון)/i,
+    monday: /(^|[\s])(כל יום שני)/i,
+    tuesday: /(^|[\s])(כל יום שלישי)/i,
+    wednesday: /(^|[\s])(כל יום רביעי)/i,
+    thursday: /(^|[\s])(כל יום חמישי)/i,
+    friday: /(^|[\s])(כל יום שישי)/i,
+    saturday: /(^|[\s])(כל שבת)/i,
+    // Multiple days pattern - "כל יום שני וחמישי" or just "שני וחמישי" or "שני, רביעי וחמישי"
+    // Note: Needs /gi flag for parser's .exec() to work, tests use .match() which works with both
+    multipleDays: /(כל\s+יום\s+)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)([\s,]+ו?[-]?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת))+([\s,]+ו[-]?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת))*/gi,
   },
   
   // Task type
@@ -257,15 +261,29 @@ export function getFamilyMember(name: string): FamilyMember | undefined {
 export function getKnownPlace(location: string): KnownPlace | undefined {
   const normalizedLocation = location.toLowerCase().trim();
   
+  // First try exact matches
+  const exactMatch = KNOWN_PLACES.find(place => {
+    const placeNameHebrew = place.displayNameHebrew.toLowerCase();
+    return normalizedLocation === placeNameHebrew;
+  });
+  
+  if (exactMatch) return exactMatch;
+  
+  // Then try word-boundary matches (but not for places with "home" as name to avoid false positives)
   return KNOWN_PLACES.find(place => {
     const placeName = place.name.toLowerCase();
-    const placeNameHe = place.displayNameHebrew.toLowerCase();
+    const placeNameHebrew = place.displayNameHebrew.toLowerCase();
     
+    // Skip if it's a generic "home" entry (these are used for multiple places)
+    if (placeName === 'home') {
+      // Only match if the location is EXACTLY the Hebrew name (already checked above)
+      return false;
+    }
+    
+    // For non-home entries, check if location contains the place name
     return (
-      normalizedLocation.includes(placeName) ||
-      normalizedLocation.includes(placeNameHe) ||
-      placeName.includes(normalizedLocation) ||
-      placeNameHe.includes(normalizedLocation)
+      normalizedLocation.includes(placeNameHebrew) ||
+      placeName.includes(normalizedLocation)
     );
   });
 }
@@ -276,4 +294,37 @@ export function getKnownPlace(location: string): KnownPlace | undefined {
 export function detectTransportAction(text: string, language: 'he' | 'en'): boolean {
   const patterns = getPatterns(language);
   return patterns.transport.test(text) || patterns.driving.test(text);
+}
+
+/**
+ * Extract multiple weekdays from text like "שני וחמישי" or "ראשון, שלישי וחמישי"
+ * Returns array of day numbers (0=Sunday, 1=Monday, etc.) or null if not found
+ */
+export function extractMultipleWeekdays(text: string): number[] | null {
+  const dayMap: Record<string, number> = {
+    'ראשון': 0,
+    'שני': 1,
+    'שלישי': 2,
+    'רביעי': 3,
+    'חמישי': 4,
+    'שישי': 5,
+    'שבת': 6
+  };
+  
+  // Match the multiple days pattern
+  const match = text.match(HEBREW_PATTERNS.recurring.multipleDays);
+  if (!match) return null;
+  
+  const matchedText = match[0];
+  const days: number[] = [];
+  
+  // Extract all day names from the matched text
+  for (const [dayName, dayNum] of Object.entries(dayMap)) {
+    if (matchedText.includes(dayName)) {
+      days.push(dayNum);
+    }
+  }
+  
+  // Return sorted array if we found multiple days
+  return days.length > 1 ? days.sort((a, b) => a - b) : null;
 }

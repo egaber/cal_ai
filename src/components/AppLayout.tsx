@@ -42,7 +42,7 @@ const AppLayout = () => {
       <div className="relative z-10">
         {/* Content Area - Header is now inside Index/TaskPlanning pages */}
         <main className="transition-all duration-300">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'calendar' | 'tasks')}>
             <TabsContent value="calendar" className="m-0 p-0">
               <Index 
                 activeTab={activeTab}
@@ -52,12 +52,7 @@ const AppLayout = () => {
               />
             </TabsContent>
             <TabsContent value="tasks" className="m-0 p-0">
-              <TaskPlanning 
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                isDarkMode={isDarkMode}
-                onToggleDarkMode={toggleDarkMode}
-              />
+              <TaskPlanning />
             </TabsContent>
           </Tabs>
         </main>

@@ -114,7 +114,33 @@ export interface ParsedTask {
   rawText: string;
   segments: TextSegment[];
   tags: ExtractedTag[];
-  language: 'hebrew' | 'english' | 'mixed';
+  
+  // Extracted values (from parser)
+  timeBucket: TimeBucket;
+  specificTime?: TimeValue;
+  specificDate?: Date;
+  owner?: FamilyMemberName;
+  involvedMembers: FamilyMemberName[];
+  location?: string;
+  priority?: PriorityLevel;
+  recurring?: RecurringPattern;
+  isReminder: boolean;
+  requiresDriving: boolean;
+  drivingDuration?: number;
+  drivingFrom?: string;
+  drivingTo?: string;
+  
+  // AI enhancement metadata (optional)
+  metadata?: {
+    usedAI?: boolean;
+    aiModel?: string;
+    aiLatency?: number;
+    aiConfidence?: number;
+    aiReasoning?: string;
+    category?: string;
+    categoryIcon?: string;
+    confidence?: number;
+  };
 }
 
 // ============================================================================

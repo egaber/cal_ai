@@ -1,19 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck, Cloud, CloudOff, RefreshCw, Brain } from 'lucide-react';
+import { aiTaskParserAdapter } from '../../mobile-task-app/src/services/aiTaskParserAdapter';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
 import { correctFamilyNames } from '../../mobile-task-app/src/utils/nameCorrection';
 import { llmService } from '@/services/llmService';
 import { todoTaskService, TodoTask } from '@/services/todoTaskService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEvents } from '@/contexts/EventContext';
+import { useNavigate } from 'react-router-dom';
 
 // TaskWithStatus is now just an alias for TodoTask
 type TaskWithStatus = TodoTask;
 
 export default function MobileTasks() {
   const { user } = useAuth();
+  const { events } = useEvents();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(true);
@@ -25,6 +30,7 @@ export default function MobileTasks() {
   const [editingTag, setEditingTag] = useState<{ taskIndex: number; tag: ExtractedTag } | null>(null);
   const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
+  const [isAiParsing, setIsAiParsing] = useState(false);
 
   // Initialize service and subscribe to real-time updates
   useEffect(() => {
@@ -487,7 +493,7 @@ Return the enhanced text with emoji and category marker.` }
   };
 
   const formatTagDisplay = (type: string, value: any): string => {
-    if (type === 'time' && typeof value === 'object') {
+    if (type === 'time' && typeof value === 'object' && !Array.isArray(value)) {
       // Support both { hour, minute } and { hours, minutes } formats
       const hour = (value as any).hour ?? (value as any).hours ?? 0;
       const minute = (value as any).minute ?? (value as any).minutes ?? 0;
@@ -862,8 +868,8 @@ Return the enhanced text with emoji and category marker.` }
         </div>
       </div>
 
-      {/* Task List */}
-      <div className="pb-24">
+      {/* Task List - with scrolling */}
+      <div className="pb-24 overflow-y-auto max-h-[calc(100vh-120px)]">
       {tasks.length === 0 && !isLoading ? (
           <div className="text-center py-12 text-gray-500">
             <p className="text-lg">אין משימות עדיין</p>
@@ -895,29 +901,48 @@ Return the enhanced text with emoji and category marker.` }
                   {/* Task content */}
                   <div className="flex-1 space-y-3">
                     {/* Scheduled indicator badge - shows if task is scheduled */}
-                    {task.scheduledEventId && (
-                      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md w-fit">
-                        <CalendarCheck className="w-3.5 h-3.5" />
-                        <span className="font-medium">
-                          {task.scheduledAt ? `נקבע ב-${new Date(task.scheduledAt).toLocaleDateString('he-IL', { 
-                            month: 'short', 
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}` : 'נקבע'}
-                        </span>
+                    {task.scheduledEventId && (() => {
+                      // Find the scheduled event to get its actual time
+                      const scheduledEvent = events.find(e => e.id === task.scheduledEventId);
+                      const eventDate = scheduledEvent ? new Date(scheduledEvent.startTime) : null;
+                      console.log('Task scheduled:', task.id, 'eventId:', task.scheduledEventId, 'found:', !!scheduledEvent);
+                      
+                      return (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // TODO: Navigate to calendar and highlight the event
-                            console.log('Navigate to calendar event:', task.scheduledEventId);
+                            if (scheduledEvent) {
+                              // Navigate to mobile calendar on the specific date
+                              const eventStart = new Date(scheduledEvent.startTime);
+                              navigate('/', { 
+                                state: { 
+                                  initialDate: eventStart.toISOString(),
+                                  highlightEventId: task.scheduledEventId
+                                } 
+                              });
+                            }
                           }}
-                          className="text-green-700 hover:text-green-800 underline"
+                          className="flex items-center gap-2 text-sm text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-all active:scale-95 w-fit"
                         >
-                          לוח שנה ←
+                          <Calendar className="w-4 h-4" />
+                          <span className="font-medium">
+                            {eventDate ? (
+                              <>
+                                נקבע ל-{eventDate.toLocaleDateString('he-IL', { 
+                                  weekday: 'short',
+                                  month: 'short', 
+                                  day: 'numeric'
+                                })} בשעה {eventDate.toLocaleTimeString('he-IL', { 
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </>
+                            ) : 'נקבע בלוח השנה'}
+                          </span>
+                          <span className="text-green-700">→</span>
                         </button>
-                      </div>
-                    )}
+                      );
+                    })()}
                     
                     {/* Task text with highlighting - clickable */}
                     <div 
@@ -1134,39 +1159,84 @@ Return the enhanced text with emoji and category marker.` }
 
             {/* Bottom actions */}
             <div className="p-4 border-t bg-white space-y-3">
-              {/* AI and Voice buttons row */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* AI and Voice buttons row - 3 buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                {/* AI Smart Parser button (NEW) */}
+                <button
+                  onClick={async () => {
+                    if (!inputText.trim() || isAiParsing) return;
+                    setIsAiParsing(true);
+                    try {
+                      console.log('[AI Parser] Starting parse for:', inputText);
+                      const result = await aiTaskParserAdapter.parseTask(
+                        inputText,
+                        tasks.map(t => t.rawText).slice(0, 5),
+                        [...new Set(tasks.flatMap(t => t.tags.filter(tag => tag.type === 'tag').map(tag => tag.displayText)))]
+                      );
+                      console.log('[AI Parser] Result:', result);
+                      console.log('[AI Parser] Metadata:', result.metadata);
+                      
+                      // Update the parsed task to trigger UI update
+                      setInputText(result.rawText);
+                      
+                      // Show confidence and reasoning in console
+                      if (result.metadata) {
+                        console.log(`✨ AI Confidence: ${(result.metadata.aiConfidence || 0) * 100}%`);
+                        console.log(`🧠 AI Reasoning: ${result.metadata.aiReasoning}`);
+                        console.log(`🏷️ Category: ${result.metadata.category} ${result.metadata.categoryIcon}`);
+                        console.log(`⚡ Model: ${result.metadata.aiModel} (${result.metadata.aiLatency}ms)`);
+                      }
+                    } catch (error) {
+                      console.error('[AI Parser] Error:', error);
+                    } finally {
+                      setIsAiParsing(false);
+                    }
+                  }}
+                  disabled={!inputText.trim() || isAiParsing}
+                  className={`py-3 rounded-lg flex items-center justify-center gap-1.5 font-medium transition-colors text-sm ${
+                    isAiParsing
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
+                  title="Smart AI Parser with family context"
+                >
+                  <Brain className={`w-4 h-4 ${isAiParsing ? 'animate-pulse' : ''}`} />
+                  <span>{isAiParsing ? 'מנתח...' : 'AI חכם'}</span>
+                </button>
+
                 {/* AI Enhancement button */}
                 <button
                   onClick={handleAiEnhance}
                   disabled={!inputText.trim() || isAiEnhancing}
-                  className={`py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
+                  className={`py-3 rounded-lg flex items-center justify-center gap-1.5 font-medium transition-colors text-sm ${
                     isAiEnhancing
                       ? 'bg-purple-500 text-white'
                       : 'bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed'
                   }`}
+                  title="Add emoji and category"
                 >
-                  <Sparkles className={`w-5 h-5 ${isAiEnhancing ? 'animate-pulse' : ''}`} />
-                  <span>{isAiEnhancing ? 'מעבד...' : 'AI'}</span>
+                  <Sparkles className={`w-4 h-4 ${isAiEnhancing ? 'animate-pulse' : ''}`} />
+                  <span>{isAiEnhancing ? 'מעבד...' : 'אימוג\'י'}</span>
                 </button>
 
                 {/* Voice button */}
                 <button
                   onClick={isListening ? stopVoiceRecognition : startVoiceRecognition}
-                  className={`py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
+                  className={`py-3 rounded-lg flex items-center justify-center gap-1.5 font-medium transition-colors text-sm ${
                     isListening
                       ? 'bg-red-500 text-white hover:bg-red-600'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
+                  title="Voice input"
                 >
                   {isListening ? (
                     <>
-                      <MicOff className="w-5 h-5" />
+                      <MicOff className="w-4 h-4" />
                       <span>עצור</span>
                     </>
                   ) : (
                     <>
-                      <Mic className="w-5 h-5" />
+                      <Mic className="w-4 h-4" />
                       <span>דבר</span>
                     </>
                   )}

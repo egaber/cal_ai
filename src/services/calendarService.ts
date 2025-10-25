@@ -1,4 +1,4 @@
-// Calendar Service - provides tools for AI to control the calendar
+c// Calendar Service - provides tools for AI to control the calendar
 
 import { CalendarEvent, FamilyMember, RecurrenceRule } from '@/types/calendar';
 
@@ -11,6 +11,11 @@ export interface CalendarTool {
       type: string;
       description: string;
       enum?: string[];
+      items?: {
+        type: string;
+        properties?: Record<string, unknown>;
+        required?: string[];
+      };
     }>;
     required: string[];
   };
@@ -269,6 +274,205 @@ export const CALENDAR_TOOLS: CalendarTool[] = [
       },
       required: ['taskId', 'suggestedStartTime', 'duration', 'memberId', 'category', 'priority', 'emoji', 'reasoning']
     }
+  },
+  {
+    name: 'add_task',
+    description: 'Add a new todo task to the task list. Use this when the user asks to create, add, or remember a new task.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskText: {
+          type: 'string',
+          description: 'The full text description of the task'
+        },
+        priority: {
+          type: 'string',
+          description: 'Priority level of the task',
+          enum: ['P1', 'P2', 'P3']
+        },
+        timeBucket: {
+          type: 'string',
+          description: 'When this task should be done',
+          enum: ['today', 'tomorrow', 'thisWeek', 'nextWeek', 'unlabeled']
+        },
+        owner: {
+          type: 'string',
+          description: 'Who is responsible for this task'
+        },
+        location: {
+          type: 'string',
+          description: 'Where this task should be done (optional)'
+        },
+        category: {
+          type: 'string',
+          description: 'Category of the task for organization',
+          enum: ['work', 'family', 'health', 'shopping', 'education', 'home', 'transport', 'personal', 'other']
+        }
+      },
+      required: ['taskText']
+    }
+  },
+  {
+    name: 'add_subtask',
+    description: 'Break down a task into subtasks. Use this when a task is complex and needs to be divided into smaller, manageable steps.',
+    parameters: {
+      type: 'object',
+      properties: {
+        parentTaskId: {
+          type: 'string',
+          description: 'The ID of the parent task to add subtasks to'
+        },
+        subtasks: {
+          type: 'array',
+          description: 'Array of subtask descriptions',
+          items: {
+            type: 'object',
+            properties: {
+              text: {
+                type: 'string',
+                description: 'Description of the subtask'
+              },
+              estimatedDuration: {
+                type: 'number',
+                description: 'Estimated time in minutes to complete this subtask'
+              },
+              priority: {
+                type: 'string',
+                enum: ['P1', 'P2', 'P3']
+              }
+            },
+            required: ['text']
+          }
+        },
+        reasoning: {
+          type: 'string',
+          description: 'Explanation of why this breakdown makes sense and how it follows SMART principles'
+        }
+      },
+      required: ['parentTaskId', 'subtasks', 'reasoning']
+    }
+  },
+  {
+    name: 'analyze_task_priority',
+    description: 'Analyze and suggest priority ordering for tasks based on time management principles, urgency, importance, and dependencies.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskAnalysis: {
+          type: 'array',
+          description: 'Analysis of each task with priority recommendations',
+          items: {
+            type: 'object',
+            properties: {
+              taskId: {
+                type: 'string',
+                description: 'The task ID being analyzed'
+              },
+              urgency: {
+                type: 'string',
+                enum: ['high', 'medium', 'low'],
+                description: 'How urgent this task is'
+              },
+              importance: {
+                type: 'string',
+                enum: ['high', 'medium', 'low'],
+                description: 'How important this task is'
+              },
+              suggestedTimeframe: {
+                type: 'string',
+                enum: ['today', 'tomorrow', 'this_week', 'next_week'],
+                description: 'When this task should be completed'
+              },
+              reasoning: {
+                type: 'string',
+                description: 'Detailed reasoning for the priority assessment, considering schedule conflicts, dependencies, and time management principles'
+              },
+              dependencies: {
+                type: 'array',
+                description: 'Other tasks that depend on this one or that this task depends on',
+                items: {
+                  type: 'string'
+                }
+              }
+            },
+            required: ['taskId', 'urgency', 'importance', 'suggestedTimeframe', 'reasoning']
+          }
+        },
+        overallStrategy: {
+          type: 'string',
+          description: 'Overall time management strategy and approach for handling all tasks'
+        }
+      },
+      required: ['taskAnalysis', 'overallStrategy']
+    }
+  },
+  {
+    name: 'create_weekly_plan',
+    description: 'Create a comprehensive weekly plan that considers all tasks, calendar events, and optimal time allocation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        weeklyStrategy: {
+          type: 'string',
+          description: 'Overall strategy for the week'
+        },
+        dailyPlans: {
+          type: 'array',
+          description: 'Plan for each day of the week',
+          items: {
+            type: 'object',
+            properties: {
+              day: {
+                type: 'string',
+                enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+              },
+              focus: {
+                type: 'string',
+                description: 'Main focus or theme for this day'
+              },
+              priorityTasks: {
+                type: 'array',
+                description: 'High priority tasks for this day',
+                items: {
+                  type: 'string'
+                }
+              },
+              timeBlocks: {
+                type: 'array',
+                description: 'Suggested time blocks for different types of work',
+                items: {
+                  type: 'object',
+                  properties: {
+                    time: {
+                      type: 'string',
+                      description: 'Time range (e.g., 9:00-11:00)'
+                    },
+                    activity: {
+                      type: 'string',
+                      description: 'Type of activity or specific task'
+                    },
+                    reasoning: {
+                      type: 'string',
+                      description: 'Why this time is optimal for this activity'
+                    }
+                  },
+                  required: ['time', 'activity']
+                }
+              }
+            },
+            required: ['day', 'focus', 'priorityTasks']
+          }
+        },
+        recommendations: {
+          type: 'array',
+          description: 'Key recommendations for successful week execution',
+          items: {
+            type: 'string'
+          }
+        }
+      },
+      required: ['weeklyStrategy', 'dailyPlans', 'recommendations']
+    }
   }
 ];
 
@@ -365,6 +569,18 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
         
         case 'schedule_task':
           return this.handleScheduleTask(request.parameters);
+        
+        case 'add_task':
+          return this.handleAddTask(request.parameters);
+        
+        case 'add_subtask':
+          return this.handleAddSubtask(request.parameters);
+        
+        case 'analyze_task_priority':
+          return this.handleAnalyzeTaskPriority(request.parameters);
+        
+        case 'create_weekly_plan':
+          return this.handleCreateWeeklyPlan(request.parameters);
         
         default:
           return {
@@ -626,8 +842,10 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
     const eventId = `task-event-${taskId}`;
 
     // Create event data with sourceTask link
+    // taskId should now contain the actual task name/text, not just a number
+    const taskTitle = taskId.toString().replace(/^\d+\.\s*/, ''); // Remove leading "7. " pattern if present
     const eventData: Omit<CalendarEvent, 'id'> & { sourceTask?: string } = {
-      title: `📋 ${taskId.substring(0, 40)}`, // Show task ID in title
+      title: taskTitle, // Use the actual task name as title
       startTime: startDate.toISOString(),
       endTime: endDate.toISOString(),
       memberId: memberId,
@@ -636,7 +854,7 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
       emoji: emoji,
       description: `Scheduled from task.\n\n${reasoning}`,
       aiTip: reasoning,
-      sourceTask: taskId  // Link back to the task
+      sourceTask: taskId.toString()  // Link back to the task
     };
 
     this.operations.createEvent(eventData);
@@ -651,6 +869,107 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
       success: true,
       message: `✅ Scheduled task from ${startDate.toLocaleTimeString()} to ${endDate.toLocaleTimeString()}. ${reasoning}`,
       data: { event: createdEvent, taskId, eventId }
+    };
+  }
+
+  private handleAddTask(params: Record<string, unknown>) {
+    if (!params.taskText) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameter: taskText'
+      };
+    }
+
+    const taskData = {
+      taskText: params.taskText as string,
+      priority: params.priority as string,
+      timeBucket: params.timeBucket as string,
+      owner: params.owner as string,
+      location: params.location as string,
+      category: params.category as string
+    };
+
+    return {
+      success: true,
+      message: `Added new task: "${taskData.taskText}"`,
+      data: taskData
+    };
+  }
+
+  private handleAddSubtask(params: Record<string, unknown>) {
+    if (!params.parentTaskId || !params.subtasks) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameters: parentTaskId, subtasks'
+      };
+    }
+
+    const parentTaskId = params.parentTaskId as string;
+    const subtasks = params.subtasks as Array<{ text: string; estimatedDuration?: number; priority?: string }>;
+    const reasoning = params.reasoning as string;
+
+    return {
+      success: true,
+      message: `Created ${subtasks.length} subtasks for task ${parentTaskId}`,
+      data: { parentTaskId, subtasks, reasoning }
+    };
+  }
+
+  private handleAnalyzeTaskPriority(params: Record<string, unknown>) {
+    if (!params.taskAnalysis || !params.overallStrategy) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameters: taskAnalysis, overallStrategy'
+      };
+    }
+
+    const taskAnalysis = params.taskAnalysis as Array<{
+      taskId: string;
+      urgency: string;
+      importance: string;
+      suggestedTimeframe: string;
+      reasoning: string;
+      dependencies?: string[];
+    }>;
+    
+    const overallStrategy = params.overallStrategy as string;
+
+    return {
+      success: true,
+      message: `Analyzed ${taskAnalysis.length} tasks and provided priority recommendations`,
+      data: { taskAnalysis, overallStrategy }
+    };
+  }
+
+  private handleCreateWeeklyPlan(params: Record<string, unknown>) {
+    if (!params.weeklyStrategy || !params.dailyPlans || !params.recommendations) {
+      return {
+        success: false,
+        message: '',
+        error: 'Missing required parameters: weeklyStrategy, dailyPlans, recommendations'
+      };
+    }
+
+    const weeklyStrategy = params.weeklyStrategy as string;
+    const dailyPlans = params.dailyPlans as Array<{
+      day: string;
+      focus: string;
+      priorityTasks: string[];
+      timeBlocks?: Array<{
+        time: string;
+        activity: string;
+        reasoning?: string;
+      }>;
+    }>;
+    const recommendations = params.recommendations as string[];
+
+    return {
+      success: true,
+      message: `Created comprehensive weekly plan with ${dailyPlans.length} daily plans`,
+      data: { weeklyStrategy, dailyPlans, recommendations }
     };
   }
 }

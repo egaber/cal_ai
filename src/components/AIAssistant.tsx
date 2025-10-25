@@ -27,8 +27,10 @@ import { useToast } from "@/hooks/use-toast";
 import { EventCard } from "@/components/EventCard";
 import { getGeminiApiKey, getAzureOpenAIApiKey } from "@/config/gemini";
 import { buildCategoryPromptList } from "@/config/taskCategories";
-import { todoTaskService } from "@/services/todoTaskService";
+import { todoTaskService, TodoTask } from "@/services/todoTaskService";
 import { useAuth } from "@/contexts/AuthContext";
+import { TaskList } from "@/components/TaskList";
+import { TaskCard } from "@/components/TaskCard";
 
 interface AIAssistantProps {
   calendarService: CalendarService;
@@ -44,6 +46,40 @@ interface AIAssistantProps {
 interface MessageWithEvent extends Message {
   event?: CalendarEvent;
   eventMember?: FamilyMember;
+  followupButtons?: string[];
+  taskList?: TodoTask[];
+  taskAnalysis?: {
+    taskAnalysis: Array<{
+      task: string;
+      taskId?: string;
+      urgency: string;
+      importance: string;
+      timeframe: string;
+      suggestedTimeframe?: string;
+      reasoning: string;
+      dependencies?: string[];
+    }>;
+    overallStrategy: string;
+  };
+  weeklyPlan?: {
+    weeklyStrategy: string;
+    dailyPlans: Array<{
+      day: string;
+      focus: string;
+      priorityTasks: string[];
+      timeBlocks?: Array<{
+        time: string;
+        activity: string;
+        reasoning?: string;
+      }>;
+    }>;
+    recommendations: string[];
+  };
+  subtasks?: {
+    parentTaskId: string;
+    subtasks: Array<{ text: string; estimatedDuration?: number; priority?: string }>;
+    reasoning: string;
+  };
 }
 
 export const AIAssistant = ({
@@ -273,6 +309,47 @@ IMPORTANT - When creating events, you MUST:
 3. Analyze the calendar context before suggesting tips
 4. Use ONLY allowed parameter names
 
+FOLLOWUP BUTTONS FEATURE:
+After each response, you SHOULD provide 2-5 suggested followup questions or ACTIONABLE commands as buttons to help the user continue easily. Include these at the end of your response in this format:
+"followup_buttons": ["Action 1", "Action 2", "Action 3"]
+
+Examples of good actionable followup buttons:
+- After creating an event: ["Schedule my next task", "Show today's events", "Move this event", "Add a reminder"]
+- After showing schedule: ["Schedule priority tasks", "Find free time slot", "Create new meeting", "Show week summary"]
+- After task scheduling: ["Schedule another task", "Show all tasks", "Update priorities", "Add new task"]
+- After task analysis: ["תזמן משימות בעדיפות גבוהה", "פרק משימה מורכבת", "צור תכנית שבועית", "הוסף משימה חדשה"]
+- General helpful actions: ["Review today", "Plan tomorrow", "Check conflicts", "Optimize schedule"]
+
+Make buttons ACTIONABLE (commands/requests) rather than just questions. Keep them short, specific, and immediately useful. Mix Hebrew and English based on user's language preference.
+
+TASK MANAGEMENT & AGENTIC WORKFLOWS:
+You now have advanced task management capabilities with rich UI components. Use these for sophisticated task planning workflows:
+
+1. TASK DISPLAY: When showing tasks, they will be rendered as rich TaskCard or TaskList components with:
+   - Visual priority indicators, time buckets, and metadata
+   - Purple AI reasoning overlays explaining your analysis
+   - Action buttons for scheduling, breakdown, editing
+   - Expandable subtasks
+
+2. MULTI-PHASE WORKFLOWS: For complex requests like "תכנון שבוע הבא" or task prioritization:
+   - Phase 1: Fetch and analyze all tasks using task context
+   - Phase 2: Apply time management principles (Eisenhower Matrix, SMART goals)
+   - Phase 3: Reorder by urgency/importance, suggest scheduling
+   - Phase 4: Create structured weekly plan or breakdown complex tasks
+
+3. TASK ANALYSIS PRINCIPLES:
+   - Urgency vs Importance (Eisenhower Matrix)
+   - Dependencies between tasks
+   - Calendar conflicts and optimal timing
+   - Cognitive load and energy management
+   - SMART criteria for task breakdown
+
+4. ACTIONABLE WORKFLOWS:
+   - "סקור ותזמן משימות" → analyze_task_priority → schedule high-priority tasks
+   - "תכנון שבוע הבא" → create_weekly_plan with structured daily focuses
+   - "פרק משימה מורכבת" → add_subtask with SMART breakdown
+   - "הוסף משימה" → add_task with proper categorization
+
 CENTRAL CATEGORY LIST (id emoji - meaning):
 ${categoriesList}
 
@@ -332,6 +409,35 @@ Available Tools:
 5. schedule_task - Schedule a todo task by creating a calendar event
    Required: taskId, suggestedStartTime, duration, memberId, category, priority, emoji, reasoning
    Use this when user asks to schedule a task from their todo list.
+   IMPORTANT: When scheduling tasks, use the full task name/text as the taskId parameter, NOT the numeric position. For example, if the task list shows "7. לקנות קפסולות קפה", use "לקנות קפסולות קפה" as the taskId, not "7".
+
+6. add_task - Add a new todo task to the task list
+   Required: taskText
+   Optional: priority, timeBucket, owner, location, category
+   Use when user asks to create, add, or remember a new task.
+
+7. add_subtask - Break down complex tasks into manageable subtasks
+   Required: parentTaskId, subtasks (array of objects with "text" field), reasoning
+   Use when a task is complex and benefits from SMART breakdown. Only suggest if task is genuinely complex.
+   
+   IMPORTANT: Each subtask object MUST have a "text" field with the subtask description.
+   Example format:
+   {
+     "parentTaskId": "task name",
+     "subtasks": [
+       {"text": "First subtask description", "estimatedDuration": 30, "priority": "P1"},
+       {"text": "Second subtask description", "estimatedDuration": 45, "priority": "P2"}
+     ],
+     "reasoning": "Explanation of the breakdown"
+   }
+
+8. analyze_task_priority - Intelligent task prioritization using time management principles
+   Required: taskAnalysis (array with urgency/importance/timeframe/reasoning), overallStrategy
+   Use for requests like "prioritize my tasks", "what should I do first", or comprehensive task analysis.
+
+9. create_weekly_plan - Comprehensive weekly planning with daily focuses and time blocks
+   Required: weeklyStrategy, dailyPlans (array), recommendations
+   Use for "תכנון שבוע הבא" or weekly planning requests.
 
 TASK SCHEDULING INTELLIGENCE:
 When scheduling tasks, you must:
@@ -381,6 +487,10 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
         const toolResults: string[] = [];
         let createdEvent: CalendarEvent | undefined;
         let createdEventMember: FamilyMember | undefined;
+        let taskAnalysisData: MessageWithEvent['taskAnalysis'] | undefined;
+        let weeklyPlanData: MessageWithEvent['weeklyPlan'] | undefined;
+        let subtasksData: MessageWithEvent['subtasks'] | undefined;
+        let taskListData: TodoTask[] | undefined;
         
         for (const toolCall of response.toolCalls) {
           console.log('🔧 Processing tool:', toolCall.tool, 'with params:', toolCall.parameters);
@@ -429,6 +539,29 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
               }
             }
             
+            // Handle task management tool results
+            if (toolCall.tool === 'analyze_task_priority' && result.data) {
+              taskAnalysisData = result.data as MessageWithEvent['taskAnalysis'];
+            }
+            
+            if (toolCall.tool === 'create_weekly_plan' && result.data) {
+              weeklyPlanData = result.data as MessageWithEvent['weeklyPlan'];
+            }
+            
+            if (toolCall.tool === 'add_subtask' && result.data) {
+              subtasksData = result.data as MessageWithEvent['subtasks'];
+            }
+            
+            if (toolCall.tool === 'add_task' && result.data) {
+              // Refresh tasks list after adding a task
+              try {
+                const updatedTasks = await todoTaskService.loadTodosFromFirestore();
+                taskListData = updatedTasks;
+              } catch (error) {
+                console.error('Failed to refresh tasks:', error);
+              }
+            }
+            
             toast({
               title: "Action Completed",
               description: result.message,
@@ -443,12 +576,42 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
           }
         }
 
-        // Add assistant message with event data for rendering
+        // Try to extract subtasks from content if not already set by tool call
+        if (!subtasksData && response.content) {
+          // More flexible regex to capture the entire JSON structure
+          const subtaskMatch = response.content.match(/\{[^]*?"parentTaskId"[^]*?"subtasks"\s*:\s*\[[^]*?\][^]*?"reasoning"[^]*?\}/);
+          if (subtaskMatch) {
+            try {
+              const extracted = JSON.parse(subtaskMatch[0]);
+              console.log('Extracted subtasks:', extracted);
+              if (extracted.subtasks && extracted.reasoning) {
+                subtasksData = {
+                  parentTaskId: extracted.parentTaskId,
+                  subtasks: extracted.subtasks,
+                  reasoning: extracted.reasoning
+                };
+                console.log('Setting subtasksData:', subtasksData);
+              }
+            } catch (e) {
+              console.error('Failed to parse subtasks from content:', e);
+              console.log('Matched content:', subtaskMatch[0]);
+            }
+          } else {
+            console.log('No subtask match found in content');
+          }
+        }
+
+        // Add assistant message with all data for rendering
         const assistantMessage: MessageWithEvent = {
           role: 'assistant',
           content: response.content,
           event: createdEvent,
           eventMember: createdEventMember,
+          taskAnalysis: taskAnalysisData,
+          weeklyPlan: weeklyPlanData,
+          subtasks: subtasksData,
+          taskList: taskListData,
+          followupButtons: response.followupButtons,
         };
 
         setChatHistory(prev => [...prev, assistantMessage]);
@@ -456,7 +619,8 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
         // No tool calls, just add the response
         const assistantMessage: MessageWithEvent = {
           role: 'assistant',
-          content: response.content
+          content: response.content,
+          followupButtons: response.followupButtons,
         };
 
         setChatHistory(prev => [...prev, assistantMessage]);
@@ -602,16 +766,21 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
       {/* Conversation Area - Scrollable, takes all available space */}
       <div className={`flex-1 min-h-0 ${isMobile ? '' : 'gap-3'}`}>
         {chatHistory.length > 0 ? (
-          <div 
+          <div
             ref={chatContainerRef}
-            className={`h-full overflow-y-auto flex flex-col justify-end ${isMobile ? 'px-4 py-3' : 'rounded-lg p-4 bg-slate-50/80 dark:bg-slate-800/60'}`} 
-            style={isMobile ? { 
+            className={`h-full overflow-y-auto scroll-smooth ${isMobile ? 'px-4 py-3' : 'rounded-lg p-4 bg-slate-50/80 dark:bg-slate-800/60'}`}
+            style={isMobile ? {
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain'
-            } : { minHeight: '280px', maxHeight: '420px' }}
+            } : {
+              minHeight: '280px',
+              maxHeight: '500px',
+              overflowY: 'auto',
+              scrollBehavior: 'smooth'
+            }}
           >
-            <div className="space-y-3">
+            <div className="space-y-3 flex flex-col">
               {chatHistory.map((msg, idx) => (
                 <div
                   key={idx}
@@ -635,29 +804,342 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                       <EventCard event={msg.event} member={msg.eventMember} />
                     </div>
                   )}
+
+                  {/* Render TaskList if this message has tasks */}
+                  {msg.taskList && msg.taskList.length > 0 && (
+                    <div className="mb-3">
+                      <TaskList
+                        tasks={msg.taskList}
+                        title="משימות מעודכנות"
+                        showWorkflowActions={true}
+                        onTaskSchedule={(task) => handleSendWithMessage(`תזמן את המשימה: ${task.rawText}`)}
+                        onTaskBreakdown={(task) => handleSendWithMessage(`פרק למשימות משנה: ${task.rawText}`)}
+                        onTaskComplete={(task) => handleSendWithMessage(`סמן כהושלם: ${task.rawText}`)}
+                        onWeeklyPlan={() => handleSendWithMessage('צור תכנית שבועית מפורטת')}
+                        onTaskAnalysis={(task) => handleSendWithMessage(`נתח משימה: ${task.rawText}`)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Render Task Analysis if this message has analysis */}
+                  {msg.taskAnalysis && (
+                    <div className="mb-3 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+                      <h3 className="text-lg font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                        🎯 ניתוח עדיפויות משימות
+                      </h3>
+                      
+                      <div className="mb-4 p-3 bg-purple-100 rounded-md">
+                        <h4 className="font-medium text-purple-800 mb-2">אסטרטגיה כללית:</h4>
+                        <p className="text-sm text-purple-700">{msg.taskAnalysis.overallStrategy}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {msg.taskAnalysis.taskAnalysis.map((analysis, idx) => {
+                          // Extract date from timeframe to show day name and make clickable
+                          const dateMatch = (analysis.timeframe || analysis.suggestedTimeframe || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                          let dateInfo = null;
+                          let eventDate = null;
+                          if (dateMatch) {
+                            const [_, day, month, year] = dateMatch;
+                            eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            const hebrewDayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+                            const dayName = hebrewDayNames[eventDate.getDay()];
+                            dateInfo = { date: `${day}/${month}/${year}`, dayName, fullDate: eventDate };
+                          }
+                          
+                          return (
+                            <div key={idx} className="p-3 bg-white border border-slate-200 rounded-lg hover:border-purple-300 hover:shadow-sm transition-all">
+                              {/* Task item similar to todo list */}
+                              <div className="flex items-start gap-3 mb-2">
+                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-600">
+                                  {idx + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    {/* Clickable task name to add to context */}
+                                    <h5
+                                      className="text-base font-medium text-slate-900 leading-snug cursor-pointer hover:text-purple-600 transition-colors"
+                                      onClick={() => handleSendWithMessage(`לגבי המשימה: ${analysis.task || analysis.taskId}`)}
+                                      title="לחץ להוספה להקשר השיחה"
+                                    >
+                                      {analysis.task || analysis.taskId}
+                                    </h5>
+                                    <div className="flex gap-1.5 flex-shrink-0">
+                                      <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                                        analysis.urgency === 'high' ? 'bg-red-100 text-red-700' :
+                                        analysis.urgency === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                        analysis.urgency === 'done' ? 'bg-green-100 text-green-700' :
+                                        'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {analysis.urgency === 'done' ? '✓' : analysis.urgency === 'high' ? '🔴' : analysis.urgency === 'medium' ? '🟡' : '🟢'}
+                                      </span>
+                                      <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                                        analysis.importance === 'high' ? 'bg-purple-100 text-purple-700' :
+                                        analysis.importance === 'medium' ? 'bg-blue-100 text-blue-700' :
+                                        'bg-slate-100 text-slate-700'
+                                      }`}>
+                                        {analysis.importance === 'high' ? '⭐' : analysis.importance === 'medium' ? '★' : '☆'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Purple AI insights text */}
+                                  <div className="mt-2 text-sm text-purple-600 bg-purple-50/50 rounded px-2 py-1.5 border-l-2 border-purple-400">
+                                    <div className="flex items-start gap-1.5">
+                                      <span className="text-purple-500 flex-shrink-0">✨</span>
+                                      <div className="flex-1">
+                                        <p className="leading-relaxed">{analysis.reasoning}</p>
+                                        {(analysis.timeframe || analysis.suggestedTimeframe) && (
+                                          <div className="mt-1 text-xs text-purple-500">
+                                            {dateInfo ? (
+                                              <button
+                                                onClick={() => onNavigateToCalendar?.(dateInfo.fullDate.toISOString())}
+                                                className="inline-flex items-center gap-1 hover:text-purple-700 hover:underline transition-colors"
+                                                title="לחץ לעבור ליומן"
+                                              >
+                                                ⏰ יום {dateInfo.dayName}, {dateInfo.date}
+                                              </button>
+                                            ) : (
+                                              <span>⏰ {analysis.timeframe || analysis.suggestedTimeframe}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Action buttons */}
+                                  <div className="mt-2 flex gap-2">
+                                    <button
+                                      onClick={() => handleSendWithMessage(`פרק למשימות משנה: ${analysis.task || analysis.taskId}`)}
+                                      className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 rounded transition-colors flex items-center gap-1"
+                                      title="פירוק המשימה למשימות משנה"
+                                    >
+                                      <span>🧩</span>
+                                      <span>פרק למשימות</span>
+                                    </button>
+                                    {analysis.urgency !== 'done' && (
+                                      <button
+                                        onClick={() => handleSendWithMessage(`תזמן את המשימה: ${analysis.task || analysis.taskId}`)}
+                                        className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors flex items-center gap-1"
+                                        title="תזמון המשימה ביומן"
+                                      >
+                                        <span>📅</span>
+                                        <span>תזמן</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                  
+                                  {analysis.dependencies && analysis.dependencies.length > 0 && (
+                                    <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                                      <span>🔗</span>
+                                      <span>תלויות: {analysis.dependencies.join(', ')}</span>
+                                    </div>
+                                  )}
+                              </div>
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Render Weekly Plan if this message has a plan */}
+                  {msg.weeklyPlan && (
+                    <div className="mb-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                      <h3 className="text-lg font-semibold text-green-900 mb-3 flex items-center gap-2">
+                        📅 תכנית שבועית
+                      </h3>
+                      
+                      <div className="mb-4 p-3 bg-green-100 rounded-md">
+                        <h4 className="font-medium text-green-800 mb-2">אסטרטגיה שבועית:</h4>
+                        <p className="text-sm text-green-700">{msg.weeklyPlan.weeklyStrategy}</p>
+                      </div>
+
+                      <div className="grid gap-3 mb-4">
+                        {msg.weeklyPlan.dailyPlans.map((day, idx) => (
+                          <div key={idx} className="p-3 bg-white border border-green-200 rounded-md">
+                            <h5 className="font-medium text-slate-900 mb-2 capitalize">{day.day}</h5>
+                            <p className="text-sm text-slate-700 mb-2"><strong>מיקוד:</strong> {day.focus}</p>
+                            
+                            {day.priorityTasks.length > 0 && (
+                              <div className="mb-2">
+                                <span className="text-sm font-medium text-slate-600">משימות עיקריות:</span>
+                                <ul className="text-sm text-slate-700 mt-1">
+                                  {day.priorityTasks.map((task, taskIdx) => (
+                                    <li key={taskIdx} className="flex items-center gap-1">
+                                      <span className="w-1 h-1 bg-green-500 rounded-full"></span>
+                                      {task}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {day.timeBlocks && day.timeBlocks.length > 0 && (
+                              <div>
+                                <span className="text-sm font-medium text-slate-600">לוח זמנים:</span>
+                                <div className="mt-1 space-y-1">
+                                  {day.timeBlocks.map((block, blockIdx) => (
+                                    <div key={blockIdx} className="text-sm">
+                                      <span className="font-medium text-slate-700">{block.time}:</span>
+                                      <span className="text-slate-600 ml-1">{block.activity}</span>
+                                      {block.reasoning && (
+                                        <span className="text-slate-500 text-xs block ml-4">
+                                          {block.reasoning}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-3 bg-green-100 rounded-md">
+                        <h4 className="font-medium text-green-800 mb-2">המלצות מפתח:</h4>
+                        <ul className="text-sm text-green-700 space-y-1">
+                          {msg.weeklyPlan.recommendations.map((rec, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-green-500 mt-1">✓</span>
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Render Subtasks if this message has subtask breakdown */}
+                  {msg.subtasks && (
+                    <div className="mb-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+                      <h3 className="text-lg font-semibold text-amber-900 mb-3 flex items-center gap-2">
+                        🔨 פירוק משימה למשימות משנה
+                      </h3>
+                      
+                      <div className="mb-3 p-3 bg-amber-100 rounded-md">
+                        <p className="text-sm text-amber-800">{msg.subtasks.reasoning}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {msg.subtasks.subtasks.map((subtask, idx) => {
+                          console.log('Rendering subtask #' + idx + ':', subtask);
+                          console.log('subtask keys:', Object.keys(subtask));
+                          console.log('subtask.text:', subtask.text);
+                          
+                          // Try to find ANY string property in the subtask
+                          const subtaskText = subtask.text ||
+                                             (subtask as any).title ||
+                                             (subtask as any).description ||
+                                             (subtask as any).task ||
+                                             (subtask as any).name ||
+                                             JSON.stringify(subtask);
+                          
+                          return (
+                            <div key={idx} className="p-3 bg-white border border-amber-200 rounded-md flex items-center justify-between">
+                              <div className="flex-1">
+                                <h5 className="font-medium text-slate-900">{subtaskText}</h5>
+                              {subtask.estimatedDuration && (
+                                <span className="text-xs text-slate-500">זמן משוער: {subtask.estimatedDuration} דקות</span>
+                              )}
+                            </div>
+                            {subtask.priority && (
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                subtask.priority === 'P1' ? 'bg-red-100 text-red-800' :
+                                subtask.priority === 'P2' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {subtask.priority}
+                              </span>
+                            )}
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   
-                  {/* Render the text content - filter out JSON code blocks when event is shown */}
+                  {/* Render the text content - filter out JSON code blocks and followup buttons */}
                   {(() => {
                     let displayContent = msg.content;
                     
-                    // If we're showing an event widget, remove JSON code blocks from the text
-                    if (msg.event) {
-                      // Remove ```json...``` blocks
-                      displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
-                      // Remove tool call JSON objects (look for ones with "tool" and "parameters")
-                      displayContent = displayContent.replace(/\{\s*"tool"[\s\S]*?"parameters"[\s\S]*?\}/g, '').trim();
-                      // Remove any remaining brackets or braces that are alone on a line
-                      displayContent = displayContent.replace(/^\s*[[\]{}]\s*$/gm, '').trim();
-                      // Clean up multiple blank lines
-                      displayContent = displayContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
-                    }
+                    // Always remove followup_buttons from displayed content
+                    displayContent = displayContent.replace(/"followup_buttons"\s*:\s*\[[^\]]*\]/g, '').trim();
+                    displayContent = displayContent.replace(/followup_buttons\s*:\s*\[[^\]]*\]/g, '').trim();
                     
-                    return displayContent ? (
+                    // Remove ALL JSON code blocks (not just when event is shown)
+                    displayContent = displayContent.replace(/```json\s*\n[\s\S]*?\n```/g, '').trim();
+                    
+                    // Remove tool call JSON objects (look for ones with "tool" and "parameters")
+                    displayContent = displayContent.replace(/\{\s*"tool"[\s\S]*?"parameters"[\s\S]*?\}/g, '').trim();
+                    
+                    // Remove taskAnalysis JSON structures
+                    displayContent = displayContent.replace(/\{\s*"taskAnalysis"[\s\S]*?"overallStrategy"[\s\S]*?\}/g, '').trim();
+                    
+                    // Remove subtasks JSON structures
+                    displayContent = displayContent.replace(/\{\s*"parentTaskId"[\s\S]*?"subtasks"[\s\S]*?"reasoning"[\s\S]*?\}/g, '').trim();
+                    
+                    // Remove any JSON objects that contain arrays with task/urgency/importance fields
+                    displayContent = displayContent.replace(/\{\s*"[^"]*":\s*\[[^\]]*"task"[^\]]*\][^}]*\}/g, '').trim();
+                    
+                    // Remove JSON arrays that contain subtask objects
+                    displayContent = displayContent.replace(/\[\s*\{\s*"text"[\s\S]*?"estimatedDuration"[\s\S]*?\}\s*\]/g, '').trim();
+                    
+                    // Remove JSON arrays that contain task objects
+                    displayContent = displayContent.replace(/\[\s*\{\s*"task"[\s\S]*?\}\s*\]/g, '').trim();
+                    
+                    // Remove any remaining brackets or braces that are alone on a line
+                    displayContent = displayContent.replace(/^\s*[[\]{}]\s*$/gm, '').trim();
+                    
+                    // Remove JSON-like structures that start with { and have tool/parameters
+                    displayContent = displayContent.replace(/\{[^}]*"tool"[^}]*\}/g, '').trim();
+                    
+                    // Remove large JSON blocks that span multiple lines (catch any missed JSON)
+                    displayContent = displayContent.replace(/\{\s*\n[\s\S]*?("task"|"urgency"|"importance"|"timeframe")[\s\S]*?\n\s*\}/g, '').trim();
+                    
+                    // Clean up multiple blank lines
+                    displayContent = displayContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+                    
+                    // Clean up any trailing commas or orphaned JSON syntax
+                    displayContent = displayContent.replace(/,\s*$/, '').trim();
+                    displayContent = displayContent.replace(/^\s*,/, '').trim();
+                    
+                    // Remove any lines that look like followup_buttons
+                    displayContent = displayContent.replace(/^.*followup_buttons.*$/gm, '').trim();
+                    
+                    // Clean up again after removals
+                    displayContent = displayContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+                    
+                    // If we have rich UI components (taskAnalysis, taskList, event, weeklyPlan, subtasks), hide text content
+                    const hasRichUI = msg.taskAnalysis || msg.taskList || msg.event || msg.weeklyPlan || msg.subtasks;
+                    
+                    // Only show text content if we don't have rich UI components and there's actual content
+                    return (!hasRichUI && displayContent) ? (
                       <p className="whitespace-pre-wrap text-sm text-slate-900 dark:text-slate-100">
                         {displayContent}
                       </p>
                     ) : null;
                   })()}
+
+                  {/* Render followup buttons if this is the last message and has buttons */}
+                  {idx === chatHistory.length - 1 && msg.followupButtons && msg.followupButtons.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {msg.followupButtons.map((buttonText, buttonIdx) => (
+                        <button
+                          key={buttonIdx}
+                          onClick={() => handleSendWithMessage(buttonText)}
+                          disabled={isLoading}
+                          className="px-3 py-1.5 text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 rounded-full border border-sky-200 transition-colors hover:border-sky-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {buttonText}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -750,6 +1232,57 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                       </div>
                     </div>
                   </button>
+
+                  <button
+                    onClick={() => handleSendWithMessage("תכנון שבוע הבא - צור לי תכנית מפורטת עם התמקדות יומית")}
+                    className="text-left px-4 py-3 rounded-lg bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600 transition-all hover:shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">📋</div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-purple-700 dark:group-hover:text-purple-300">
+                          תכנון שבוע הבא
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          AI-powered weekly planning with daily focus
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendWithMessage("נתח את עדיפויות המשימות שלי לפי מטריצת אייזנהאואר וזמני יומן")}
+                    className="text-left px-4 py-3 rounded-lg bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-200/50 dark:border-indigo-700/30 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all hover:shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">🎯</div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                          ניתוח עדיפויות חכם
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Smart prioritization with Eisenhower Matrix
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendWithMessage("הוסף משימה חדשה: הכן מצגת לפגישת צוות בשבוע הבא")}
+                    className="text-left px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200/50 dark:border-emerald-700/30 hover:border-emerald-300 dark:hover:border-emerald-600 transition-all hover:shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">➕</div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          הוסף משימה חדשה
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Add task with smart categorization
+                        </div>
+                      </div>
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -773,6 +1306,18 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                   <li className="flex items-start gap-2">
                     <span className="text-green-500 mt-0.5">✓</span>
                     <span>Find optimal time slots and avoid conflicts</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500 mt-0.5">✓</span>
+                    <span>Create comprehensive weekly plans with daily focuses</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500 mt-0.5">✓</span>
+                    <span>Analyze task priorities using time management principles</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500 mt-0.5">✓</span>
+                    <span>Break down complex tasks into SMART subtasks</span>
                   </li>
                 </ul>
               </div>

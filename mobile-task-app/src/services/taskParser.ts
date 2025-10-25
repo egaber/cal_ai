@@ -43,6 +43,53 @@ interface Match {
   text: string;
 }
 
+// Global safety constants for all regex loops
+const MAX_REGEX_ITERATIONS = 100;
+const MAX_REGEX_TIME_MS = 100; // 100ms max per pattern
+
+// Helper to safely execute regex patterns
+function safeExec(pattern: RegExp, text: string, maxIterations = MAX_REGEX_ITERATIONS): RegExpExecArray[] {
+  const results: RegExpExecArray[] = [];
+  pattern.lastIndex = 0;
+  
+  let match: RegExpExecArray | null;
+  let iterationCount = 0;
+  const startTime = Date.now();
+  let lastIndex = -1;
+  
+  while ((match = pattern.exec(text)) !== null) {
+    // Safety check 1: iteration limit
+    if (++iterationCount > maxIterations) {
+      console.warn(`[Parser Safety] Hit iteration limit for pattern: ${pattern.source}`);
+      break;
+    }
+    
+    // Safety check 2: time limit
+    if (Date.now() - startTime > MAX_REGEX_TIME_MS) {
+      console.warn(`[Parser Safety] Hit time limit for pattern: ${pattern.source}`);
+      break;
+    }
+    
+    // Safety check 3: zero-length match
+    if (match[0].length === 0) {
+      console.warn(`[Parser Safety] Zero-length match for pattern: ${pattern.source}`);
+      pattern.lastIndex++;
+      continue;
+    }
+    
+    // Safety check 4: lastIndex not advancing
+    if (match.index === lastIndex) {
+      console.warn(`[Parser Safety] lastIndex not advancing for pattern: ${pattern.source}`);
+      break;
+    }
+    
+    lastIndex = match.index;
+    results.push(match);
+  }
+  
+  return results;
+}
+
 export function parseTask(text: string): ParsedTask {
   if (!text || text.trim().length === 0) {
     return createEmptyTask(text);
@@ -82,9 +129,9 @@ export function parseTask(text: string): ParsedTask {
   const detectedWeekdays: number[] = []; // Collect all detected weekdays
 
   // 1. Priority (P1, P2, P3)
-  let match: RegExpExecArray | null;
   const priorityPattern = new RegExp(PRIORITY_PATTERN);
-  while ((match = priorityPattern.exec(text)) !== null) {
+  const priorityMatches = safeExec(priorityPattern, text);
+  for (const match of priorityMatches) {
     priority = `P${match[1]}` as PriorityLevel;
     allMatches.push({
       start: match.index,
@@ -96,10 +143,10 @@ export function parseTask(text: string): ParsedTask {
   }
 
   // 2. Time buckets - extract the actual word from capture group [2]
-  patterns.today.lastIndex = 0;
-  while ((match = patterns.today.exec(text)) !== null) {
+  const todayMatches = safeExec(patterns.today, text);
+  for (const match of todayMatches) {
     hasToday = true;
-    const actualText = match[2] || match[0]; // group 2 is the actual word
+    const actualText = match[2] || match[0];
     const startOffset = match[0].indexOf(actualText);
     allMatches.push({
       start: match.index + startOffset,
@@ -110,8 +157,8 @@ export function parseTask(text: string): ParsedTask {
     });
   }
 
-  patterns.tomorrow.lastIndex = 0;
-  while ((match = patterns.tomorrow.exec(text)) !== null) {
+  const tomorrowMatches = safeExec(patterns.tomorrow, text);
+  for (const match of tomorrowMatches) {
     hasTomorrow = true;
     const actualText = match[2] || match[0];
     const startOffset = match[0].indexOf(actualText);
@@ -124,8 +171,8 @@ export function parseTask(text: string): ParsedTask {
     });
   }
 
-  patterns.thisWeek.lastIndex = 0;
-  while ((match = patterns.thisWeek.exec(text)) !== null) {
+  const thisWeekMatches = safeExec(patterns.thisWeek, text);
+  for (const match of thisWeekMatches) {
     hasThisWeek = true;
     const actualText = match[2] || match[0];
     const startOffset = match[0].indexOf(actualText);
@@ -138,8 +185,8 @@ export function parseTask(text: string): ParsedTask {
     });
   }
 
-  patterns.nextWeek.lastIndex = 0;
-  while ((match = patterns.nextWeek.exec(text)) !== null) {
+  const nextWeekMatches = safeExec(patterns.nextWeek, text);
+  for (const match of nextWeekMatches) {
     hasNextWeek = true;
     const actualText = match[2] || match[0];
     const startOffset = match[0].indexOf(actualText);
@@ -155,8 +202,8 @@ export function parseTask(text: string): ParsedTask {
   // 3. Family members - For Hebrew: group[4] is name, group[2] is "את", group[3] is prefix
   //                      For English: group[1] is the name
   Object.entries(patterns.familyMembers).forEach(([name, pattern]) => {
-    pattern.lastIndex = 0;
-    while ((match = pattern.exec(text)) !== null) {
+    const matches = safeExec(pattern, text);
+    for (const match of matches) {
       const memberName = name.charAt(0).toUpperCase() + name.slice(1) as FamilyMemberName;
       if (!mentionedMembers.includes(memberName)) {
         mentionedMembers.push(memberName);
@@ -185,8 +232,8 @@ export function parseTask(text: string): ParsedTask {
   // 4a. Known locations first - extract from capture group [2]
   const knownLocationMatches: Match[] = [];
   Object.entries(patterns.locations).forEach(([placeName, pattern]) => {
-    pattern.lastIndex = 0;
-    while ((match = pattern.exec(text)) !== null) {
+    const matches = safeExec(pattern, text);
+    for (const match of matches) {
       location = placeName;
       const actualText = match[2] || match[0];
       const startOffset = match[0].indexOf(actualText);
@@ -221,7 +268,8 @@ export function parseTask(text: string): ParsedTask {
     
     // Pattern: (start or space) + ב + Hebrew letters (3-20 chars) + optional space + optional number
     const streetPattern = /(?:^|[\s])(ב([א-ת]{3,20})(?:\s+(\d{1,4}))?(?=\s|$))/g;
-    while ((match = streetPattern.exec(text)) !== null) {
+    const streetMatches = safeExec(streetPattern, text);
+    for (const match of streetMatches) {
       const streetName = match[2]; // Group 2 is the street name without "ב"
       const number = match[3]; // Group 3 is the optional number
       const fullMatch = match[1]; // Group 1 is the complete match including "ב"
@@ -258,8 +306,8 @@ export function parseTask(text: string): ParsedTask {
 
   // 5. Time (HH:MM and written times)
   // First try numeric times
-  patterns.time.lastIndex = 0;
-  while ((match = patterns.time.exec(text)) !== null) {
+  const timeMatches = safeExec(patterns.time, text);
+  for (const match of timeMatches) {
     // English: /at\s+(\d{1,2}):(\d{2}).../ -> groups [1] and [2]
     // Hebrew: /(^|[\s])(?:בשעה|ב-?|ב)\s*(\d{1,2}):(\d{2})/ -> groups [2] and [3]
     
@@ -317,70 +365,105 @@ export function parseTask(text: string): ParsedTask {
   }
 
   // 7. Recurring patterns - detect and highlight
-  // IMPORTANT: Check specific patterns BEFORE general patterns to avoid false matches
-  // Map of pattern key to RecurringPattern value
-  const recurringMap: Record<string, RecurringPattern> = {
-    // Specific weekdays FIRST (these contain "כל יום" but are more specific)
-    sunday: 'weekday-0',
-    monday: 'weekday-1',
-    tuesday: 'weekday-2',
-    wednesday: 'weekday-3',
-    thursday: 'weekday-4',
-    friday: 'weekday-5',
-    saturday: 'weekday-6',
-    // Time-of-day specific (also more specific than general "daily")
-    morning: 'morning',
-    evening: 'evening',
-    afternoon: 'afternoon',
-    night: 'night',
-    // General patterns LAST
-    daily: 'daily',
-    weekly: 'weekly',
-    monthly: 'monthly',
-  };
+  // IMPORTANT: Check multiple days pattern FIRST, then other specific patterns
   
-  // Check each recurring pattern type IN ORDER (specific to general)
-  for (const [key, recurringType] of Object.entries(recurringMap)) {
-    const pattern = patterns.recurring[key];
-    if (!pattern) continue;
-    
-    pattern.lastIndex = 0;
-    while ((match = pattern.exec(text)) !== null) {
-      // If it's a weekday, collect it
-      if (recurringType.startsWith('weekday-')) {
-        const dayNum = parseInt(recurringType.split('-')[1]);
-        if (!detectedWeekdays.includes(dayNum)) {
-          detectedWeekdays.push(dayNum);
+  // First, check for multiple days pattern (e.g., "כל יום שני וחמישי")
+  // Only available in Hebrew patterns
+  const multiDaysPattern = language === 'he' ? HEBREW_PATTERNS.recurring.multipleDays : null;
+  if (multiDaysPattern) {
+    multiDaysPattern.lastIndex = 0;
+    const multiMatch = multiDaysPattern.exec(text);
+    if (multiMatch) {
+      // Extract weekday numbers from the matched text
+      const matchedText = multiMatch[0];
+      const dayMap: Record<string, number> = {
+        'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3,
+        'חמישי': 4, 'שישי': 5, 'שבת': 6
+      };
+      
+      for (const [dayName, dayNum] of Object.entries(dayMap)) {
+        if (matchedText.includes(dayName)) {
+          if (!detectedWeekdays.includes(dayNum)) {
+            detectedWeekdays.push(dayNum);
+          }
         }
       }
       
-      // Keep track of the most specific recurring pattern found
-      // Priority: specific weekdays > time-of-day > general patterns
-      if (detectedRecurring === 'none' || 
-          recurringType.startsWith('weekday-') || 
-          (recurringType !== 'daily' && recurringType !== 'weekly' && recurringType !== 'monthly')) {
-        detectedRecurring = recurringType;
+      if (detectedWeekdays.length > 1) {
+        detectedRecurring = 'weekdays';
+        // Add single match for the ENTIRE phrase
+        allMatches.push({
+          start: multiMatch.index,
+          end: multiMatch.index + matchedText.length,
+          type: 'recurring',
+          value: 'weekdays',
+          text: matchedText,
+        });
       }
-      
-      const actualText = match[2] || match[0];
-      const startOffset = match[0].indexOf(actualText);
-      allMatches.push({
-        start: match.index + startOffset,
-        end: match.index + startOffset + actualText.length,
-        type: 'recurring',
-        value: recurringType,
-        text: actualText,
-      });
     }
   }
   
-  // After collecting all weekdays, determine final recurring pattern
-  if (detectedWeekdays.length > 1) {
-    // Multiple weekdays detected - use 'weekdays' type
-    detectedRecurring = 'weekdays';
-  } else if (detectedWeekdays.length === 1) {
-    // Single weekday - keep the weekday-N pattern
-    detectedRecurring = `weekday-${detectedWeekdays[0]}` as RecurringPattern;
+  // Only check individual patterns if we didn't find multiple days
+  if (detectedWeekdays.length <= 1) {
+    // Map of pattern key to RecurringPattern value
+    const recurringMap: Record<string, RecurringPattern> = {
+      // Specific weekdays FIRST
+      sunday: 'weekday-0',
+      monday: 'weekday-1',
+      tuesday: 'weekday-2',
+      wednesday: 'weekday-3',
+      thursday: 'weekday-4',
+      friday: 'weekday-5',
+      saturday: 'weekday-6',
+      // Time-of-day specific
+      morning: 'morning',
+      evening: 'evening',
+      afternoon: 'afternoon',
+      night: 'night',
+      // General patterns LAST
+      daily: 'daily',
+      weekly: 'weekly',
+      monthly: 'monthly',
+    };
+    
+    // Check each recurring pattern type IN ORDER (specific to general)
+    for (const [key, recurringType] of Object.entries(recurringMap)) {
+      const pattern = patterns.recurring[key];
+      if (!pattern) continue;
+
+      const matches = safeExec(pattern, text);
+      for (const match of matches) {
+        // If it's a weekday, collect it
+        if (recurringType.startsWith('weekday-')) {
+          const dayNum = parseInt(recurringType.split('-')[1]);
+          if (!detectedWeekdays.includes(dayNum)) {
+            detectedWeekdays.push(dayNum);
+          }
+        }
+
+        // Keep track of the most specific recurring pattern found
+        if (detectedRecurring === 'none' ||
+            recurringType.startsWith('weekday-') ||
+            (recurringType !== 'daily' && recurringType !== 'weekly' && recurringType !== 'monthly')) {
+          detectedRecurring = recurringType;
+        }
+
+        const actualText = match[2] || match[0];
+        const startOffset = match[0].indexOf(actualText);
+        allMatches.push({
+          start: match.index + startOffset,
+          end: match.index + startOffset + actualText.length,
+          type: 'recurring',
+          value: recurringType,
+          text: actualText,
+        });
+      }
+    }
+    
+    // Set final pattern based on detected weekdays
+    if (detectedWeekdays.length === 1) {
+      detectedRecurring = `weekday-${detectedWeekdays[0]}` as RecurringPattern;
+    }
   }
 
   // 8. Task type keywords

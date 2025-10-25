@@ -150,6 +150,55 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     };
   }
   
+  // Pattern: "8 ורבע לתשע" (8 and a quarter to 9 = 8:45)
+  // CHECK THIS FIRST before simple quarter pattern!
+  const digitQuarterToPattern = /(\d{1,2})\s+ורבע\s+ל(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)/g;
+  match = digitQuarterToPattern.exec(text);
+  
+  if (match) {
+    const hour = parseInt(match[1]);
+    if (hour >= 0 && hour < 24) {
+      return {
+        time: { hour, minute: 45 },
+        text: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  
+  // Pattern: "8 וחצי" or "בשעה 8 וחצי" (digit + and a half)
+  const digitHalfPattern = /(?:בשעה\s+)?(\d{1,2})\s+וחצי/g;
+  match = digitHalfPattern.exec(text);
+  
+  if (match) {
+    const hour = parseInt(match[1]);
+    if (hour >= 0 && hour < 24) {
+      return {
+        time: { hour, minute: 30 },
+        text: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  
+  // Pattern: "8 ורבע" or "בשעה 8 ורבע" (digit + and a quarter)
+  const digitQuarterPattern = /(?:בשעה\s+)?(\d{1,2})\s+ורבע/g;
+  match = digitQuarterPattern.exec(text);
+  
+  if (match) {
+    const hour = parseInt(match[1]);
+    if (hour >= 0 && hour < 24) {
+      return {
+        time: { hour, minute: 15 },
+        text: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  
   // Pattern: "בשמונה וחצי" (at eight and a half)
   const halfPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
   match = halfPattern.exec(text);
@@ -164,9 +213,37 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     };
   }
   
+  // Pattern: "שמונה וחצי" (eight and a half) - without ב prefix
+  const halfPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
+  match = halfPattern2.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 30 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
   // Pattern: "בשמונה ורבע" (at eight and a quarter)
   const quarterPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+ורבע/g;
   match = quarterPattern.exec(text);
+  
+  if (match) {
+    const hour = HEBREW_NUMBERS[match[1]];
+    return {
+      time: { hour, minute: 15 },
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+  
+  // Pattern: "תשע ורבע" (nine and a quarter) - without ב prefix
+  const quarterPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+ורבע/g;
+  match = quarterPattern2.exec(text);
   
   if (match) {
     const hour = HEBREW_NUMBERS[match[1]];

@@ -31,6 +31,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   toolCalls?: ToolCall[];
+  followupButtons?: string[];
   error?: string;
 }
 
@@ -122,9 +123,10 @@ class AzureOpenAIHandler {
       console.log('[Azure OpenAI] Response content:', content);
       console.log('[Azure OpenAI] Response content length:', content.length);
 
-      return { 
+      return {
         content,
-        toolCalls: this.extractToolCalls(content)
+        toolCalls: this.extractToolCalls(content),
+        followupButtons: this.extractFollowupButtons(content)
       };
     } catch (error) {
       console.error('[Azure OpenAI] Full error:', error);
@@ -133,6 +135,60 @@ class AzureOpenAIHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractFollowupButtons(content: string): string[] | undefined {
+    // Extract followup buttons from AI response
+    // Look for patterns like "followup_buttons": ["option1", "option2"]
+    let followupMatch = content.match(/"followup_buttons"\s*:\s*\[([^\]]*)\]/);
+    if (!followupMatch) {
+      // Try without quotes
+      followupMatch = content.match(/followup_buttons\s*:\s*\[([^\]]*)\]/);
+    }
+    
+    if (followupMatch) {
+      try {
+        const buttonsArray = JSON.parse(`[${followupMatch[1]}]`);
+        if (Array.isArray(buttonsArray) && buttonsArray.length > 0) {
+          return buttonsArray.filter(btn => typeof btn === 'string' && btn.trim().length > 0);
+        }
+      } catch (e) {
+        console.log('❌ Failed to parse followup buttons:', e);
+      }
+    }
+    
+    // Look for lines that contain followup_buttons with array syntax
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.includes('followup_buttons') && line.includes('[')) {
+        const arrayMatch = line.match(/\[([^\]]*)\]/);
+        if (arrayMatch) {
+          try {
+            const buttonsArray = JSON.parse(`[${arrayMatch[1]}]`);
+            if (Array.isArray(buttonsArray) && buttonsArray.length > 0 && buttonsArray.every(btn => typeof btn === 'string')) {
+              return buttonsArray.filter(btn => btn.trim().length > 0);
+            }
+          } catch (e) {
+            // Continue trying other patterns
+          }
+        }
+      }
+    }
+    
+    // Also look for standalone JSON arrays at the end of responses that might be buttons
+    const standaloneMatch = content.match(/\[([^\]]*)\]\s*$/);
+    if (standaloneMatch) {
+      try {
+        const buttonsArray = JSON.parse(`[${standaloneMatch[1]}]`);
+        if (Array.isArray(buttonsArray) && buttonsArray.length > 0 && buttonsArray.every(btn => typeof btn === 'string')) {
+          return buttonsArray.filter(btn => btn.trim().length > 0);
+        }
+      } catch (e) {
+        // Not buttons, continue
+      }
+    }
+    
+    return undefined;
   }
 
   private extractToolCalls(content: string): ToolCall[] | undefined {
@@ -281,9 +337,10 @@ class AzureXAIHandler {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || 'No response';
 
-      return { 
+      return {
         content,
-        toolCalls: this.extractToolCalls(content)
+        toolCalls: this.extractToolCalls(content),
+        followupButtons: this.extractFollowupButtons(content)
       };
     } catch (error) {
       console.error('Azure xAI error:', error);
@@ -292,6 +349,22 @@ class AzureXAIHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractFollowupButtons(content: string): string[] | undefined {
+    // Extract followup buttons from AI response
+    const followupMatch = content.match(/"followup_buttons"\s*:\s*\[([^\]]*)\]/);
+    if (followupMatch) {
+      try {
+        const buttonsArray = JSON.parse(`[${followupMatch[1]}]`);
+        if (Array.isArray(buttonsArray) && buttonsArray.length > 0) {
+          return buttonsArray.filter(btn => typeof btn === 'string' && btn.trim().length > 0);
+        }
+      } catch (e) {
+        console.log('❌ Failed to parse followup buttons:', e);
+      }
+    }
+    return undefined;
   }
 
   private extractToolCalls(content: string): ToolCall[] | undefined {
@@ -381,9 +454,10 @@ class GeminiHandler {
       const data = await response.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
 
-      return { 
+      return {
         content,
-        toolCalls: this.extractToolCalls(content)
+        toolCalls: this.extractToolCalls(content),
+        followupButtons: this.extractFollowupButtons(content)
       };
     } catch (error) {
       console.error('Gemini error:', error);
@@ -392,6 +466,22 @@ class GeminiHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractFollowupButtons(content: string): string[] | undefined {
+    // Extract followup buttons from AI response
+    const followupMatch = content.match(/"followup_buttons"\s*:\s*\[([^\]]*)\]/);
+    if (followupMatch) {
+      try {
+        const buttonsArray = JSON.parse(`[${followupMatch[1]}]`);
+        if (Array.isArray(buttonsArray) && buttonsArray.length > 0) {
+          return buttonsArray.filter(btn => typeof btn === 'string' && btn.trim().length > 0);
+        }
+      } catch (e) {
+        console.log('❌ Failed to parse followup buttons:', e);
+      }
+    }
+    return undefined;
   }
 
   private extractToolCalls(content: string): ToolCall[] | undefined {
@@ -491,7 +581,11 @@ class LocalLMHandler {
                        data.choices?.[0]?.message?.tool_calls ||
                        this.extractToolCalls(content);
 
-      return { content, toolCalls };
+      return {
+        content,
+        toolCalls,
+        followupButtons: this.extractFollowupButtons(content)
+      };
     } catch (error) {
       console.error('Local LM error:', error);
       return {
@@ -499,6 +593,22 @@ class LocalLMHandler {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  private extractFollowupButtons(content: string): string[] | undefined {
+    // Extract followup buttons from AI response
+    const followupMatch = content.match(/"followup_buttons"\s*:\s*\[([^\]]*)\]/);
+    if (followupMatch) {
+      try {
+        const buttonsArray = JSON.parse(`[${followupMatch[1]}]`);
+        if (Array.isArray(buttonsArray) && buttonsArray.length > 0) {
+          return buttonsArray.filter(btn => typeof btn === 'string' && btn.trim().length > 0);
+        }
+      } catch (e) {
+        console.log('❌ Failed to parse followup buttons:', e);
+      }
+    }
+    return undefined;
   }
 
   private extractToolCalls(content: string): ToolCall[] | undefined {

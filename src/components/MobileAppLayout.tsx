@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
@@ -29,6 +29,18 @@ const MobileAppLayout = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
+
+  // Handle navigation from location state (e.g., from MobileTasks)
+  useEffect(() => {
+    const state = location.state as { initialDate?: string; highlightEventId?: string } | null;
+    if (state?.initialDate) {
+      setCalendarDate(new Date(state.initialDate));
+      setActiveTab('calendar');
+    }
+    if (state?.highlightEventId) {
+      setTargetEventId(state.highlightEventId);
+    }
+  }, [location.state]);
 
   // Get today's and this week's events
   const currentDate = new Date();
