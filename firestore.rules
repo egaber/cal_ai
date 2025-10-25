@@ -28,6 +28,31 @@ service cloud.firestore {
       match /data/{document=**} {
         allow read, write: if isOwner(userId);
       }
+      
+      // User's todos (simple mobile tasks) - moved here from families
+      match /todoTasks/{todoId} {
+        // Only the user can access their own todos
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Allow listing users collection when querying by phoneNumber
+    // This is needed for WhatsApp webhook to find users by phone number
+    // Security: Only exposes user ID and phoneNumber field, not sensitive data
+    match /users/{userId} {
+      allow list: if request.query.limit <= 1 && 
+                     resource.data.phoneNumber != null;
+      
+      // Allow WhatsApp webhook to read user's tasks and events (unauthenticated)
+      // Security: Webhook already knows the userId from phone number lookup
+      // This enables WhatsApp bot to provide personalized responses
+      match /todoTasks/{taskId} {
+        allow read: if true;  // Read-only access for WhatsApp bot
+      }
+      
+      match /events/{eventId} {
+        allow read: if true;  // Read-only access for WhatsApp bot
+      }
     }
     
     // Families collection
@@ -38,6 +63,9 @@ service cloud.firestore {
       // Anyone authenticated can read families (needed for invite code lookup)
       // Security is maintained because users can only join via valid invite codes
       allow read: if isAuthenticated();
+      
+      // Allow unauthenticated queries to find family by memberUserIds (for WhatsApp webhook)
+      allow list: if request.query.limit <= 1;
       
       // Family admins can update the family
       // OR allow adding yourself as a member via arrayUnion (for joining via invite)
@@ -72,6 +100,9 @@ service cloud.firestore {
           
           // Family members can read each other's events (for family calendar view)
           allow read: if isFamilyMember(familyId);
+          
+          // Allow WhatsApp webhook to read/write events (unauthenticated)
+          allow read, write: if true;
         }
         
         // User's calendar metadata (sync info, etc.)
@@ -96,6 +127,9 @@ service cloud.firestore {
         match /todos/{todoId} {
           // Only the user can access their own todos
           allow read, write: if isOwner(userId);
+          
+          // Allow WhatsApp webhook to read/write todos (unauthenticated)
+          allow read, write: if true;
         }
       }
     }

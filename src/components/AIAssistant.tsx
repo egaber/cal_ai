@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Sparkles, Settings, Wrench, RotateCcw } from "lucide-react";
+import { Send, Sparkles, Settings, Wrench, RotateCcw, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -482,7 +482,7 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
             }
           }
           
-          const result = calendarService.executeToolCall(toolCall);
+          const result = await calendarService.executeToolCall(toolCall);
           console.log('🔧 Tool result:', result);
           
           // Log event details for debugging
@@ -635,6 +635,19 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
         </div>
 
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              toast({
+                title: "Chat History",
+                description: "Chat history feature coming soon",
+              });
+            }}
+            title="View chat history"
+          >
+            <History className="h-4 w-4" />
+          </Button>
           {chatHistory.length > 0 && (
             <Button
               variant="ghost"
@@ -647,9 +660,9 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                   description: "Chat history cleared",
                 });
               }}
-              title="New conversation"
+              title="Start new conversation"
             >
-              <RotateCcw className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
             </Button>
           )}
         </div>

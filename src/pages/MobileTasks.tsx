@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { parseTask } from '../../mobile-task-app/src/services/taskParser';
 import { ParsedTask, ExtractedTag } from '../../mobile-task-app/src/types/mobileTask';
-import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck, Cloud, CloudOff, RefreshCw, Brain } from 'lucide-react';
+import { Mic, MicOff, Plus, X, Trash2, Sparkles, Calendar, CalendarCheck, Cloud, CloudOff, RefreshCw, Brain, MessageSquare } from 'lucide-react';
 import { aiTaskParserAdapter } from '../../mobile-task-app/src/services/aiTaskParserAdapter';
 import { Button } from '@/components/ui/button';
 import { TagEditor } from '../../mobile-task-app/src/components/TagEditor';
@@ -11,13 +11,25 @@ import { todoTaskService, TodoTask } from '@/services/todoTaskService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEvents } from '@/contexts/EventContext';
 import { useNavigate } from 'react-router-dom';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AIAssistant } from '@/components/AIAssistant';
+import { CalendarService } from '@/services/calendarService';
+import { CalendarEvent } from '@/types/calendar';
+import { useFamily } from '@/contexts/FamilyContext';
 
 // TaskWithStatus is now just an alias for TodoTask
 type TaskWithStatus = TodoTask;
 
 export default function MobileTasks() {
   const { user } = useAuth();
-  const { events } = useEvents();
+  const { events, createEvent, updateEvent, deleteEvent } = useEvents();
+  const { family } = useFamily();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +43,8 @@ export default function MobileTasks() {
   const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+  const [aiInitialMessage, setAiInitialMessage] = useState<string | undefined>(undefined);
 
   // Initialize service and subscribe to real-time updates
   useEffect(() => {
@@ -59,6 +73,52 @@ export default function MobileTasks() {
       unsubscribe();
     };
   }, [user]);
+
+  // Create calendar service for AI assistant
+  const calendarService = React.useMemo(() => new CalendarService({
+    createEvent: (eventData: Omit<CalendarEvent, 'id'>) => {
+      console.log('Creating event via AI:', eventData);
+      createEvent(eventData);
+    },
+    updateEvent: (eventId: string, updates: Partial<CalendarEvent>) => {
+      console.log('Updating event via AI:', eventId, updates);
+      updateEvent(eventId, updates);
+    },
+    deleteEvent: (eventId: string) => {
+      console.log('Deleting event via AI:', eventId);
+      deleteEvent(eventId);
+    },
+    moveEvent: (eventId: string, newStartTime: string, newEndTime: string) => {
+      console.log('Moving event via AI:', eventId, newStartTime, newEndTime);
+      updateEvent(eventId, { startTime: newStartTime, endTime: newEndTime });
+    },
+  }), [createEvent, updateEvent, deleteEvent]);
+
+  // Get today's and this week's events for AI context
+  const currentDate = new Date();
+  const todayStart = new Date(currentDate);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(currentDate);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const weekEnd = new Date(currentDate);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const todayEvents = events.filter(event => {
+    const eventStart = new Date(event.startTime);
+    return eventStart >= todayStart && eventStart <= todayEnd;
+  });
+
+  const weekEvents = events.filter(event => {
+    const eventStart = new Date(event.startTime);
+    return eventStart >= currentDate && eventStart <= weekEnd;
+  });
+
+  // Handle opening AI assistant with context
+  const handleOpenAiAssistant = (initialMessage?: string) => {
+    setAiInitialMessage(initialMessage);
+    setShowAiAssistant(true);
+  };
 
   // Parse text in real-time
   const parsedTask = inputText ? parseTask(inputText) : null;
@@ -1265,6 +1325,68 @@ Return the enhanced text with emoji and category marker.` }
           onClose={() => setEditingTag(null)}
         />
       )}
+
+      {/* Floating AI Assistant Button */}
+      {!isAddingTask && (
+        <button
+          onClick={() => handleOpenAiAssistant('הוסף משימה חדשה')}
+          className="fixed bottom-20 left-4 z-50 w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group"
+          title="AI Assistant - Create tasks with natural language"
+        >
+          <MessageSquare className="w-6 h-6 group-hover:scale-110 transition-transform" />
+          <span className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+            <Sparkles className="w-3 h-3" />
+          </span>
+        </button>
+      )}
+
+      {/* AI Assistant Dialog */}
+      <Dialog open={showAiAssistant} onOpenChange={(open) => {
+        setShowAiAssistant(open);
+        if (!open) {
+          // Reset initial message when closing
+          setAiInitialMessage(undefined);
+        }
+      }}>
+        <DialogContent className="max-w-4xl h-[85vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-purple-600" />
+              <span>AI Assistant - Task Creation</span>
+            </DialogTitle>
+            <DialogDescription>
+              Ask me to create tasks using natural language. I'll handle scheduling, priorities, and all the details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            <AIAssistant
+              calendarService={calendarService}
+              currentDate={currentDate}
+              todayEvents={todayEvents}
+              weekEvents={weekEvents}
+              familyMembers={family?.members || []}
+              onMemoryUpdate={() => {
+                console.log('🔄 Memory updated, tasks should refresh automatically via Firestore subscription');
+              }}
+              initialMessage={aiInitialMessage}
+              onNavigateToCalendar={(eventId) => {
+                // Find the event to get its date
+                const targetEvent = events.find(e => e.id === eventId);
+                if (targetEvent) {
+                  const eventDate = new Date(targetEvent.startTime);
+                  navigate('/', {
+                    state: {
+                      initialDate: eventDate.toISOString(),
+                      highlightEventId: eventId
+                    }
+                  });
+                }
+                setShowAiAssistant(false);
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

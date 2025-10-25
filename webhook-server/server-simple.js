@@ -1,4 +1,6 @@
 const express = require('express');
+const https = require('https');
+const http = require('http');
 
 const app = express();
 
@@ -113,30 +115,60 @@ app.post('/whatsapp', async (req, res) => {
 
 // Call your AI service (placeholder - customize this!)
 async function callAIService(message, history, phoneNumber) {
-  // Call the AI API endpoint running on your React app
+  // Call the AI API endpoint
   try {
     const apiUrl = process.env.AI_API_URL || 'http://localhost:6000/chat';
     
-    const response = await fetch(apiUrl, {
+    const postData = JSON.stringify({
+      message: message,
+      phoneNumber: phoneNumber,
+      conversationHistory: history.slice(-8) // Last 4 exchanges
+    });
+
+    const options = {
+      hostname: 'localhost',
+      port: 6000,
+      path: '/chat',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: message,
-        phoneNumber: phoneNumber,
-        conversationHistory: history.slice(-8) // Last 4 exchanges
-      })
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = http.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              console.warn('AI API error:', res.statusCode);
+              resolve(getSmartFallback(message));
+              return;
+            }
+
+            const jsonData = JSON.parse(data);
+            resolve(jsonData.response || jsonData.content || getSmartFallback(message));
+          } catch (error) {
+            console.warn('Failed to parse AI response:', error.message);
+            resolve(getSmartFallback(message));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.warn('Failed to call AI service:', error.message);
+        resolve(getSmartFallback(message));
+      });
+
+      req.write(postData);
+      req.end();
     });
-
-    if (!response.ok) {
-      console.warn('AI API error:', response.status);
-      // Fallback to smart responses
-      return getSmartFallback(message);
-    }
-
-    const data = await response.json();
-    return data.response || data.content || getSmartFallback(message);
     
   } catch (error) {
     console.warn('Failed to call AI service:', error.message);

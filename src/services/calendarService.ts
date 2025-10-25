@@ -549,7 +549,7 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
   }
 
   // Execute a tool call
-  executeToolCall(request: ToolCallRequest): { success: boolean; message: string; error?: string; data?: unknown } {
+  executeToolCall(request: ToolCallRequest): { success: boolean; message: string; error?: string; data?: unknown } | Promise<{ success: boolean; message: string; error?: string; data?: unknown }> {
     try {
       switch (request.tool) {
         case 'create_meeting':
@@ -872,8 +872,11 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
     };
   }
 
-  private handleAddTask(params: Record<string, unknown>) {
+  private async handleAddTask(params: Record<string, unknown>): Promise<{ success: boolean; message: string; error?: string; data?: unknown }> {
+    console.log('🔧 handleAddTask called with params:', params);
+    
     if (!params.taskText) {
+      console.error('❌ Missing taskText parameter');
       return {
         success: false,
         message: '',
@@ -881,20 +884,62 @@ Note: When creating or modifying events, use the event IDs shown in brackets [li
       };
     }
 
-    const taskData = {
-      taskText: params.taskText as string,
-      priority: params.priority as string,
-      timeBucket: params.timeBucket as string,
-      owner: params.owner as string,
-      location: params.location as string,
-      category: params.category as string
-    };
+    const taskText = params.taskText as string;
+    console.log('📝 Task text to add:', taskText);
 
-    return {
-      success: true,
-      message: `Added new task: "${taskData.taskText}"`,
-      data: taskData
-    };
+    try {
+      // Import the todoTaskService dynamically to avoid circular dependencies
+      console.log('📦 Importing todoTaskService...');
+      const { todoTaskService } = await import('@/services/todoTaskService');
+      
+      // Parse the task text using the mobile task parser
+      console.log('🔍 Parsing task text...');
+      // Use absolute path from project root
+      const { parseTask } = await import('../../mobile-task-app/src/services/taskParser');
+      const parsedTask = parseTask(taskText);
+      console.log('✅ Parsed task:', parsedTask);
+      
+      // Create the todo with parsed data and any AI-provided metadata
+      console.log('🏗️ Creating todo...');
+      const newTodo = todoTaskService.createTodo(parsedTask, false);
+      console.log('✅ Created todo:', newTodo);
+      
+      // Apply AI-provided overrides if present (with proper type handling)
+      if (params.priority && typeof params.priority === 'string') {
+        newTodo.priority = params.priority as any;
+        console.log('🔧 Applied priority override:', params.priority);
+      }
+      if (params.timeBucket && typeof params.timeBucket === 'string') {
+        newTodo.timeBucket = params.timeBucket as any;
+        console.log('🔧 Applied timeBucket override:', params.timeBucket);
+      }
+      if (params.owner && typeof params.owner === 'string') {
+        newTodo.owner = params.owner as any;
+        console.log('🔧 Applied owner override:', params.owner);
+      }
+      if (params.location && typeof params.location === 'string') {
+        newTodo.location = params.location;
+        console.log('🔧 Applied location override:', params.location);
+      }
+      
+      // Save to Firestore
+      console.log('💾 Saving to Firestore...');
+      await todoTaskService.saveTodoToFirestore(newTodo);
+      console.log('✅ Successfully saved to Firestore!');
+      
+      return {
+        success: true,
+        message: `✅ Added new task: "${taskText}"`,
+        data: newTodo
+      };
+    } catch (error) {
+      console.error('❌ Error adding task:', error);
+      return {
+        success: false,
+        message: '',
+        error: `Failed to add task: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   }
 
   private handleAddSubtask(params: Record<string, unknown>) {

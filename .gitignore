@@ -48,6 +48,10 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
+# Firebase credentials
+firebase-service-account.json
+**/firebase-service-account.json
+
 # dotenv environment variables file
 .env
 .env.local

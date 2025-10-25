@@ -77,7 +77,7 @@ class AzureOpenAIHandler {
     ];
   }
 
-  async chat(messages: Message[], modelId: string = 'gpt-5-mini', systemPrompt?: string): Promise<ChatResponse> {
+  async chat(messages: Message[], modelId: string = 'gpt-5-mini', systemPrompt?: string, tools?: { name: string; description: string; parameters: unknown }[]): Promise<ChatResponse> {
     try {
       // Debug: Log API key status (first/last 4 chars only for security)
       console.log('[Azure OpenAI] API Key present:', !!this.apiKey);
@@ -88,6 +88,7 @@ class AzureOpenAIHandler {
       console.log('[Azure OpenAI] Endpoint:', this.endpoint);
       console.log('[Azure OpenAI] Model/Deployment:', modelId);
       console.log('[Azure OpenAI] API Version:', this.apiVersion);
+      console.log('[Azure OpenAI] Tools provided:', tools?.length || 0);
 
       // Prepare messages with system prompt
       const allMessages = systemPrompt
@@ -97,16 +98,33 @@ class AzureOpenAIHandler {
       const url = `${this.endpoint}openai/deployments/${modelId}/chat/completions?api-version=${this.apiVersion}`;
       console.log('[Azure OpenAI] Request URL:', url);
 
+      // Build request body
+      const requestBody: Record<string, unknown> = {
+        messages: allMessages,
+        max_tokens: 16384
+      };
+
+      // Add tools if provided, converting to OpenAI function calling format
+      if (tools && tools.length > 0) {
+        requestBody.tools = tools.map(tool => ({
+          type: 'function',
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters
+          }
+        }));
+        requestBody.tool_choice = 'auto'; // Let model decide when to use tools
+        console.log('[Azure OpenAI] Sending', tools.length, 'tool definitions');
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'api-key': this.apiKey,
         },
-        body: JSON.stringify({
-          messages: allMessages,
-          max_tokens: 16384
-        })
+        body: JSON.stringify(requestBody)
       });
 
       console.log('[Azure OpenAI] Response status:', response.status, response.statusText);
@@ -118,14 +136,37 @@ class AzureOpenAIHandler {
       }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || 'No response';
+      console.log('[Azure OpenAI] Full response data:', JSON.stringify(data, null, 2));
+      
+      const message = data.choices?.[0]?.message;
+      const content = message?.content || '';
+      const toolCalls = message?.tool_calls;
 
       console.log('[Azure OpenAI] Response content:', content);
       console.log('[Azure OpenAI] Response content length:', content.length);
+      console.log('[Azure OpenAI] Tool calls from API:', toolCalls);
+
+      // Extract tool calls from OpenAI function calling format
+      let extractedToolCalls: ToolCall[] | undefined;
+      
+      if (toolCalls && Array.isArray(toolCalls) && toolCalls.length > 0) {
+        console.log('[Azure OpenAI] Processing', toolCalls.length, 'tool calls from API');
+        extractedToolCalls = toolCalls.map((tc: any) => ({
+          tool: tc.function?.name || tc.name,
+          parameters: typeof tc.function?.arguments === 'string'
+            ? JSON.parse(tc.function.arguments)
+            : tc.function?.arguments || tc.arguments || {}
+        }));
+        console.log('[Azure OpenAI] Extracted tool calls:', extractedToolCalls);
+      } else {
+        // Fallback to text-based extraction for models that don't support function calling
+        console.log('[Azure OpenAI] No native tool calls, trying text extraction');
+        extractedToolCalls = this.extractToolCalls(content);
+      }
 
       return {
         content,
-        toolCalls: this.extractToolCalls(content),
+        toolCalls: extractedToolCalls,
         followupButtons: this.extractFollowupButtons(content)
       };
     } catch (error) {
@@ -704,7 +745,7 @@ export class LLMService {
           error: 'Azure OpenAI API key not set'
         };
       }
-      return this.azureOpenAIHandler.chat(messages, model.id, systemPrompt);
+      return this.azureOpenAIHandler.chat(messages, model.id, systemPrompt, tools);
     } else if (model.provider === 'azure-xai') {
       if (!this.azureXAIHandler) {
         return {
