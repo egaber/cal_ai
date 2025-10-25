@@ -369,8 +369,8 @@ describe('Hebrew Patterns', () => {
       const result = parseTask('להוציא את אלון מהגן בשעה 8 וחצי בבוקר');
       
       expect(result.specificTime).toBeDefined();
-      expect(result.specificTime?.hour).toBe(8);
-      expect(result.specificTime?.minute).toBe(30);
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(30);
       
       // Should have time tag
       const timeTag = result.tags.find(t => t.type === 'time');
@@ -382,8 +382,8 @@ describe('Hebrew Patterns', () => {
       const result = parseTask('להוציא את אלון מהגן בשעה 8 ורבע בבוקר');
       
       expect(result.specificTime).toBeDefined();
-      expect(result.specificTime?.hour).toBe(8);
-      expect(result.specificTime?.minute).toBe(15);
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(15);
       
       const timeTag = result.tags.find(t => t.type === 'time');
       expect(timeTag).toBeDefined();
@@ -394,24 +394,24 @@ describe('Hebrew Patterns', () => {
       const result = parseTask('פגישה בשעה 8 ורבע לתשע');
       
       expect(result.specificTime).toBeDefined();
-      expect(result.specificTime?.hour).toBe(8);
-      expect(result.specificTime?.minute).toBe(45);
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(45);
     });
 
     it('should parse "שמונה וחצי בבוקר" as 8:30', () => {
       const result = parseTask('איסוף בשעה שמונה וחצי בבוקר');
       
       expect(result.specificTime).toBeDefined();
-      expect(result.specificTime?.hour).toBe(8);
-      expect(result.specificTime?.minute).toBe(30);
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(30);
     });
 
     it('should parse "תשע ורבע" as 9:15', () => {
       const result = parseTask('להגיע בשעה תשע ורבע');
       
       expect(result.specificTime).toBeDefined();
-      expect(result.specificTime?.hour).toBe(9);
-      expect(result.specificTime?.minute).toBe(15);
+      expect(result.specificTime?.hours).toBe(9);
+      expect(result.specificTime?.minutes).toBe(15);
     });
 
     it('should highlight written time in segments', () => {
@@ -427,8 +427,120 @@ describe('Hebrew Patterns', () => {
       const result = parseTask('פגישה ב-14:30 או שלוש וחצי');
       
       // Should prefer the numeric time
-      expect(result.specificTime?.hour).toBe(14);
-      expect(result.specificTime?.minute).toBe(30);
+      expect(result.specificTime?.hours).toBe(14);
+      expect(result.specificTime?.minutes).toBe(30);
+    });
+    
+    it('should parse "בשעה 8" as 8:00 am (without context)', () => {
+      const result = parseTask('להוציא את אלון מהגן בשעה 8');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('08:00');
+    });
+    
+    it('should parse "ב8" as 8:00 am (without context)', () => {
+      const result = parseTask('להוציא את אלון מהגן ב8');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('08:00');
+    });
+    
+    it('should parse "ב8 בערב" as 20:00 (evening context)', () => {
+      const result = parseTask('להוציא את אלון מהגן ב8 בערב');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(20);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('20:00');
+    });
+    
+    it('should parse "בשעה 8 בערב" as 20:00 (evening context)', () => {
+      const result = parseTask('להוציא את אלון מהגן בשעה 8 בערב');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(20);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('20:00');
+    });
+    
+    it('should parse "ב8 וחצי בערב" as 20:30', () => {
+      const result = parseTask('להוציא את אלון מהגן ב8 וחצי בערב');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(20);
+      expect(result.specificTime?.minutes).toBe(30);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('20:30');
+    });
+    
+    it('should parse "בשמונה" as 8:00', () => {
+      const result = parseTask('להוציא את אלון מהגן בשמונה');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(8);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('08:00');
+    });
+    
+    it('should parse "בשמונה בערב" as 20:00', () => {
+      const result = parseTask('להוציא את אלון מהגן בשמונה בערב');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(20);
+      expect(result.specificTime?.minutes).toBe(0);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('20:00');
+    });
+    
+    it('should parse "בשמונה וחצי בערב" as 20:30', () => {
+      const result = parseTask('להוציא את אלון מהגן בשמונה וחצי בערב');
+      
+      expect(result.specificTime).toBeDefined();
+      expect(result.specificTime?.hours).toBe(20);
+      expect(result.specificTime?.minutes).toBe(30);
+      
+      const timeTag = result.tags.find(t => t.type === 'time');
+      expect(timeTag).toBeDefined();
+      expect(timeTag?.displayText).toBe('20:30');
+    });
+    
+    it('should highlight "בשעה 8" in segments', () => {
+      const result = parseTask('להוציא את אלון מהגן בשעה 8');
+      
+      const timeSegment = result.segments.find(s => s.type === 'time');
+      expect(timeSegment).toBeDefined();
+      expect(timeSegment?.text).toContain('בשעה 8');
+    });
+    
+    it('should highlight "ב8" in segments', () => {
+      const result = parseTask('להוציא את אלון מהגן ב8');
+      
+      const timeSegment = result.segments.find(s => s.type === 'time');
+      expect(timeSegment).toBeDefined();
+      expect(timeSegment?.text).toContain('ב8');
     });
   });
 

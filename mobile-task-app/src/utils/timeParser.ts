@@ -40,7 +40,7 @@ export function parseEnglishWrittenTime(text: string): WrittenTimeMatch | null {
     if (!isPM && hour === 12) hour = 0;
     
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes: 0, displayText: `${hour.toString().padStart(2, '0')}:00` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
@@ -61,7 +61,7 @@ export function parseEnglishWrittenTime(text: string): WrittenTimeMatch | null {
     else if (minuteWord === 'forty-five') minute = 45;
     
     return {
-      time: { hour, minute },
+      time: { hours: hour, minutes: minute, displayText: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
@@ -76,7 +76,7 @@ export function parseEnglishWrittenTime(text: string): WrittenTimeMatch | null {
     const hour = ENGLISH_NUMBERS[match[2].toLowerCase()];
     
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes: 0, displayText: `${hour.toString().padStart(2, '0')}:00` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
@@ -90,68 +90,88 @@ export function parseEnglishWrittenTime(text: string): WrittenTimeMatch | null {
  * Parse Hebrew written time like "בשמונה" or "בשמונה וחצי" with position info
  */
 export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
-  // Pattern: "בשמונה בבוקר" (at eight in the morning)
-  const morningPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בבוקר/g;
-  let match = morningPattern.exec(text);
+  // PRIORITY 1: Check for context-aware patterns with time-of-day indicators first
+  
+  // Pattern: "ב8 בערב" or "בשעה 8 בערב" (digit + evening context)
+  const digitEveningPattern = /(?:בשעה\s+|ב)(\d{1,2})(?:\s+וחצי)?\s+בערב/g;
+  let match = digitEveningPattern.exec(text);
   
   if (match) {
-    const hour = HEBREW_NUMBERS[match[1]];
+    let hour = parseInt(match[1]);
+    const hasHalf = match[0].includes('וחצי');
+    const minutes = hasHalf ? 30 : 0;
+    
+    if (hour >= 0 && hour < 24) {
+      // Evening time: add 12 if hour < 12
+      if (hour < 12) hour += 12;
+      return {
+        time: { hours: hour, minutes, displayText: `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}` },
+        text: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  
+  // Pattern: "בשמונה בבוקר" or "בשמונה בערב" (Hebrew number with time context)
+  const hebrewWithContextPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)(?:\s+וחצי)?\s+(בבוקר|בערב|בצהריים)/g;
+  match = hebrewWithContextPattern.exec(text);
+  
+  if (match) {
+    let hour = HEBREW_NUMBERS[match[1]];
+    const hasHalf = match[0].includes('וחצי');
+    const minutes = hasHalf ? 30 : 0;
+    const timeOfDay = match[2];
+    
+    // Add 12 for evening/noon times
+    if ((timeOfDay === 'בערב' || timeOfDay === 'בצהריים') && hour < 12) {
+      hour += 12;
+    }
+    
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes, displayText: `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
     };
   }
   
-  // Pattern: "שמונה בערב" (eight in the evening) = 20:00
-  const eveningPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בערב/g;
-  match = eveningPattern.exec(text);
+  // Pattern: "שמונה בערב" (Hebrew number + evening, without ב prefix)
+  const hebrewEveningPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)(?:\s+וחצי)?\s+בערב/g;
+  match = hebrewEveningPattern.exec(text);
   
   if (match) {
     let hour = HEBREW_NUMBERS[match[1]];
+    const hasHalf = match[0].includes('וחצי');
+    const minutes = hasHalf ? 30 : 0;
+    
     // Evening time: add 12 if hour < 12
     if (hour < 12) hour += 12;
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes, displayText: `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
     };
   }
   
-  // Pattern: "שמונה בבוקר" (eight in the morning) - without ב prefix
-  const morningPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בבוקר/g;
-  match = morningPattern2.exec(text);
+  // Pattern: "שמונה בבוקר" (Hebrew number + morning, without ב prefix)
+  const hebrewMorningPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בבוקר/g;
+  match = hebrewMorningPattern.exec(text);
   
   if (match) {
     const hour = HEBREW_NUMBERS[match[1]];
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes: 0, displayText: `${hour.toString().padStart(2, '0')}:00` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
     };
   }
   
-  // Pattern: "שמונה בצהריים" (eight at noon)
-  const noonPattern = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+בצהריים/g;
-  match = noonPattern.exec(text);
-  
-  if (match) {
-    let hour = HEBREW_NUMBERS[match[1]];
-    // Noon time: if hour < 12, add 12
-    if (hour < 12) hour += 12;
-    return {
-      time: { hour, minute: 0 },
-      text: match[0],
-      start: match.index,
-      end: match.index + match[0].length,
-    };
-  }
+  // PRIORITY 2: Compound patterns (half, quarter) without context
   
   // Pattern: "8 ורבע לתשע" (8 and a quarter to 9 = 8:45)
-  // CHECK THIS FIRST before simple quarter pattern!
   const digitQuarterToPattern = /(\d{1,2})\s+ורבע\s+ל(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)/g;
   match = digitQuarterToPattern.exec(text);
   
@@ -159,7 +179,7 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     const hour = parseInt(match[1]);
     if (hour >= 0 && hour < 24) {
       return {
-        time: { hour, minute: 45 },
+        time: { hours: hour, minutes: 45, displayText: `${hour.toString().padStart(2, '0')}:45` },
         text: match[0],
         start: match.index,
         end: match.index + match[0].length,
@@ -175,7 +195,7 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     const hour = parseInt(match[1]);
     if (hour >= 0 && hour < 24) {
       return {
-        time: { hour, minute: 30 },
+        time: { hours: hour, minutes: 30, displayText: `${hour.toString().padStart(2, '0')}:30` },
         text: match[0],
         start: match.index,
         end: match.index + match[0].length,
@@ -191,7 +211,7 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     const hour = parseInt(match[1]);
     if (hour >= 0 && hour < 24) {
       return {
-        time: { hour, minute: 15 },
+        time: { hours: hour, minutes: 15, displayText: `${hour.toString().padStart(2, '0')}:15` },
         text: match[0],
         start: match.index,
         end: match.index + match[0].length,
@@ -199,70 +219,64 @@ export function parseHebrewWrittenTime(text: string): WrittenTimeMatch | null {
     }
   }
   
-  // Pattern: "בשמונה וחצי" (at eight and a half)
-  const halfPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
-  match = halfPattern.exec(text);
+  // Pattern: "בשמונה וחצי" or "בשמונה ורבע" (at eight and a half/quarter)
+  const hebrewWithModifierPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+(וחצי|ורבע)/g;
+  match = hebrewWithModifierPattern.exec(text);
   
   if (match) {
     const hour = HEBREW_NUMBERS[match[1]];
+    const modifier = match[2];
+    const minutes = modifier === 'וחצי' ? 30 : 15;
     return {
-      time: { hour, minute: 30 },
+      time: { hours: hour, minutes, displayText: `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
     };
   }
   
-  // Pattern: "שמונה וחצי" (eight and a half) - without ב prefix
-  const halfPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+וחצי/g;
-  match = halfPattern2.exec(text);
+  // Pattern: "שמונה וחצי" or "תשע ורבע" (Hebrew number + modifier, without ב prefix)
+  const hebrewWithModifierPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+(וחצי|ורבע)/g;
+  match = hebrewWithModifierPattern2.exec(text);
   
   if (match) {
     const hour = HEBREW_NUMBERS[match[1]];
+    const modifier = match[2];
+    const minutes = modifier === 'וחצי' ? 30 : 15;
     return {
-      time: { hour, minute: 30 },
+      time: { hours: hour, minutes, displayText: `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,
     };
   }
   
-  // Pattern: "בשמונה ורבע" (at eight and a quarter)
-  const quarterPattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+ורבע/g;
-  match = quarterPattern.exec(text);
+  // PRIORITY 3: Simple standalone patterns (no modifiers, no context)
+  
+  // Pattern: "בשעה 8" or "ב8" (digit hour without context)
+  const digitStandalonePattern = /(?:בשעה\s+|ב)(\d{1,2})(?!\s*(?:וחצי|ורבע|בערב|בבוקר|:|-))/g;
+  match = digitStandalonePattern.exec(text);
   
   if (match) {
-    const hour = HEBREW_NUMBERS[match[1]];
-    return {
-      time: { hour, minute: 15 },
-      text: match[0],
-      start: match.index,
-      end: match.index + match[0].length,
-    };
+    const hour = parseInt(match[1]);
+    if (hour >= 0 && hour < 24) {
+      return {
+        time: { hours: hour, minutes: 0, displayText: `${hour.toString().padStart(2, '0')}:00` },
+        text: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
   }
   
-  // Pattern: "תשע ורבע" (nine and a quarter) - without ב prefix
-  const quarterPattern2 = /(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)\s+ורבע/g;
-  match = quarterPattern2.exec(text);
-  
-  if (match) {
-    const hour = HEBREW_NUMBERS[match[1]];
-    return {
-      time: { hour, minute: 15 },
-      text: match[0],
-      start: match.index,
-      end: match.index + match[0].length,
-    };
-  }
-  
-  // Pattern: "בשמונה" (at eight) - simple form
-  const simplePattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)(?!\s)/g;
+  // Pattern: "בשמונה" (at eight with ב prefix) - simple form without modifiers or context
+  const simplePattern = /ב(אפס|אחד|אחת|שתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|אחד עשרה|שתיים עשרה)(?!\s+(?:וחצי|ורבע|בערב|בבוקר|בצהריים))/g;
   match = simplePattern.exec(text);
   
   if (match) {
     const hour = HEBREW_NUMBERS[match[1]];
     return {
-      time: { hour, minute: 0 },
+      time: { hours: hour, minutes: 0, displayText: `${hour.toString().padStart(2, '0')}:00` },
       text: match[0],
       start: match.index,
       end: match.index + match[0].length,

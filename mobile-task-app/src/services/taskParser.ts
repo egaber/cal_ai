@@ -328,7 +328,8 @@ export function parseTask(text: string): ParsedTask {
     const hour = parseInt(hourStr);
     const minute = parseInt(minuteStr);
     if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-      specificTime = { hour, minute };
+      const displayText = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      specificTime = { hours: hour, minutes: minute, displayText };
       // Find the actual time string (HH:MM part)
       const timeStr = `${hourStr}:${minuteStr}`;
       const startOffset = match[0].indexOf(timeStr);
@@ -568,7 +569,7 @@ export function parseTask(text: string): ParsedTask {
     tags.push({
       id: `tag-${tagId++}`,
       type: 'time',
-      displayText: `${String(specificTime.hour).padStart(2, '0')}:${String(specificTime.minute).padStart(2, '0')}`,
+      displayText: specificTime.displayText,
       value: specificTime,
       emoji: getTagEmoji('time'),
       editable: true,
