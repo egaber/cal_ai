@@ -19,24 +19,27 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarEvent, FamilyMember } from '@/types/calendar';
+import { FamilyMember } from '@/types/calendar';
 import { GoogleCalendarSettings, CalendarMemberMapping } from '@/types/googleCalendar';
 import { googleCalendarService } from '@/services/googleCalendarService';
 import { StorageService } from '@/services/storageService';
+import { createEventService } from '@/services/eventService';
 import { Cloud, CloudOff, RefreshCw, Settings, AlertCircle, CheckCircle, Plus, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 
 interface GoogleCalendarSyncProps {
-  events: CalendarEvent[];
+  familyId: string;
+  userId: string;
   familyMembers: FamilyMember[];
-  onEventsUpdated: (events: CalendarEvent[]) => void;
+  onSyncComplete?: () => void;
 }
 
 export function GoogleCalendarSync({
-  events,
+  familyId,
+  userId,
   familyMembers,
-  onEventsUpdated,
+  onSyncComplete,
 }: GoogleCalendarSyncProps) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -197,8 +200,10 @@ export function GoogleCalendarSync({
     setIsOpen(false);
   };
 
-  // Sync from Google Calendar (all mapped calendars)
+  // Sync from Google Calendar (all mapped calendars) - NOW SAVES TO FIRESTORE
   const handleSyncFromGoogle = async () => {
+    console.log('🔄 Starting Google Calendar sync...');
+    
     if (!isAuthenticated) {
       toast({
         title: 'Not Authenticated',
@@ -217,6 +222,8 @@ export function GoogleCalendarSync({
       return;
     }
 
+    console.log('📋 Calendar mappings:', settings.calendarMappings);
+    
     setIsSyncing(true);
     let totalImported = 0;
 
@@ -227,12 +234,18 @@ export function GoogleCalendarSync({
       const timeMax = new Date();
       timeMax.setDate(timeMax.getDate() + 90);
 
-      const existingIds = new Set(events.map((e) => e.id));
-      const allNewEvents: CalendarEvent[] = [];
+      console.log('📅 Date range:', { timeMin, timeMax });
+      console.log('👤 User ID:', userId);
+      console.log('👨‍👩‍👧‍👦 Family ID:', familyId);
+
+      // Create EventService for Google calendar source
+      const googleEventService = createEventService(familyId, userId, 'google');
 
       // Sync each mapped calendar
       for (const mapping of settings.calendarMappings) {
         try {
+          console.log(`📥 Fetching events from calendar: ${mapping.calendarName} (${mapping.calendarId})`);
+          
           const googleEvents = await googleCalendarService.syncFromGoogle(
             mapping.calendarId,
             mapping.memberId,
@@ -241,21 +254,24 @@ export function GoogleCalendarSync({
             mapping.calendarEmail
           );
 
-          // Filter out duplicates
-          const newEvents = googleEvents.filter((e) => !existingIds.has(e.id));
-          allNewEvents.push(...newEvents);
-          totalImported += newEvents.length;
+          console.log(`✅ Received ${googleEvents.length} events from Google Calendar`);
+          
+          if (googleEvents.length > 0) {
+            console.log('📝 Sample event:', googleEvents[0]);
+          }
 
-          // Add to existing IDs to prevent duplicates across calendars
-          newEvents.forEach(e => existingIds.add(e.id));
+          // Save each event to Firestore in the 'google' calendar source
+          for (const event of googleEvents) {
+            console.log(`💾 Saving event to Firestore:`, event.title);
+            await googleEventService.createEvent(event);
+            totalImported++;
+          }
+          
+          console.log(`✅ Successfully saved ${googleEvents.length} events to Firestore`);
         } catch (error) {
-          console.error(`Failed to sync calendar ${mapping.calendarName}:`, error);
+          console.error(`❌ Failed to sync calendar ${mapping.calendarName}:`, error);
         }
       }
-
-      // Merge with existing events
-      const updatedEvents = [...events, ...allNewEvents];
-      onEventsUpdated(updatedEvents);
 
       // Update last sync time
       const updatedSettings = {
@@ -264,6 +280,9 @@ export function GoogleCalendarSync({
       };
       setSettings(updatedSettings);
       StorageService.saveGoogleCalendarSettings(updatedSettings);
+
+      // Notify parent to refresh
+      onSyncComplete?.();
 
       toast({
         title: 'Sync Complete',
@@ -280,7 +299,7 @@ export function GoogleCalendarSync({
     }
   };
 
-  // Sync to Google Calendar
+  // Sync to Google Calendar - Export local events
   const handleSyncToGoogle = async () => {
     if (!isAuthenticated) {
       toast({
@@ -305,10 +324,14 @@ export function GoogleCalendarSync({
       let totalSuccess = 0;
       let totalFailed = 0;
 
+      // Load local events from cal_ai source
+      const localEventService = createEventService(familyId, userId, 'cal_ai');
+      const allLocalEvents = await localEventService.loadAllEvents();
+
       // Export events to each mapped calendar based on member
       for (const mapping of settings.calendarMappings) {
-        const memberEvents = events.filter(
-          e => e.memberId === mapping.memberId && e.source !== 'google'
+        const memberEvents = allLocalEvents.filter(
+          e => e.memberId === mapping.memberId
         );
 
         if (memberEvents.length > 0) {

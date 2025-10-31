@@ -1,12 +1,20 @@
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Calendar, ListTodo, Languages, Sun, Moon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Calendar, ListTodo, Languages, Sun, Moon, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UserProfile } from "./UserProfile";
 import { UserProfile as UserProfileType } from "@/types/user";
 import { FamilyMember } from "@/types/calendar";
 import { APP_ICON, PRIMARY_COLOR, PRIMARY_COLOR_HOVER } from "@/config/branding";
 import { useRTL } from "@/contexts/RTLContext";
 import { useTranslation } from "@/i18n/translations";
+import { CalendarViewMode } from "@/contexts/EventContext";
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -23,6 +31,8 @@ interface CalendarHeaderProps {
   onTabChange?: (tab: 'calendar' | 'tasks') => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
+  calendarViewMode?: CalendarViewMode;
+  onCalendarViewModeChange?: (mode: CalendarViewMode) => void;
 }
 
 export const CalendarHeader = ({
@@ -39,7 +49,9 @@ export const CalendarHeader = ({
   activeTab = 'calendar',
   onTabChange,
   isDarkMode = false,
-  onToggleDarkMode
+  onToggleDarkMode,
+  calendarViewMode = 'all',
+  onCalendarViewModeChange
 }: CalendarHeaderProps) => {
   const { language, toggleRTL, isRTL } = useRTL();
   const t = useTranslation(language);
@@ -109,8 +121,38 @@ export const CalendarHeader = ({
             </div>
           </div>
 
-          {/* View Mode Selector */}
-          <div className="flex items-center justify-center gap-2 md:justify-start">
+          {/* View Mode Selector + Calendar Filter */}
+          <div className="flex items-center justify-center gap-3 md:justify-start">
+            {/* Calendar Source Filter */}
+            {onCalendarViewModeChange && (
+              <Select value={calendarViewMode} onValueChange={onCalendarViewModeChange}>
+                <SelectTrigger className="w-[180px] h-9 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>All Calendars</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="local">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <span>My Calendar</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="google">
+                    <div className="flex items-center gap-2">
+                      <Cloud className="h-4 w-4 text-blue-500" />
+                      <span>Google Calendar</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            
+            {/* Day/Week/Month View Selector */}
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800">
               <Button
                 variant={viewMode === 'day' ? 'default' : 'ghost'}

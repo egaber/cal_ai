@@ -77,7 +77,18 @@ const Index = ({ activeTab, onTabChange, isDarkMode, onToggleDarkMode }: IndexPr
       setSelectedMembers(familyMembers.map(m => m.id));
     }
   }, [familyMembers]);
-  const { events: cloudEvents, createEvent: createCloudEvent, updateEvent: updateCloudEvent, deleteEvent: deleteCloudEvent, moveEvent: moveCloudEvent, loading: eventsLoading } = useEvents();
+  const { 
+    events: cloudEvents, 
+    filteredEvents: contextFilteredEvents,
+    viewMode: calendarViewMode,
+    setViewMode: setCalendarViewMode,
+    createEvent: createCloudEvent, 
+    updateEvent: updateCloudEvent, 
+    deleteEvent: deleteCloudEvent, 
+    moveEvent: moveCloudEvent, 
+    loading: eventsLoading,
+    refreshEvents
+  } = useEvents();
   // Use cloud events directly
   const events = cloudEvents;
   const [memoryData, setMemoryData] = useState<MemoryData>({
@@ -677,11 +688,14 @@ What would you like to know or do with this event?`;
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <GoogleCalendarSync
-              events={events}
-              familyMembers={familyMembers}
-              onEventsUpdated={() => {}} // Events now managed by cloud context
-            />
+            {family?.id && user?.uid && (
+              <GoogleCalendarSync
+                familyId={family.id}
+                userId={user.uid}
+                familyMembers={familyMembers}
+                onSyncComplete={refreshEvents}
+              />
+            )}
             {eventSuggestions.length > 0 && (
               <Button
                 onClick={() => setShowSuggestionsPanel(!showSuggestionsPanel)}
@@ -824,6 +838,8 @@ What would you like to know or do with this event?`;
                 onTabChange={onTabChange}
                 isDarkMode={isDarkMode}
                 onToggleDarkMode={onToggleDarkMode}
+                calendarViewMode={calendarViewMode}
+                onCalendarViewModeChange={setCalendarViewMode}
               />
 
               <div className="mt-6 flex min-h-[600px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-white/90 shadow-inner">

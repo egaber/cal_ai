@@ -1,14 +1,20 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react';
 import { CalendarEvent } from '@/types/calendar';
 import { EventService, createEventService } from '@/services/eventService';
 import { useFamily } from './FamilyContext';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
+export type CalendarViewMode = 'all' | 'local' | 'google';
+
 interface EventContextType {
   events: CalendarEvent[];
   loading: boolean;
   eventService: EventService | null;
+  googleEventService: EventService | null;
+  viewMode: CalendarViewMode;
+  setViewMode: (mode: CalendarViewMode) => void;
+  filteredEvents: CalendarEvent[];
   createEvent: (eventData: Omit<CalendarEvent, 'id'>) => Promise<CalendarEvent>;
   updateEvent: (eventId: string, updates: Partial<CalendarEvent>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
@@ -37,21 +43,43 @@ export const EventProvider = ({ children }: EventProviderProps) => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventService, setEventService] = useState<EventService | null>(null);
+  const [googleEventService, setGoogleEventService] = useState<EventService | null>(null);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(() => {
+    // Load saved preference from localStorage
+    const saved = localStorage.getItem('calendarViewMode');
+    return (saved as CalendarViewMode) || 'all';
+  });
 
-  // Initialize event service when family and user are available
+  // Save view mode preference
+  useEffect(() => {
+    localStorage.setItem('calendarViewMode', viewMode);
+  }, [viewMode]);
+
+  // Filter events based on view mode
+  const filteredEvents = useMemo(() => {
+    if (viewMode === 'all') return events;
+    if (viewMode === 'local') return events.filter(e => e.source !== 'google');
+    if (viewMode === 'google') return events.filter(e => e.source === 'google');
+    return events;
+  }, [events, viewMode]);
+
+  // Initialize event services when family and user are available
   useEffect(() => {
     if (family?.id && user?.uid) {
-      const service = createEventService(family.id, user.uid, 'cal_ai');
-      setEventService(service);
+      const localService = createEventService(family.id, user.uid, 'cal_ai');
+      const googleService = createEventService(family.id, user.uid, 'google');
+      setEventService(localService);
+      setGoogleEventService(googleService);
     } else {
       setEventService(null);
+      setGoogleEventService(null);
       setEvents([]);
     }
   }, [family?.id, user?.uid]);
 
-  // Load and subscribe to events
+  // Load and subscribe to events from both sources
   useEffect(() => {
-    if (!eventService) {
+    if (!eventService || !googleEventService) {
       setLoading(false);
       return;
     }
@@ -67,20 +95,36 @@ export const EventProvider = ({ children }: EventProviderProps) => {
     endDate.setDate(0); // Last day of month
     endDate.setHours(23, 59, 59, 999);
 
-    // Subscribe to real-time updates
-    const unsubscribe = eventService.subscribeToEvents(
+    let localEvents: CalendarEvent[] = [];
+    let googleEvents: CalendarEvent[] = [];
+
+    // Subscribe to local calendar events
+    const unsubscribeLocal = eventService.subscribeToEvents(
       startDate,
       endDate,
       (updatedEvents) => {
-        setEvents(updatedEvents);
+        localEvents = updatedEvents;
+        setEvents([...localEvents, ...googleEvents]);
+        setLoading(false);
+      }
+    );
+
+    // Subscribe to Google calendar events
+    const unsubscribeGoogle = googleEventService.subscribeToEvents(
+      startDate,
+      endDate,
+      (updatedEvents) => {
+        googleEvents = updatedEvents;
+        setEvents([...localEvents, ...googleEvents]);
         setLoading(false);
       }
     );
 
     return () => {
-      unsubscribe();
+      unsubscribeLocal();
+      unsubscribeGoogle();
     };
-  }, [eventService]);
+  }, [eventService, googleEventService]);
 
   const createEvent = async (eventData: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> => {
     if (!eventService) {
@@ -178,7 +222,7 @@ export const EventProvider = ({ children }: EventProviderProps) => {
   };
 
   const refreshEvents = async (): Promise<void> => {
-    if (!eventService) return;
+    if (!eventService || !googleEventService) return;
 
     try {
       setLoading(true);
@@ -192,8 +236,13 @@ export const EventProvider = ({ children }: EventProviderProps) => {
       endDate.setDate(0);
       endDate.setHours(23, 59, 59, 999);
 
-      const loadedEvents = await eventService.loadEvents(startDate, endDate);
-      setEvents(loadedEvents);
+      // Load from both sources
+      const [localEvents, googleEvents] = await Promise.all([
+        eventService.loadEvents(startDate, endDate),
+        googleEventService.loadEvents(startDate, endDate),
+      ]);
+
+      setEvents([...localEvents, ...googleEvents]);
     } catch (error) {
       console.error('Error refreshing events:', error);
       toast({
@@ -212,6 +261,10 @@ export const EventProvider = ({ children }: EventProviderProps) => {
         events,
         loading,
         eventService,
+        googleEventService,
+        viewMode,
+        setViewMode,
+        filteredEvents,
         createEvent,
         updateEvent,
         deleteEvent,

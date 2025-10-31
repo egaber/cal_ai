@@ -193,21 +193,54 @@ Emojis are also automatically assigned based on event titles.
 
 ### "Authentication Failed" / "Error 400: redirect_uri_mismatch"
 
-- **Problem**: OAuth authentication is not working, or you see "redirect_uri_mismatch" error
-- **Solution**: 
-  - **This is the most common error!** It means the URL in your browser doesn't match what's registered in Google Cloud Console
-  - Check your browser's address bar - what port number do you see? (e.g., `http://localhost:8081`)
-  - Go back to Google Cloud Console → APIs & Services → Credentials
-  - Click on your OAuth 2.0 Client ID
-  - Under "Authorized JavaScript origins", add the EXACT URL from your browser (including the port)
-  - Under "Authorized redirect URIs", add the same URL
-  - Click "Save"
-  - Wait 5 minutes for changes to propagate
-  - Try authenticating again
-  - Common ports to add:
-    - `http://localhost:5173` (Vite default)
-    - `http://localhost:8081` (alternative)
-    - `http://localhost:3000` (React default)
+- **Problem**: OAuth authentication is not working, or you see "redirect_uri_mismatch" error with "origin=http://localhost:8080"
+- **Root Cause**: The URL in your browser doesn't match what's registered in Google Cloud Console
+- **Solution - FOLLOW EXACTLY**: 
+  
+  1. **Check Your Browser's URL**:
+     - Look at your browser's address bar
+     - What port do you see? (e.g., `http://localhost:8080`, `http://localhost:5173`)
+     - **Write it down EXACTLY** - you'll need this exact URL
+  
+  2. **Update Google Cloud Console**:
+     - Go to [Google Cloud Console](https://console.cloud.google.com/)
+     - Make sure your "Calendar AI" project is selected (check top bar)
+     - Go to "APIs & Services" → "Credentials"
+     - Click on your OAuth 2.0 Client ID (the one you created)
+     - You'll see two sections to update:
+     
+     **A. Authorized JavaScript origins**:
+     - Click "+ ADD URI"
+     - Add the EXACT URL from your browser: `http://localhost:8080` (or whatever port you saw)
+     - Also add these common alternatives:
+       - `http://localhost:5173` (Vite default)
+       - `http://localhost:8081`
+       - `http://localhost:3000`
+     
+     **B. Authorized redirect URIs**:
+     - Click "+ ADD URI"
+     - Add the SAME URLs again:
+       - `http://localhost:8080`
+       - `http://localhost:5173`
+       - `http://localhost:8081`
+       - `http://localhost:3000`
+     
+     - Click "SAVE" at the bottom
+  
+  3. **Wait and Retry**:
+     - Wait 1-2 minutes for Google to process the changes
+     - Close the error popup
+     - Click "Connect" again in Calendar AI
+     - The authentication should now work!
+  
+  **Common Port Numbers**:
+  - `8080` - Common development server
+  - `5173` - Vite's default port
+  - `8081` - Alternative port
+  - `3000` - Create React App default
+  - `4173` - Vite preview mode
+  
+  **Pro Tip**: Add ALL of these ports to avoid this error in the future. There's no limit, and it's better to have them ready!
 
 ### "Failed to initialize Google Calendar API"
 
