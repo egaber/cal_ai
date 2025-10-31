@@ -38,9 +38,9 @@ You should see:
 ```
 🚀 WhatsApp Webhook Server Started!
 =====================================
-📡 Server running on: http://localhost:3000
-📱 Webhook endpoint: http://localhost:3000/whatsapp
-💚 Health check: http://localhost:3000/
+📡 Server running on: http://localhost:6000
+📱 Webhook endpoint: http://localhost:6000/whatsapp
+💚 Health check: http://localhost:6000/
 
 Waiting for messages...
 ```
@@ -58,7 +58,7 @@ choco install ngrok
 ### Run ngrok
 In a **new terminal window**:
 ```powershell
-ngrok http 3000
+ngrok http 6000
 ```
 
 You'll see something like:
