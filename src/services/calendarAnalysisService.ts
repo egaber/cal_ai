@@ -247,22 +247,26 @@ ${eventsFormatted}
       const prompt = this.buildAnalysisPrompt(events);
       console.log('📝 Prompt built, sending to AI...');
       
-      // Get available models
+      // Get user's selected model from modelConfigService
+      const { modelConfigService } = await import('./modelConfigService');
       const availableModels = await llmService.getAvailableModels();
+      
       if (availableModels.length === 0) {
-        throw new Error('No LLM models available. Please configure API keys.');
+        throw new Error('No LLM models available. Please configure API keys in Account Settings.');
       }
       
-      // Use first available model (prefer Azure OpenAI or Gemini)
-      const model = availableModels.find(m => m.provider === 'azure-openai' || m.provider === 'gemini') 
-                   || availableModels[0];
+      const selectedModel = modelConfigService.findModel(availableModels);
       
-      console.log(`🤖 Using model: ${model.name} (${model.provider})`);
+      if (!selectedModel) {
+        throw new Error('No LLM model found. Please select a model in Account Settings.');
+      }
+      
+      console.log(`🤖 Using selected model: ${selectedModel.name} (${selectedModel.provider})`);
       
       // Send to AI
       const response = await llmService.chat({
         messages: [{ role: 'user', content: prompt }],
-        model
+        model: selectedModel
       });
       
       console.log('✅ Received AI response');
@@ -271,19 +275,39 @@ ${eventsFormatted}
       let insightsData;
       try {
         // Extract text from response
-        const responseText = response.content || '';
+        let responseText = response.content || '';
         
-        // Try to extract JSON from response
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          insightsData = JSON.parse(jsonMatch[0]);
+        // Remove markdown code blocks if present
+        responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        
+        // Remove any leading/trailing whitespace
+        responseText = responseText.trim();
+        
+        // Fix common JSON issues from Hebrew text
+        // Replace problematic backslashes in Hebrew text
+        responseText = responseText.replace(/אחה\\"צ/g, 'אחר הצהריים');
+        responseText = responseText.replace(/בוקר\\/g, 'בוקר ');
+        responseText = responseText.replace(/צהריים\\/g, 'צהריים ');
+        responseText = responseText.replace(/ערב\\/g, 'ערב ');
+        
+        // Try to extract JSON from response (find first { to last })
+        const firstBrace = responseText.indexOf('{');
+        const lastBrace = responseText.lastIndexOf('}');
+        
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const jsonStr = responseText.substring(firstBrace, lastBrace + 1);
+          insightsData = JSON.parse(jsonStr);
         } else {
+          // Fallback: try to parse as-is
           insightsData = JSON.parse(responseText);
         }
+        
+        console.log('✅ Successfully parsed insights data');
       } catch (parseError) {
-        console.error('Failed to parse AI response as JSON:', parseError);
-        console.log('Raw response:', response);
-        throw new Error('AI response is not valid JSON');
+        console.error('❌ Failed to parse AI response as JSON:', parseError);
+        console.log('📄 Raw response (first 1000 chars):', response.content?.substring(0, 1000));
+        console.log('📄 Problem area (around error):', response.content?.substring(1350, 1450));
+        throw new Error(`AI response is not valid JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
       
       // Build full insights object

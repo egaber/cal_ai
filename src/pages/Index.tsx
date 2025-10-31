@@ -759,6 +759,8 @@ What would you like to know or do with this event?`;
                   familyMembers={familyMembers}
                   memoryData={memoryData}
                   onMemoryUpdate={setMemoryData}
+                  userId={user?.uid || ''}
+                  familyId={family?.id || ''}
                 />
               </DialogContent>
             </Dialog>

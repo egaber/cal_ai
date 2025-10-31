@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,24 +9,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, Users, MapPin, Plus, Trash2, Edit } from "lucide-react";
+import { Brain, Users, MapPin, Plus, Trash2, Edit, Lightbulb, Calendar, RefreshCw } from "lucide-react";
 import { UserMemory, FamilyMemory, Place, TravelInfo, MemoryData } from "@/types/memory";
 import { FamilyMember } from "@/types/calendar";
 import { StorageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
+import { CalendarInsights } from "@/types/calendarInsights";
+import { calendarAnalysisService } from "@/services/calendarAnalysisService";
 
 interface MemoryManagerProps {
   familyMembers: FamilyMember[];
   memoryData: MemoryData;
   onMemoryUpdate: (memoryData: MemoryData) => void;
+  userId: string;
+  familyId: string;
 }
 
-export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate }: MemoryManagerProps) {
+export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userId, familyId }: MemoryManagerProps) {
   const { toast } = useToast();
   const [isAddUserMemoryOpen, setIsAddUserMemoryOpen] = useState(false);
   const [isAddFamilyMemoryOpen, setIsAddFamilyMemoryOpen] = useState(false);
   const [isAddPlaceOpen, setIsAddPlaceOpen] = useState(false);
   const [isAddTravelOpen, setIsAddTravelOpen] = useState(false);
+  
+  // Calendar Insights State
+  const [calendarInsights, setCalendarInsights] = useState<CalendarInsights | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(true);
 
   // User Memory Form
   const [newUserMemory, setNewUserMemory] = useState({
@@ -206,6 +215,54 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate }: Mem
     return familyMembers.find(m => m.id === memberId)?.name || 'Unknown';
   };
 
+  // Load calendar insights on mount
+  useEffect(() => {
+    loadCalendarInsights();
+  }, []);
+
+  const loadCalendarInsights = async () => {
+    setIsLoadingInsights(true);
+    try {
+      const insights = await calendarAnalysisService.loadInsights(userId);
+      setCalendarInsights(insights);
+    } catch (error) {
+      console.error('Failed to load insights:', error);
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  };
+
+  const handleAnalyzeCalendar = async () => {
+    setIsAnalyzing(true);
+    try {
+      const result = await calendarAnalysisService.analyzeCalendar(userId, familyId);
+      
+      if (result.success && result.insights) {
+        setCalendarInsights(result.insights);
+        await calendarAnalysisService.saveInsights(result.insights);
+        
+        toast({
+          title: "ניתוח הושלם",
+          description: `נותחו ${result.insights.eventsAnalyzed} אירועים`,
+        });
+      } else {
+        toast({
+          title: "הניתוח נכשל",
+          description: result.error || 'אירעה שגיאה',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "שגיאה",
+        description: error instanceof Error ? error.message : 'אירעה שגיאה',
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -219,12 +276,218 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate }: Mem
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="user" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="insights">📊 Insights</TabsTrigger>
             <TabsTrigger value="user">User Memory</TabsTrigger>
             <TabsTrigger value="family">Family Memory</TabsTrigger>
             <TabsTrigger value="places">Places</TabsTrigger>
             <TabsTrigger value="travel">Travel Info</TabsTrigger>
           </TabsList>
+
+          {/* Calendar Insights Tab */}
+          <TabsContent value="insights" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium">Calendar Intelligence</p>
+                <p className="text-xs text-muted-foreground">
+                  {calendarInsights 
+                    ? `Last analyzed: ${new Date(calendarInsights.analyzedAt).toLocaleString('he-IL')}`
+                    : 'No analysis yet'}
+                </p>
+              </div>
+              <Button 
+                size="sm" 
+                onClick={handleAnalyzeCalendar}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    מנתח...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    נתח יומן
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {isLoadingInsights ? (
+              <div className="text-center py-8 text-muted-foreground">טוען תובנות...</div>
+            ) : !calendarInsights ? (
+              <Card className="p-8 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <Lightbulb className="h-12 w-12 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium mb-2">אין עדיין ניתוח</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      לחץ על "נתח יומן" כדי לקבל תובנות על ההרגלים והדפוסים שלך
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-4">
+                  {/* Summary Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">סיכום</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">אירועים נותחו:</span>
+                          <span className="font-medium ml-2">{calendarInsights.eventsAnalyzed}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">רמת ביטחון:</span>
+                          <Badge variant={calendarInsights.confidence > 70 ? 'default' : 'secondary'} className="ml-2">
+                            {calendarInsights.confidence}%
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Family Members */}
+                  {calendarInsights.familyMembers.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Users className="h-5 w-5" />
+                          בני משפחה ותפקידים
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {calendarInsights.familyMembers.map((member, idx) => (
+                            <div key={idx} className="p-3 border rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium">{member.name}</span>
+                                <Badge variant="outline">{member.confidence}% ביטחון</Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">{member.role}</p>
+                              {member.responsibilities.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {member.responsibilities.map((resp, i) => (
+                                    <Badge key={i} variant="secondary" className="text-xs">
+                                      {resp}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Recurring Anchors */}
+                  {calendarInsights.recurringAnchors.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Calendar className="h-5 w-5" />
+                          עוגנים קבועים
+                        </CardTitle>
+                        <CardDescription>פעילויות חוזרות שמארגנות את השבוע</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {calendarInsights.recurringAnchors.map((anchor, idx) => (
+                            <div key={idx} className="p-3 border rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium">{anchor.activity}</span>
+                                <Badge variant="outline">{anchor.confidence}% ביטחון</Badge>
+                              </div>
+                              <div className="text-sm space-y-1">
+                                <p><span className="text-muted-foreground">יום:</span> {anchor.dayOfWeek}</p>
+                                <p><span className="text-muted-foreground">שעה:</span> {anchor.time}</p>
+                                <p><span className="text-muted-foreground">תדירות:</span> {anchor.frequency}</p>
+                                {anchor.participants.length > 0 && (
+                                  <p><span className="text-muted-foreground">משתתפים:</span> {anchor.participants.join(', ')}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Habits */}
+                  {calendarInsights.habits.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">הרגלים</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {calendarInsights.habits.map((habit, idx) => (
+                            <div key={idx} className="p-3 border rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge variant="secondary">{habit.timePreference}</Badge>
+                                <Badge variant="outline">{habit.confidence}% ביטחון</Badge>
+                              </div>
+                              <p className="text-sm mb-2">{habit.description}</p>
+                              {habit.examples.length > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-medium">דוגמאות:</span> {habit.examples.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* General Insights */}
+                  {calendarInsights.generalInsights.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Lightbulb className="h-5 w-5" />
+                          תובנות כלליות
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {calendarInsights.generalInsights.map((insight, idx) => (
+                            <div key={idx} className="p-3 border rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium">{insight.title}</span>
+                                <div className="flex gap-2">
+                                  <Badge variant={
+                                    insight.impact === 'positive' ? 'default' :
+                                    insight.impact === 'negative' ? 'destructive' :
+                                    'secondary'
+                                  }>
+                                    {insight.impact}
+                                  </Badge>
+                                  <Badge variant="outline">{insight.confidence}%</Badge>
+                                </div>
+                              </div>
+                              <p className="text-sm mb-2">{insight.description}</p>
+                              {insight.suggestedAction && (
+                                <p className="text-sm text-blue-600">
+                                  💡 {insight.suggestedAction}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </TabsContent>
 
           {/* User Memory Tab */}
           <TabsContent value="user" className="space-y-4">
@@ -631,7 +894,7 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate }: Mem
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="">Anyone</SelectItem>
-                            {familyMembers.filter(m => m.role === 'Parent').map((member) => (
+                          {familyMembers.filter(m => m.role === 'parent').map((member) => (
                               <SelectItem key={member.id} value={member.id}>
                                 {member.name}
                               </SelectItem>
