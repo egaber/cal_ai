@@ -35,17 +35,34 @@ export class EventService {
     return `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  // Recursively remove undefined values from an object
+  private removeUndefined(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.removeUndefined(item)).filter(item => item !== undefined);
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      Object.keys(obj).forEach(key => {
+        const value = this.removeUndefined(obj[key]);
+        if (value !== undefined) {
+          cleaned[key] = value;
+        }
+      });
+      return cleaned;
+    }
+    
+    return obj;
+  }
+
   // Convert CalendarEvent to Firestore format
   private toFirestore(event: CalendarEvent): DocumentData {
-    // Remove undefined values as Firestore doesn't accept them
-    const cleanEvent: any = {};
-    
-    Object.keys(event).forEach(key => {
-      const value = (event as any)[key];
-      if (value !== undefined) {
-        cleanEvent[key] = value;
-      }
-    });
+    // Remove undefined values recursively as Firestore doesn't accept them
+    const cleanEvent = this.removeUndefined(event);
     
     return {
       ...cleanEvent,
