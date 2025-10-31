@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import { LLMService, Message } from '../services/llmService';
-import { CalendarService } from '../services/calendarService';
+import { MemoryService } from '../services/memoryService';
+import { MemoryExtractionService } from '../services/memoryExtractionService';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { FamilyMember } from '../types/calendar';
 
 // API endpoint for WhatsApp webhook to call
 // This will be exposed via Vite's server middleware
@@ -34,6 +38,44 @@ export async function handleWhatsAppChat(req: Request, res: Response) {
       });
     }
 
+    // Look up user and family by phone number
+    let userId: string | null = null;
+    let familyId: string | null = null;
+    let familyMembers: FamilyMember[] = [];
+    
+    try {
+      // Find user by phone number
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('phoneNumber', '==', phoneNumber), limit(1));
+      const userSnapshot = await getDocs(q);
+      
+      if (!userSnapshot.empty) {
+        const userDoc = userSnapshot.docs[0];
+        userId = userDoc.id;
+        
+        // Find user's family
+        const familiesRef = collection(db, 'families');
+        const familyQuery = query(
+          familiesRef,
+          where('memberUserIds', 'array-contains', userId),
+          limit(1)
+        );
+        const familySnapshot = await getDocs(familyQuery);
+        
+        if (!familySnapshot.empty) {
+          const familyDoc = familySnapshot.docs[0];
+          familyId = familyDoc.id;
+          const familyData = familyDoc.data();
+          
+          // Get family members for memory extraction
+          familyMembers = familyData.members || [];
+        }
+      }
+    } catch (error) {
+      console.error('Error looking up user/family:', error);
+      // Continue without memory features
+    }
+
     // Get LLM service
     const service = getLLMService();
     const models = await service.getAvailableModels();
@@ -47,17 +89,40 @@ export async function handleWhatsAppChat(req: Request, res: Response) {
     // Use first available model
     const model = models[0];
 
-    // Build context
+    // Load memory context if family is found
+    let memoryContext = '';
+    if (familyId && familyMembers.length > 0) {
+      try {
+        const userIdToNameMap = new Map<string, string>();
+        familyMembers.forEach(member => {
+          userIdToNameMap.set(member.id, member.name);
+        });
+        
+        memoryContext = await MemoryService.getMemoryContextString(
+          familyId,
+          userIdToNameMap,
+          undefined,
+          30  // Limit to 30 memories for WhatsApp to save tokens
+        );
+      } catch (error) {
+        console.error('Error loading memory context:', error);
+      }
+    }
+
+    // Build context with memory
     const systemPrompt = `You are Cal AI, an intelligent personal assistant for task and calendar management.
 
 Current date: ${new Date().toLocaleDateString()}
 User: Phone ${phoneNumber}
+
+${memoryContext ? `\n${memoryContext}\n` : ''}
 
 You help users:
 - Create and manage tasks
 - Schedule appointments
 - Organize their day
 - Answer questions about their schedule
+- Learn from conversations to provide personalized assistance
 
 Be concise and friendly. Keep responses under 300 characters when possible (WhatsApp limit).
 Use emojis sparingly but effectively.
@@ -69,6 +134,7 @@ IMPORTANT: If the user's message is a task (contains actions like "buy", "pick u
 
 If it's a question:
 - Answer directly and concisely
+- Use context from family memories when relevant
 - Offer helpful suggestions
 
 Keep the conversation natural and helpful!`;
@@ -78,10 +144,11 @@ Keep the conversation natural and helpful!`;
     
     // Add conversation history if provided
     if (conversationHistory && Array.isArray(conversationHistory)) {
-      conversationHistory.forEach((msg: any) => {
-        if (msg.role && msg.content) {
+      conversationHistory.forEach((msg: { role: string; content: string }) => {
+        const validRole = msg.role as 'user' | 'assistant' | 'system';
+        if (validRole && msg.content) {
           messages.push({
-            role: msg.role,
+            role: validRole,
             content: msg.content
           });
         }
@@ -107,11 +174,38 @@ Keep the conversation natural and helpful!`;
       });
     }
 
+    // Extract and save memories if family context is available
+    if (familyId && familyMembers.length > 0) {
+      try {
+        const memoryResult = await MemoryExtractionService.extractMemories(
+          message,
+          conversationHistory || [],
+          familyMembers
+        );
+        
+        if (memoryResult.hasMemory && memoryResult.memories.length > 0) {
+          console.log(`📝 Extracted ${memoryResult.memories.length} memories from conversation`);
+          
+          // Save memories to Firestore
+          await MemoryExtractionService.saveExtractedMemories(
+            memoryResult.memories,
+            familyMembers
+          );
+          
+          console.log('✅ Memories saved successfully');
+        }
+      } catch (error) {
+        console.error('Error extracting/saving memories:', error);
+        // Don't fail the request if memory extraction fails
+      }
+    }
+
     // Return AI response
     return res.json({
       response: response.content,
       model: model.name,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      memoriesExtracted: familyId ? true : false
     });
 
   } catch (error) {

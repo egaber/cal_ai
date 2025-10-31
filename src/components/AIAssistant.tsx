@@ -276,9 +276,33 @@ export const AIAssistant = ({
       // Get todo tasks context
       const todosContext = await todoTaskService.getTodosForAI();
 
-      // Create system prompt with calendar tools information + centralized category list
+      // Create system prompt with calendar tools information + centralized category list + memory extraction
       const categoriesList = buildCategoryPromptList();
       const systemPrompt = `You are an AI calendar assistant with intelligent scheduling capabilities. You help users manage the calendar by creating, moving, editing, and deleting meetings while providing smart suggestions. You also help with task scheduling and management.
+
+MEMORY EXTRACTION:
+If the user shares information that should be remembered (preferences, locations, schedules, habits, restrictions), include a MEMORY_SAVE tool call in your response:
+
+<MEMORY_SAVE>
+{
+  "memoryType": "place|preference|habit|restriction|fact|note",
+  "text": "Human-readable description",
+  "tags": ["tag1", "tag2"],
+  "structured": {
+    "key": "value"
+  }
+}
+</MEMORY_SAVE>
+
+Examples:
+1. User: "אני עובד במיקרוסופט הרצליה ברחוב אלן טיורינג 3"
+   Response: "רשמתי! 💼 <MEMORY_SAVE>{"memoryType":"place","text":"מקום עבודה: מיקרוסופט הרצליה - רחוב אלן טיורינג 3","tags":["work","location"],"structured":{"type":"work","company":"מיקרוסופט","address":"רחוב אלן טיורינג 3"}}</MEMORY_SAVE>"
+
+2. User: "הגן של אלון נפתח ב-7:30 ופתיחה עד 8:30"
+   Response: "רשמתי את זמני הגן! <MEMORY_SAVE>{"memoryType":"place","text":"גן אלון - פתיחה 7:30, הגעה עד 8:30","tags":["kindergarten","schedule"],"structured":{"type":"kindergarten","openTime":"7:30","arrivalDeadline":"8:30","child":"אלון"}}</MEMORY_SAVE>"
+
+3. User: "תזכור שאני לא אוהב פגישות לפני 9 בבוקר"
+   Response: "נרשם! <MEMORY_SAVE>{"memoryType":"preference","text":"אין פגישות לפני 9:00 בבוקר","tags":["meetings","preference"],"structured":{"category":"meetings","constraint":"no_meetings_before","time":"09:00"}}</MEMORY_SAVE>"
 
 IMPORTANT - When creating events, you MUST:
 1. Always include an appropriate "emoji" parameter (not "type") that matches the chosen category or specific activity
@@ -603,7 +627,61 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
         setChatHistory(prev => [...prev, assistantMessage]);
       }
 
-      // Run memory extraction in background (don't await)
+      // Extract and process MEMORY_SAVE tool calls from LLM response
+      if (response.content && user?.familyId) {
+        const memorySavePattern = /<MEMORY_SAVE>\s*(\{[\s\S]*?\})\s*<\/MEMORY_SAVE>/g;
+        const memorySaveMatches = [...response.content.matchAll(memorySavePattern)];
+        
+        if (memorySaveMatches.length > 0) {
+          console.log(`\n🤖 LLM MEMORY EXTRACTION: Found ${memorySaveMatches.length} memories`);
+          
+          try {
+            const { getFirestore, collection, addDoc, Timestamp } = await import('firebase/firestore');
+            const db = getFirestore();
+            const memoryRef = collection(db, 'families', user.familyId, 'memory');
+            
+            for (const match of memorySaveMatches) {
+              try {
+                const memoryData = JSON.parse(match[1]);
+                console.log(`   Type: ${memoryData.memoryType}`);
+                console.log(`   Text: "${memoryData.text}"`);
+                console.log(`   Tags: ${memoryData.tags?.join(', ') || 'none'}`);
+                
+                // Save to Firestore
+                await addDoc(memoryRef, {
+                  memoryType: memoryData.memoryType,
+                  text: memoryData.text,
+                  source: 'ai_inferred',
+                  confidence: 0.95, // High confidence from LLM
+                  tags: [...(memoryData.tags || []), 'mobile_chat', 'llm'],
+                  structured: memoryData.structured || {},
+                  createdAt: Timestamp.now(),
+                  updatedAt: Timestamp.now()
+                });
+                
+                console.log(`✅ LLM-extracted memory saved to Firestore`);
+                
+                // Notify user
+                toast({
+                  title: "💡 Memory Saved",
+                  description: `I learned: ${memoryData.text.substring(0, 50)}...`,
+                });
+                
+                // Notify parent component
+                if (onMemoryUpdate) {
+                  onMemoryUpdate();
+                }
+              } catch (error) {
+                console.error(`❌ Failed to parse/save LLM memory:`, error);
+              }
+            }
+          } catch (error) {
+            console.error('Memory save error:', error);
+          }
+        }
+      }
+
+      // Also run old memory extraction in background as fallback (don't await)
       extractMemoriesInBackground(userMessage.content);
 
     } catch (error) {
@@ -983,9 +1061,12 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
                     </div>
                   )}
                   
-                  {/* Render the text content - filter out JSON code blocks and followup buttons */}
+                  {/* Render the text content - filter out JSON code blocks, followup buttons, and memory save tags */}
                   {(() => {
                     let displayContent = msg.content;
+                    
+                    // Remove MEMORY_SAVE tags and content
+                    displayContent = displayContent.replace(/<MEMORY_SAVE>\s*\{[\s\S]*?\}\s*<\/MEMORY_SAVE>/g, '').trim();
                     
                     // Always remove followup_buttons from displayed content
                     displayContent = displayContent.replace(/"followup_buttons"\s*:\s*\[[^\]]*\]/g, '').trim();

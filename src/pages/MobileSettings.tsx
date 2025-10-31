@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, Sparkles, Phone } from 'lucide-react';
+import { MessageCircle, Sparkles, Phone, Brain } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { llmService, LLMModel } from '@/services/llmService';
 import { modelConfigService } from '@/services/modelConfigService';
 import { getGeminiApiKey, getAzureOpenAIApiKey } from '@/config/gemini';
@@ -8,6 +9,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 
 const MobileSettings = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
@@ -332,6 +334,33 @@ const MobileSettings = () => {
                 <Sparkles className="w-5 h-5" />
                 <span>שמור הגדרות AI</span>
               </button>
+            </div>
+          </div>
+
+          {/* Family Memory Section */}
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
+            <div className="flex items-center gap-3 mb-4">
+              <Brain className="w-6 h-6 text-indigo-600" />
+              <h2 className="text-lg font-semibold text-gray-900">זיכרון המשפחה</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                צפה בכל הזיכרונות שהמערכת לומדת עליך ועל המשפחה שלך
+              </p>
+
+              <button
+                onClick={() => navigate('/memory')}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform active:scale-95 flex items-center justify-center gap-3"
+              >
+                <Brain className="w-5 h-5" />
+                <span>צפה בזיכרונות</span>
+              </button>
+
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>🤖 זיכרונות נוצרים אוטומטית מהשיחות ב-WhatsApp</p>
+                <p>👤 זיכרונות יכולים להיווצר גם באפליקציה</p>
+              </div>
             </div>
           </div>
 

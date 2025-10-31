@@ -5,7 +5,7 @@ import { llmService, Message } from '../src/services/llmService';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, orderBy, limit, addDoc, Timestamp } from 'firebase/firestore';
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -511,7 +511,7 @@ async function generateAIResponse(
       content: message
     });
 
-    // System prompt for WhatsApp context
+    // System prompt for WhatsApp context with memory extraction
     const systemPrompt = `You are Cal AI, a helpful personal assistant integrated with WhatsApp.
 You help users manage their tasks, schedule, and family calendar.
 
@@ -525,15 +525,38 @@ ${contextInfo}
 IMPORTANT CAPABILITIES:
 - You can see the user's actual tasks and events above
 - When user asks to create a task, respond that you'll add it and note the details
-- Format: "✅ הוספתי משימה: [task title]"
+- You can save important information to memory for future reference
+
+MEMORY EXTRACTION:
+If the user shares information that should be remembered (preferences, locations, schedules, habits, restrictions), include a MEMORY_SAVE tool call in your response:
+
+<MEMORY_SAVE>
+{
+  "memoryType": "place|preference|habit|restriction|fact|note",
+  "text": "Human-readable description",
+  "tags": ["tag1", "tag2"],
+  "structured": {
+    "key": "value"
+  }
+}
+</MEMORY_SAVE>
+
+Examples:
+1. User: "אני עובד במיקרוסופט הרצליה ברחוב אלן טיורינג 3"
+   Response: "רשמתי! 💼 <MEMORY_SAVE>{"memoryType":"place","text":"מקום עבודה: מיקרוסופט הרצליה - רחוב אלן טיורינג 3","tags":["work","location"],"structured":{"type":"work","company":"מיקרוסופט","address":"רחוב אלן טיורינג 3"}}</MEMORY_SAVE>"
+
+2. User: "הגן של אלון נפתח ב-7:30 ופתיחה עד 8:30"
+   Response: "רשמתי את זמני הגן! <MEMORY_SAVE>{"memoryType":"place","text":"גן אלון - פתיחה 7:30, הגעה עד 8:30","tags":["kindergarten","schedule"],"structured":{"type":"kindergarten","openTime":"7:30","arrivalDeadline":"8:30","child":"אלון"}}</MEMORY_SAVE>"
+
+3. User: "תזכור שאני לא אוהב פגישות לפני 9 בבוקר"
+   Response: "נרשם! <MEMORY_SAVE>{"memoryType":"preference","text":"אין פגישות לפני 9:00 בבוקר","tags":["meetings","preference"],"structured":{"category":"meetings","constraint":"no_meetings_before","time":"09:00"}}</MEMORY_SAVE>"
 
 Guidelines:
 - Respond in the same language as the user (Hebrew/English)
 - Be concise and friendly (WhatsApp is for quick messages)
 - Use emojis to make responses warm and engaging
-- If user asks about their tasks/events, reference the actual data above
-- If user wants to create a task, acknowledge and say it's been added
-- Be proactive in helping organize their day
+- When saving memory, acknowledge it naturally in your response
+- Don't over-explain the memory save - just confirm it
 - Keep responses under 300 characters when possible
 
 Family members to recognize: Eyal, Ella, Hilly, Yael, Alon
@@ -552,7 +575,47 @@ IMPORTANT: Be conversational and helpful, not robotic. Act like a smart assistan
       return getSmartFallback(message, phoneNumber);
     }
 
-    const aiResponse = response.content || getSmartFallback(message, phoneNumber);
+    let aiResponse = response.content || getSmartFallback(message, phoneNumber);
+    
+    // Extract and process MEMORY_SAVE tool calls from LLM response
+    const memorySavePattern = /<MEMORY_SAVE>\s*(\{[\s\S]*?\})\s*<\/MEMORY_SAVE>/g;
+    const memorySaveMatches = [...aiResponse.matchAll(memorySavePattern)];
+    
+    if (memorySaveMatches.length > 0 && userId) {
+      const familyId = await getUserFamilyId(userId);
+      if (familyId) {
+        const memoryRef = collection(db!, 'families', familyId, 'memory');
+        
+        for (const match of memorySaveMatches) {
+          try {
+            const memoryData = JSON.parse(match[1]);
+            console.log(`\n🤖 LLM MEMORY EXTRACTION:`);
+            console.log(`   Type: ${memoryData.memoryType}`);
+            console.log(`   Text: "${memoryData.text}"`);
+            console.log(`   Tags: ${memoryData.tags?.join(', ') || 'none'}`);
+            
+            // Save to Firestore
+            await addDoc(memoryRef, {
+              memoryType: memoryData.memoryType,
+              text: memoryData.text,
+              source: 'ai_inferred',
+              confidence: 0.95, // High confidence from LLM
+              tags: [...(memoryData.tags || []), 'whatsapp', 'llm'],
+              structured: memoryData.structured || {},
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now()
+            });
+            
+            console.log(`✅ LLM-extracted memory saved to Firestore`);
+          } catch (error) {
+            console.error(`❌ Failed to parse/save LLM memory:`, error);
+          }
+        }
+        
+        // Remove MEMORY_SAVE tags from user-visible response
+        aiResponse = aiResponse.replace(memorySavePattern, '').trim();
+      }
+    }
     
     // Check if user is creating a task (after AI response)
     const isCreatingTask = shouldCreateTask || containsTaskKeywords(lowerMessage);
@@ -572,6 +635,84 @@ IMPORTANT: Be conversational and helpful, not robotic. Act like a smart assistan
       
       if (taskId) {
         console.log(`✅ Task created: ${taskId}`);
+      }
+    }
+
+    // SAVE MEMORIES - Pattern-based extraction
+    if (userId) {
+      try {
+        const familyId = await getUserFamilyId(userId);
+        if (familyId) {
+          const memoryRef = collection(db!, 'families', familyId, 'memory');
+          let memorySaved = false;
+          
+          // Pattern 1: Kindergarten times
+          const kinderMatch = message.match(/גן.*?(\d{1,2}:\d{2}).*?(\d{1,2}:\d{2})/);
+          if (kinderMatch) {
+            console.log(`\n📝 SAVING MEMORY: Kindergarten info detected`);
+            await addDoc(memoryRef, {
+              memoryType: 'place',
+              text: `גן - פתיחה ${kinderMatch[1]}, איסוף ${kinderMatch[2]}`,
+              source: 'ai_inferred',
+              confidence: 0.9,
+              tags: ['kindergarten', 'whatsapp'],
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now(),
+              structured: { type: 'kindergarten', openTime: kinderMatch[1], pickupTime: kinderMatch[2] }
+            });
+            memorySaved = true;
+          }
+          
+          // Pattern 2: Work location
+          const workMatch = message.match(/(עבודה|מקום עבודה|עובד|משרד).*?(מיקרוסופט|גוגל|אמזון|פייסבוק|מטא|אפל|אינטל|אנבידיה)/i);
+          const addressMatch = message.match(/(רחוב|רח')\s+([א-ת\s]+\d+)/);
+          if (workMatch || addressMatch) {
+            console.log(`\n📝 SAVING MEMORY: Work location detected`);
+            let text = 'מקום עבודה: ';
+            if (workMatch) text += workMatch[2];
+            if (addressMatch) text += ` - ${addressMatch[2]}`;
+            
+            await addDoc(memoryRef, {
+              memoryType: 'place',
+              text,
+              source: 'ai_inferred',
+              confidence: 0.85,
+              tags: ['work', 'whatsapp'],
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now(),
+              structured: { 
+                type: 'work',
+                company: workMatch ? workMatch[2] : undefined,
+                address: addressMatch ? addressMatch[2] : undefined
+              }
+            });
+            memorySaved = true;
+          }
+          
+          // Pattern 3: Explicit memory save request
+          const explicitMatch = message.match(/(תוסיף|תזכור|תרשום|שמור)\s+(זיכרון|במזכרת)/i);
+          if (explicitMatch && !memorySaved) {
+            console.log(`\n📝 SAVING MEMORY: Explicit save request`);
+            await addDoc(memoryRef, {
+              memoryType: 'note',
+              text: message,
+              source: 'user',
+              confidence: 1.0,
+              tags: ['manual', 'whatsapp'],
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now(),
+              structured: { originalMessage: message }
+            });
+            memorySaved = true;
+          }
+          
+          if (memorySaved) {
+            console.log(`✅ Memory saved to families/${familyId}/memory/`);
+          }
+        }
+      } catch (error) {
+        console.error('Memory save error:', error);
+        // Don't fail the request
       }
     }
 

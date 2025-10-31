@@ -8,6 +8,7 @@ import { Calendar, ListTodo, Sparkles, MessageSquare, Settings } from 'lucide-re
 import MobileIndex from '@/pages/MobileIndex';
 import MobileTasks from '@/pages/MobileTasks';
 import MobileSettings from '@/pages/MobileSettings';
+import MobileMemory from '@/pages/MobileMemory';
 import { AIAssistant } from '@/components/AIAssistant';
 import { CalendarService } from '@/services/calendarService';
 import { CalendarEvent } from '@/types/calendar';
@@ -24,6 +25,7 @@ const MobileAppLayout = () => {
   const getActiveTab = () => {
     if (location.pathname.includes('/tasks')) return 'tasks';
     if (location.pathname.includes('/settings')) return 'settings';
+    if (location.pathname.includes('/memory')) return 'memory';
     return 'calendar';
   };
 
@@ -31,6 +33,11 @@ const MobileAppLayout = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
+
+  // Update active tab when location changes
+  useEffect(() => {
+    setActiveTab(getActiveTab());
+  }, [location.pathname]);
 
   // Handle navigation from location state (e.g., from MobileTasks)
   useEffect(() => {
@@ -113,6 +120,7 @@ const MobileAppLayout = () => {
         )}
         {activeTab === 'tasks' && <MobileTasks />}
         {activeTab === 'settings' && <MobileSettings />}
+        {activeTab === 'memory' && <MobileMemory />}
         {activeTab === 'ai' && (
           <AIAssistant
             calendarService={calendarService}
