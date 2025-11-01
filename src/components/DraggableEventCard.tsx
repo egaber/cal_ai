@@ -634,8 +634,8 @@ export const DraggableEventCard = ({
         paddingRight: layout ? '6px' : undefined,
       }}
     >
-      {/* Vertical color bar on the left - full height and positioned slightly to the right */}
-      <div className={cn('absolute left-1.5 top-1 bottom-1 w-1', styles.bar, 'rounded-full')} />
+      {/* Vertical color bar - positioned based on RTL context */}
+      <div className={cn('absolute top-1 bottom-1 w-1', isRTL ? 'right-1.5' : 'left-1.5', styles.bar, 'rounded-full')} />
 
       {/* Top resize handle - hidden on mobile */}
       {'ontouchstart' in window ? null : (
