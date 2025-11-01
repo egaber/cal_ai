@@ -1,4 +1,4 @@
-import { CalendarEvent } from '@/types/calendar';
+import { CalendarEvent, FamilyMember } from '@/types/calendar';
 import { 
   CalendarInsights, 
   AnalyzeCalendarRequest,
@@ -98,44 +98,60 @@ class CalendarAnalysisService {
   }
 
   /**
-   * Build the analysis prompt (in Hebrew)
+   * Format family members for prompt
    */
-  buildAnalysisPrompt(events: CalendarEvent[]): string {
+  formatFamilyMembersForPrompt(familyMembers: FamilyMember[]): string {
+    return familyMembers.map((member, index) => {
+      const ageStr = member.age && member.age > 0 ? `, ${member.age} years old` : '';
+      const roleStr = member.role ? ` (${member.role})` : '';
+      return `${index + 1}. ${member.name}${roleStr}${ageStr}`;
+    }).join('\n');
+  }
+
+  /**
+   * Build the analysis prompt (in English for better results)
+   */
+  buildAnalysisPrompt(events: CalendarEvent[], familyMembers: FamilyMember[]): string {
     const totalEvents = events.length;
     const dateRange = this.getDateRange(events);
     const eventsFormatted = this.formatEventsForPrompt(events);
+    const familyMembersFormatted = this.formatFamilyMembersForPrompt(familyMembers);
     
-    const prompt = `אתה עוזר בינה מלאכותית מתקדם שלומד את ההרגלים, הדפוסים והמבנה המשפחתי של משתמשים מתוך ניתוח היומן שלהם.
+    const prompt = `You are an AI family planner that analyzes a family's shared calendar and produces structured insights about their life patterns and responsibilities.
 
-משימתך: נתח את רשימת האירועים הבאה והסק תובנות מעמיקות על:
-1. בני המשפחה ותפקידיהם
-2. פעולות קבועות (עוגנים יומיים/שבועיים)
-3. הרגלי עבודה ופנאי
-4. העדפות זמן ותזמון
-5. דפוסים חוזרים
+## Family Members:
+${familyMembersFormatted || 'No family member information provided'}
 
-נתונים:
-- סה"כ אירועים: ${totalEvents}
-- טווח תאריכים: ${dateRange}
-
-רשימת אירועים:
+## Calendar Events (${totalEvents} events from ${dateRange}):
 ${eventsFormatted}
 
-הנחיות לניתוח:
-1. חפש דפוסים חוזרים - אירועים שקורים באותו יום/שעה
-2. זהה תפקידים - מי עושה מה (עבודה, הסעות, פגישות)
-3. מצא עוגנים - פעילויות קבועות שמסביבן מתארגן השבוע
-4. זהה העדפות זמן - מתי יש פגישות, מתי זמן חופשי
-5. הצע תובנות - מה אפשר ללמוד על סדר היום והרגלים
+## Your Task:
+Extract meaningful, structured insights ("facts") about how the family operates — routines, roles, dependencies, and time use patterns.
 
-דרישות תשובה:
-- השב ב-JSON בלבד, ללא טקסט נוסף
-- כלול רמת ביטחון (0-100) לכל תובנה
-- היה ספציפי ומדויק בהתבסס על הנתונים
-- אם אין מספיק נתונים למסקנה, ציין זאת
+## Analysis Guidelines:
+- Focus only on insights that are **recurrent, consistent, or functionally significant**
+- Each insight should reference **specific family members** when relevant
+- Do not invent information — infer only from observed patterns
+- Include logistical details if relevant (e.g., who drives, estimated travel time, dependencies)
+- Note potential conflicts between events (overlaps) as separate insights
+- Skip vague events unless they are clearly meaningful
+- For activities with locations, try to understand travel logistics (who takes/picks up, travel time)
 
-מבנה JSON מצופה:
+## Available Categories (choose the most relevant):
+טיפול בילדים | הסעות | נסיעות | תחזוקת בית | זמן משותף | עבודה | פגישות חברתיות | אירוח משפחה | התארחות אצל משפחה | חופשה בארץ | חופשה בחו״ל | ספורט | אירוע | זום | אסיפת הורים | יום הורים | בייביסיטר | חגים | אחר
+
+## Output Format (JSON only, no additional text):
 {
+  "insights": [
+    {
+      "summary": "Short natural language sentence describing the insight",
+      "related_people": ["family member names involved"],
+      "category": "one of the categories above",
+      "importance": "נמוכה | בינונית | גבוהה",
+      "confidence": 0.85,
+      "source_events": ["relevant event titles"]
+    }
+  ],
   "familyMembers": [
     {
       "name": "שם או תיאור",
@@ -227,7 +243,8 @@ ${eventsFormatted}
    */
   async analyzeCalendar(
     userId: string,
-    familyId: string
+    familyId: string,
+    familyMembers: FamilyMember[] = []
   ): Promise<AnalyzeCalendarResponse> {
     try {
       console.log('🧠 Starting calendar analysis...');
@@ -243,8 +260,8 @@ ${eventsFormatted}
         };
       }
       
-      // Build prompt
-      const prompt = this.buildAnalysisPrompt(events);
+      // Build prompt with family members
+      const prompt = this.buildAnalysisPrompt(events, familyMembers);
       console.log('📝 Prompt built, sending to AI...');
       
       // Get user's selected model from modelConfigService
@@ -366,6 +383,134 @@ ${eventsFormatted}
     } catch (error) {
       console.error('Failed to load insights:', error);
       return null;
+    }
+  }
+
+  /**
+   * Predict upcoming events for the next 7 days
+   */
+  async predictUpcomingEvents(
+    userId: string,
+    familyId: string,
+    familyMembers: FamilyMember[] = []
+  ): Promise<import('@/types/calendarInsights').PredictEventsResponse> {
+    try {
+      console.log('🔮 Starting event prediction...');
+      
+      // Load insights if available
+      const insights = await this.loadInsights(userId);
+      
+      // Load historical events
+      const events = await this.loadEventHistory(userId, familyId);
+      
+      if (events.length === 0) {
+        return {
+          success: false,
+          error: 'No historical events to base predictions on'
+        };
+      }
+      
+      const familyMembersFormatted = this.formatFamilyMembersForPrompt(familyMembers);
+      const eventsFormatted = this.formatEventsForPrompt(events.slice(-50)); // Last 50 events
+      
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      
+      const prompt = `You are an AI family planner. Based on historical calendar data and learned patterns, predict upcoming events for the next 7 days.
+
+## Family Members:
+${familyMembersFormatted || 'No family member information'}
+
+## Recent Events (last 50):
+${eventsFormatted}
+
+${insights ? `## Learned Insights:
+- Recurring activities: ${insights.recurringAnchors.map(a => `${a.activity} on ${a.dayOfWeek} at ${a.time}`).join(', ')}
+- Key responsibilities: ${insights.familyMembers.map(m => `${m.name}: ${m.responsibilities.join(', ')}`).join(' | ')}
+` : ''}
+
+## Task:
+Predict likely events for the period: ${today.toLocaleDateString('he-IL')} to ${nextWeek.toLocaleDateString('he-IL')}
+
+Consider:
+- Recurring patterns from historical data
+- Day of week patterns
+- Family member responsibilities
+- Typical timing and duration
+- Potential scheduling conflicts
+
+## Available Categories:
+טיפול בילדים | הסעות | נסיעות | תחזוקת בית | זמן משותף | עבודה | פגישות חברתיות | אירוח משפחה | התארחות אצל משפחה | חופשה בארץ | חופשה בחו״ל | ספורט | אירוע | זום | אסיפת הורים | יום הורים | בייביסיטר | חגים | אחר
+
+## Output (JSON only):
+{
+  "predictions": [
+    {
+      "title": "event title",
+      "predicted_date": "2025-11-01",
+      "predicted_time": "08:00",
+      "duration": 60,
+      "category": "category from list",
+      "responsible_people": ["names"],
+      "confidence": 0.85,
+      "reasoning": "why this prediction",
+      "potential_conflicts": ["possible conflicts"]
+    }
+  ]
+}`;
+
+      // Get selected model
+      const { modelConfigService } = await import('./modelConfigService');
+      const availableModels = await llmService.getAvailableModels();
+      const selectedModel = modelConfigService.findModel(availableModels);
+      
+      if (!selectedModel) {
+        throw new Error('No LLM model available');
+      }
+      
+      console.log(`🤖 Using model: ${selectedModel.name}`);
+      
+      const response = await llmService.chat({
+        messages: [{ role: 'user', content: prompt }],
+        model: selectedModel
+      });
+      
+      // Parse response
+      let responseText = response.content || '';
+      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      const firstBrace = responseText.indexOf('{');
+      const lastBrace = responseText.lastIndexOf('}');
+      const jsonStr = responseText.substring(firstBrace, lastBrace + 1);
+      const predData = JSON.parse(jsonStr);
+      
+      const predictions: import('@/types/calendarInsights').CalendarPredictions = {
+        userId,
+        predictedAt: new Date().toISOString(),
+        predictionPeriod: {
+          from: today.toISOString(),
+          to: nextWeek.toISOString()
+        },
+        predictions: predData.predictions || [],
+        basedOnInsights: !!insights,
+        confidence: predData.predictions?.length > 0 ? 
+          predData.predictions.reduce((sum: number, p: { confidence: number }) => sum + p.confidence, 0) / predData.predictions.length * 100 : 0
+      };
+      
+      console.log('🔮 Predictions complete:', predictions);
+      
+      return {
+        success: true,
+        predictions
+      };
+      
+    } catch (error) {
+      console.error('❌ Prediction failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 }

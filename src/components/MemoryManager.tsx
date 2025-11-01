@@ -36,6 +36,11 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userI
   const [calendarInsights, setCalendarInsights] = useState<CalendarInsights | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(true);
+  
+  // Predictions State
+  const [predictions, setPredictions] = useState<import('@/types/calendarInsights').CalendarPredictions | null>(null);
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [isLoadingPredictions, setIsLoadingPredictions] = useState(false);
 
   // User Memory Form
   const [newUserMemory, setNewUserMemory] = useState({
@@ -235,7 +240,7 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userI
   const handleAnalyzeCalendar = async () => {
     setIsAnalyzing(true);
     try {
-      const result = await calendarAnalysisService.analyzeCalendar(userId, familyId);
+      const result = await calendarAnalysisService.analyzeCalendar(userId, familyId, familyMembers);
       
       if (result.success && result.insights) {
         setCalendarInsights(result.insights);
@@ -263,6 +268,61 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userI
     }
   };
 
+  const handlePredictEvents = async () => {
+    setIsPredicting(true);
+    try {
+      const result = await calendarAnalysisService.predictUpcomingEvents(userId, familyId, familyMembers);
+      
+      if (result.success && result.predictions) {
+        setPredictions(result.predictions);
+        
+        toast({
+          title: "חיזוי הושלם",
+          description: `זוהו ${result.predictions.predictions.length} אירועים צפויים`,
+        });
+      } else {
+        toast({
+          title: "החיזוי נכשל",
+          description: result.error || 'אירעה שגיאה',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "שגיאה",
+        description: error instanceof Error ? error.message : 'אירעה שגיאה',
+        variant: "destructive",
+      });
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
+  const handleDeleteInsights = () => {
+    try {
+      localStorage.removeItem(`calendar_insights_${userId}`);
+      setCalendarInsights(null);
+      toast({
+        title: "תובנות נמחקו",
+        description: "כל התובנות נמחקו בהצלחה",
+      });
+    } catch (error) {
+      toast({
+        title: "שגיאה",
+        description: "לא הצלחנו למחוק את התובנות",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeletePredictions = () => {
+    setPredictions(null);
+    toast({
+      title: "חיזויים נמחקו",
+      description: "כל החיזויים נמחקו בהצלחה",
+    });
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -276,13 +336,180 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userI
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="user" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="insights">📊 Insights</TabsTrigger>
+            <TabsTrigger value="predictions">🔮 Predictions</TabsTrigger>
             <TabsTrigger value="user">User Memory</TabsTrigger>
             <TabsTrigger value="family">Family Memory</TabsTrigger>
             <TabsTrigger value="places">Places</TabsTrigger>
             <TabsTrigger value="travel">Travel Info</TabsTrigger>
           </TabsList>
+
+          {/* Predictions Tab */}
+          <TabsContent value="predictions" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium">חיזוי אירועים עתידיים</p>
+                <p className="text-xs text-muted-foreground">
+                  {predictions 
+                    ? `תחזית אחרונה: ${new Date(predictions.predictedAt).toLocaleString('he-IL')}`
+                    : 'אין תחזית עדיין'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {predictions && (
+                  <Button 
+                    size="sm" 
+                    variant="destructive"
+                    onClick={handleDeletePredictions}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    מחק חיזויים
+                  </Button>
+                )}
+                <Button 
+                  size="sm" 
+                  onClick={handlePredictEvents}
+                  disabled={isPredicting}
+                >
+                  {isPredicting ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      מחזה...
+                    </>
+                  ) : (
+                    <>
+                      <Lightbulb className="h-4 w-4 mr-2" />
+                      חזה אירועים
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {!predictions ? (
+              <Card className="p-8 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <Calendar className="h-12 w-12 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium mb-2">אין עדיין חיזוי</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      לחץ על "חזה אירועים" כדי לקבל חיזוי של אירועים צפויים ב-7 הימים הקרובים
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-4">
+                  {/* Summary */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">סיכום</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">אירועים צפויים:</span>
+                          <span className="font-medium ml-2">{predictions.predictions.length}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">רמת ביטחון:</span>
+                          <Badge variant={predictions.confidence > 70 ? 'default' : 'secondary'} className="ml-2">
+                            {Math.round(predictions.confidence)}%
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">מבוסס על תובנות:</span>
+                          <Badge variant={predictions.basedOnInsights ? 'default' : 'secondary'} className="ml-2">
+                            {predictions.basedOnInsights ? 'כן' : 'לא'}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">תקופה:</span>
+                          <span className="text-xs ml-2">
+                            {new Date(predictions.predictionPeriod.from).toLocaleDateString('he-IL')} - {new Date(predictions.predictionPeriod.to).toLocaleDateString('he-IL')}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Predictions List */}
+                  {predictions.predictions.map((pred, idx) => (
+                    <Card key={idx} className="border-l-4" style={{ borderLeftColor: pred.confidence > 0.8 ? '#22c55e' : pred.confidence > 0.6 ? '#eab308' : '#ef4444' }}>
+                      <CardContent className="pt-4">
+                        <div className="space-y-3">
+                          {/* Header */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-lg mb-1">{pred.title}</h4>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Calendar className="h-4 w-4" />
+                                <span>{new Date(pred.predicted_date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                                <span>•</span>
+                                <span>{pred.predicted_time}</span>
+                                <span>•</span>
+                                <span>{pred.duration} דקות</span>
+                              </div>
+                            </div>
+                            <Badge variant={pred.confidence > 0.8 ? 'default' : pred.confidence > 0.6 ? 'secondary' : 'outline'}>
+                              {Math.round(pred.confidence * 100)}% ביטחון
+                            </Badge>
+                          </div>
+
+                          {/* Category & People */}
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {pred.category}
+                            </Badge>
+                            {pred.responsible_people.map((person, i) => (
+                              <Badge key={i} variant="secondary">
+                                <Users className="h-3 w-3 mr-1" />
+                                {person}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {/* Reasoning */}
+                          <div className="bg-muted/50 p-3 rounded-lg">
+                            <p className="text-sm">
+                              <span className="font-medium text-muted-foreground">סיבה: </span>
+                              {pred.reasoning}
+                            </p>
+                          </div>
+
+                          {/* Conflicts */}
+                          {pred.potential_conflicts && pred.potential_conflicts.length > 0 && (
+                            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                              <p className="text-sm font-medium text-orange-800 mb-2">⚠️ קונפליקטים אפשריים:</p>
+                              <ul className="text-sm text-orange-700 space-y-1">
+                                {pred.potential_conflicts.map((conflict, i) => (
+                                  <li key={i}>• {conflict}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Action Button */}
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Plus className="h-4 w-4 mr-2" />
+                            הוסף ליומן
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {predictions.predictions.length === 0 && (
+                    <Card className="p-8 text-center">
+                      <p className="text-muted-foreground">לא זוהו אירועים צפויים לתקופה זו</p>
+                    </Card>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </TabsContent>
 
           {/* Calendar Insights Tab */}
           <TabsContent value="insights" className="space-y-4">
@@ -295,23 +522,35 @@ export function MemoryManager({ familyMembers, memoryData, onMemoryUpdate, userI
                     : 'No analysis yet'}
                 </p>
               </div>
-              <Button 
-                size="sm" 
-                onClick={handleAnalyzeCalendar}
-                disabled={isAnalyzing}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    מנתח...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="h-4 w-4 mr-2" />
-                    נתח יומן
-                  </>
+              <div className="flex gap-2">
+                {calendarInsights && (
+                  <Button 
+                    size="sm" 
+                    variant="destructive"
+                    onClick={handleDeleteInsights}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    מחק תובנות
+                  </Button>
                 )}
-              </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleAnalyzeCalendar}
+                  disabled={isAnalyzing}
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      מנתח...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      נתח יומן
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
             {isLoadingInsights ? (

@@ -56,6 +56,29 @@ export interface GeneralInsight {
   suggestedAction?: string;  // e.g., "לשקול להעביר חלק לימי שישי"
 }
 
+// New structured insight format
+export interface StructuredInsight {
+  summary: string;  // Short natural language sentence
+  related_people: string[];  // Family member names involved
+  category: string;  // One of the predefined categories
+  importance: 'נמוכה' | 'בינונית' | 'גבוהה';
+  confidence: number;  // 0-1
+  source_events: string[];  // Relevant event titles
+}
+
+// Predicted event for future planning
+export interface PredictedEvent {
+  title: string;
+  predicted_date: string;  // ISO date
+  predicted_time: string;  // e.g., "08:00"
+  duration: number;  // minutes
+  category: string;
+  responsible_people: string[];  // Who will handle it
+  confidence: number;  // 0-1
+  reasoning: string;  // Why this prediction was made
+  potential_conflicts: string[];  // Possible scheduling conflicts
+}
+
 export interface CalendarInsights {
   userId: string;
   analyzedAt: string;  // ISO date
@@ -65,6 +88,10 @@ export interface CalendarInsights {
     to: string;
   };
   
+  // New structured insights
+  insights?: StructuredInsight[];
+  
+  // Original format (for backward compatibility)
   familyMembers: FamilyMemberRole[];
   recurringAnchors: RecurringAnchor[];
   habits: Habit[];
@@ -75,6 +102,19 @@ export interface CalendarInsights {
   confidence: number;  // Overall confidence 0-100
   needsMoreData: boolean;
   suggestedAnalysisFrequency: string;  // e.g., "weekly", "monthly"
+}
+
+// Predictions response
+export interface CalendarPredictions {
+  userId: string;
+  predictedAt: string;  // ISO date
+  predictionPeriod: {
+    from: string;
+    to: string;
+  };
+  predictions: PredictedEvent[];
+  basedOnInsights: boolean;  // Whether predictions used insights
+  confidence: number;  // Overall confidence 0-100
 }
 
 // Request/Response types for the service
@@ -96,5 +136,11 @@ export interface AnalyzeCalendarRequest {
 export interface AnalyzeCalendarResponse {
   success: boolean;
   insights?: CalendarInsights;
+  error?: string;
+}
+
+export interface PredictEventsResponse {
+  success: boolean;
+  predictions?: CalendarPredictions;
   error?: string;
 }
