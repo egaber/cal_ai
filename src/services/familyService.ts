@@ -61,7 +61,7 @@ export const createFamily = async (
       age: 0, // Age will be set by user in settings
       isYou: true,
       isMobile: true,
-      avatar: creatorPhotoURL,
+      ...(creatorPhotoURL && { avatar: creatorPhotoURL }), // Only include avatar if photoURL exists
     };
 
     const family: Family = {
