@@ -369,12 +369,13 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
 
   const handleHeaderTouchStart = (e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
-    // Only handle if touching the date picker area or notch
-    if (!target.closest('.date-picker-draggable')) return;
+    // Only handle if touching the notch area specifically
+    if (!target.closest('.month-notch')) return;
     
     headerTouchStartY.current = e.touches[0].clientY;
     isHeaderDragging.current = true;
-    setDragOffset(0);
+    
+    // Don't reset dragOffset - maintain current state
   };
 
   const handleHeaderTouchMove = (e: React.TouchEvent) => {
@@ -387,13 +388,16 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     const currentY = e.touches[0].clientY;
     const deltaY = currentY - headerTouchStartY.current;
     
-    // Allow dragging down to expand, or up to collapse if expanded
-    if (deltaY > 0 && !isMonthViewExpanded) {
-      // Dragging down to expand - limit to max expansion
-      setDragOffset(Math.min(deltaY, 300));
-    } else if (deltaY < 0 && isMonthViewExpanded) {
-      // Dragging up to collapse - allow negative offset
-      setDragOffset(Math.max(deltaY, -300));
+    // Always allow smooth dragging in both directions regardless of current state
+    // This ensures the view follows the finger from the start
+    if (isMonthViewExpanded) {
+      // When expanded, allow dragging up to collapse
+      // Clamp between -260 (full collapse) and 0 (stay expanded)
+      setDragOffset(Math.max(-260, Math.min(0, deltaY)));
+    } else {
+      // When collapsed, allow dragging down to expand
+      // Clamp between 0 (stay collapsed) and 260 (full expand)
+      setDragOffset(Math.max(0, Math.min(260, deltaY)));
     }
   };
 
@@ -402,16 +406,28 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     
     isHeaderDragging.current = false;
     
-    // Determine if we should expand or collapse based on drag distance
-    if (dragOffset > 100 && !isMonthViewExpanded) {
-      setIsMonthViewExpanded(true);
-      setDragOffset(0);
-    } else if (dragOffset < -100 && isMonthViewExpanded) {
-      setIsMonthViewExpanded(false);
-      setDragOffset(0);
+    if (isMonthViewExpanded) {
+      // Currently expanded - check if dragging up enough to collapse
+      // Use 50% threshold: if dragged more than halfway to collapsed, complete the collapse
+      const collapseThreshold = -130; // 50% of 260px range
+      if (dragOffset < collapseThreshold) {
+        setIsMonthViewExpanded(false);
+        setDragOffset(0);
+      } else {
+        // Snap back to expanded state
+        setDragOffset(0);
+      }
     } else {
-      // Snap back to current state
-      setDragOffset(0);
+      // Currently collapsed - check if dragging down enough to expand
+      // Use 50% threshold: if dragged more than halfway to expanded, complete the expansion
+      const expandThreshold = 130; // 50% of 260px range
+      if (dragOffset > expandThreshold) {
+        setIsMonthViewExpanded(true);
+        setDragOffset(0);
+      } else {
+        // Snap back to collapsed state
+        setDragOffset(0);
+      }
     }
   };
 
@@ -534,23 +550,18 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
         </div>
 
         {/* Week Date Circles with Draggable Notch */}
-        <div 
-          className="relative date-picker-draggable"
-          onTouchStart={handleHeaderTouchStart}
-          onTouchMove={handleHeaderTouchMove}
-          onTouchEnd={handleHeaderTouchEnd}
-        >
+        <div className="relative">
           {/* Week or Month View */}
           <div 
             className="px-2 pt-2 overflow-hidden"
             style={{
               maxHeight: isMonthViewExpanded 
-                ? `${320 + Math.max(0, dragOffset)}px` 
-                : `${64 + Math.max(0, dragOffset)}px`,
+                ? `${320 + dragOffset}px` 
+                : `${64 + dragOffset}px`,
               transition: isHeaderDragging.current ? 'none' : 'max-height 0.3s ease-out',
             }}
           >
-            {isMonthViewExpanded ? (
+            {(isMonthViewExpanded || dragOffset > 20) ? (
               // Full Month Grid
               <div>
                 <div className="text-center text-sm font-semibold text-gray-700 mb-2">
@@ -622,8 +633,18 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
             )}
           </div>
 
-          {/* Notch indicator at bottom with expand/collapse icon */}
-          <div className="flex justify-center items-center pb-2 pt-1 gap-2">
+          {/* Notch indicator at bottom with expand/collapse icon - This is the draggable area */}
+          <div 
+            className="month-notch flex justify-center items-center pb-2 pt-1 gap-2 cursor-grab active:cursor-grabbing touch-none"
+            onTouchStart={handleHeaderTouchStart}
+            onTouchMove={handleHeaderTouchMove}
+            onTouchEnd={handleHeaderTouchEnd}
+            style={{ 
+              WebkitUserSelect: 'none', 
+              userSelect: 'none',
+              WebkitTouchCallout: 'none'
+            }}
+          >
             <div className="w-8 h-1 bg-gray-300 rounded-full" />
             {isMonthViewExpanded ? (
               <ChevronUp className="h-4 w-4 text-gray-400" />

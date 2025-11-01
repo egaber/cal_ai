@@ -45,6 +45,7 @@ export const MobileCalendarView = ({
   const isLongPressing = useRef(false);
   const touchStartY = useRef<number>(0);
   const initialScrollTop = useRef<number>(0);
+  const [eventDragActive, setEventDragActive] = useState(false);
 
   const now = new Date();
   const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
@@ -68,9 +69,9 @@ export const MobileCalendarView = ({
   const currentDayEvents = useMemo(() => getEventsForDate(currentDate), [currentDate, events]);
   const currentEventLayouts = useMemo(() => calculateEventLayouts(events, currentDate), [events, currentDate]);
 
-  // Lock body scroll and prevent pull-to-refresh when long-press is active
+  // Lock body scroll and prevent pull-to-refresh when long-press OR event drag is active
   useEffect(() => {
-    if (longPressActive) {
+    if (longPressActive || eventDragActive) {
       // Store original styles
       const originalOverflow = document.body.style.overflow;
       const originalPosition = document.body.style.position;
@@ -96,7 +97,7 @@ export const MobileCalendarView = ({
         document.documentElement.style.overscrollBehavior = htmlOriginalOverscrollBehavior;
       };
     }
-  }, [longPressActive]);
+  }, [longPressActive, eventDragActive]);
 
   // Auto-scroll to current time on mount and when returning to today
   useEffect(() => {
@@ -235,9 +236,9 @@ export const MobileCalendarView = ({
         <div
           ref={scrollContainerRef}
           className="h-full overflow-y-auto overflow-x-hidden ios-scroll hide-scrollbar"
-          style={longPressActive ? { 
+          style={(longPressActive || eventDragActive) ? { 
             overflow: 'hidden',
-            touchAction: 'none',
+            touchAction: 'pan-y',
           } : undefined}
         >
           <div className="relative">
@@ -305,7 +306,7 @@ export const MobileCalendarView = ({
 
                     {/* Events */}
                     {hour === 0 && (
-                      <div className="absolute inset-0" style={{ height: `${24 * TIME_SLOT_HEIGHT}px` }}>
+                      <div className="absolute inset-0 pointer-events-none" style={{ height: `${24 * TIME_SLOT_HEIGHT}px` }}>
                         {dayEvents.map((event) => {
                           const member = familyMembers.find(m => m.id === event.memberId);
                           const layout = eventLayouts.get(event.id);
@@ -313,7 +314,7 @@ export const MobileCalendarView = ({
                           return (
                             <div
                               key={event.id}
-                              className={`${
+                              className={`pointer-events-auto ${
                                 highlightEventId === event.id
                                   ? 'animate-pulse-highlight'
                                   : ''
@@ -331,6 +332,7 @@ export const MobileCalendarView = ({
                                 member={member}
                                 familyMembers={familyMembers}
                                 layout={layout}
+                                onDragStateChange={setEventDragActive}
                               />
                             </div>
                           );

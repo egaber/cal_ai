@@ -21,48 +21,46 @@ export const DraggableEventPlaceholder = ({
 
   const formatEndTime = (startHour: number, startMinute: number) => {
     let endHour = startHour + 1;
-    let endMinute = startMinute;
+    const endMinute = startMinute;
     if (endHour >= 24) endHour = 23;
     return formatTime(endHour, endMinute);
   };
 
   const height = timeSlotHeight; // 1 hour
   // Center the placeholder on the touch point by offsetting by half its height
-  const centeredTop = top - (height / 2);
+  const centeredTop = top - height / 2;
+  const clampedTop = Math.max(8, centeredTop);
 
   return (
     <div
-      className="absolute left-2 right-2 rounded-2xl z-40 pointer-events-none select-none"
+      className="absolute left-2 right-2 z-50 pointer-events-none select-none"
       style={{
-        top: `${centeredTop}px`,
+        top: `${clampedTop}px`,
         height: `${height}px`,
-        WebkitUserSelect: 'none',
-        userSelect: 'none',
+        WebkitUserSelect: "none",
+        userSelect: "none",
       }}
     >
-      {/* Enhanced glass effect with better transparency */}
-      <div className="h-full w-full rounded-2xl bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 backdrop-blur-xl border-2 border-white/40 shadow-2xl flex flex-col items-center justify-center gap-2 p-4">
-        {/* Large time display with icon */}
-        <div className="flex items-center gap-2.5">
-          <Clock className="h-6 w-6 text-white/90 animate-pulse flex-shrink-0" />
-          <div className="text-3xl font-bold text-white drop-shadow-lg">
-            {formatTime(hour, minute)}
+      <div className="relative flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/96 px-4 py-3 text-slate-900 shadow-[0_32px_60px_-24px_rgba(15,23,42,0.65)] backdrop-blur-xl ring-1 ring-white/35 before:absolute before:inset-0 before:-z-10 before:bg-white/35 before:backdrop-blur-2xl">
+        <div className="flex flex-col gap-3">
+          <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+            New Event
+          </span>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <span className="text-2xl font-semibold leading-tight text-slate-900 whitespace-nowrap">
+              {formatTime(hour, minute)}
+            </span>
           </div>
         </div>
 
-        {/* "New Event" text */}
-        <div className="text-base font-semibold text-white/95 drop-shadow">
-          New Event
-        </div>
-
-        {/* Duration with better spacing */}
-        <div className="text-sm font-medium text-white/80 drop-shadow-sm">
-          {formatTime(hour, minute)} - {formatEndTime(hour, minute)}
-        </div>
-
-        {/* Visual hint */}
-        <div className="text-[10px] text-white/70 text-center mt-1 font-medium">
-          Release to confirm
+        <div className="rounded-xl border border-slate-200/70 bg-slate-50/95 px-3 py-2 text-left">
+          <div className="text-sm font-semibold leading-tight text-slate-900">
+            Starts • {formatTime(hour, minute)}
+          </div>
+          <div className="text-[13px] font-medium leading-tight text-slate-600">
+            Ends • {formatEndTime(hour, minute)}
+          </div>
         </div>
       </div>
     </div>

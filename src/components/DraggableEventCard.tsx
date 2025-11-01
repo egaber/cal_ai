@@ -48,6 +48,7 @@ interface DraggableEventCardProps {
   member?: FamilyMember;
   familyMembers?: FamilyMember[]; // All family members to lookup multiple attendees
   layout?: EventLayout; // Layout information for handling overlaps
+  onDragStateChange?: (isDragging: boolean) => void; // Callback to notify parent of drag state
 }
 
 const CATEGORY_STYLES: Record<CalendarEvent["category"], {
@@ -304,6 +305,7 @@ export const DraggableEventCard = ({
   member,
   familyMembers = [],
   layout,
+  onDragStateChange,
 }: DraggableEventCardProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<'top' | 'bottom' | null>(null);
@@ -314,6 +316,7 @@ export const DraggableEventCard = ({
   const cardRef = useRef<HTMLDivElement>(null);
   const { isRTL } = useRTL();
   const isMobile = 'ontouchstart' in window;
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
   const startDate = useMemo(() => new Date(event.startTime), [event.startTime]);
   const endDate = useMemo(() => new Date(event.endTime), [event.endTime]);
@@ -360,11 +363,6 @@ export const DraggableEventCard = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Disable drag on mobile/touch devices
-    if ('ontouchstart' in window) {
-      return;
-    }
-    
     if (e.target instanceof HTMLElement && e.target.classList.contains('resize-handle')) {
       return;
     }
@@ -397,12 +395,123 @@ export const DraggableEventCard = ({
     }
   };
 
-  const handleResizeMouseDown = (e: React.MouseEvent, direction: 'top' | 'bottom') => {
-    // Disable resize on mobile/touch devices
-    if ('ontouchstart' in window) {
-      return;
+  // Touch handlers for mobile drag
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    
+    // CRITICAL: Stop propagation immediately to prevent calendar's touch handlers
+    e.stopPropagation();
+    
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    
+    // Start long-press timer for drag
+    const timer = setTimeout(() => {
+      setIsDragReady(true);
+      setIsDragging(true);
+      setHasDragged(false);
+      
+      const rect = cardRef.current?.getBoundingClientRect();
+      if (rect) {
+        setDragOffset({
+          x: touch.clientX - rect.left,
+          y: touch.clientY - rect.top,
+        });
+      }
+      
+      // Notify parent that drag started
+      onDragStateChange?.(true);
+      
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500); // 500ms long-press threshold
+    
+    setLongPressTimer(timer);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    
+    const touch = e.touches[0];
+    
+    // Cancel long-press if user moves finger before threshold
+    if (longPressTimer && touchStartPos.current) {
+      const moveDistance = Math.sqrt(
+        Math.pow(touch.clientX - touchStartPos.current.x, 2) +
+        Math.pow(touch.clientY - touchStartPos.current.y, 2)
+      );
+      
+      if (moveDistance > 10 && !isDragReady) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+        return;
+      }
     }
     
+    // Handle dragging if ready
+    if (isDragging && isDragReady && cardRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      setHasDragged(true);
+      
+      // For mobile, get the parent container (could be scroll container or events layer)
+      const eventsContainer = cardRef.current.parentElement;
+      if (!eventsContainer) return;
+      
+      const containerRect = eventsContainer.getBoundingClientRect();
+      
+      // Calculate position relative to the events container (which spans 24 hours)
+      const newY = touch.clientY - containerRect.top;
+      
+      // Calculate new time based on position
+      const totalMinutes = snapToGrid((newY / timeSlotHeight) * 60);
+      const newHour = Math.floor(totalMinutes / 60);
+      const newMinute = totalMinutes % 60;
+
+      if (newHour >= 0 && newHour < 24) {
+        // On mobile, we're always in the same column (single day view)
+        const targetDate = dates[columnIndex] || dates[0];
+        const newStartDate = new Date(targetDate);
+        newStartDate.setHours(newHour, newMinute, 0, 0);
+        
+        const newEndDate = new Date(newStartDate);
+        newEndDate.setTime(newStartDate.getTime() + durationMinutes * 60000);
+
+        onMove(event.id, newStartDate.toISOString(), newEndDate.toISOString());
+      }
+      
+      // Additional haptic feedback during drag
+      if (navigator.vibrate && Math.abs(newY - topPosition) > 20) {
+        navigator.vibrate(10);
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    
+    // If we were dragging, don't trigger click
+    if (isDragging && isDragReady) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Notify parent that drag ended
+      onDragStateChange?.(false);
+    }
+    
+    setIsDragging(false);
+    setIsDragReady(false);
+    touchStartPos.current = null;
+  };
+
+  const handleResizeMouseDown = (e: React.MouseEvent, direction: 'top' | 'bottom') => {
     e.stopPropagation();
     setIsResizing(direction);
   };
@@ -500,17 +609,21 @@ export const DraggableEventCard = ({
   return (
     <div
       ref={cardRef}
+      data-event-card="true"
       onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       className={cn(
         'absolute select-none overflow-hidden rounded-sm border bg-white/90 shadow-sm transition-all hover:shadow-md',
         'ontouchstart' in window ? 'cursor-pointer' : 'cursor-move',
         styles.card,
-        isDragging && 'scale-[1.01] border-primary/40',
+        (isDragging || isDragReady) && 'scale-105 shadow-2xl border-primary/60 z-50',
         isResizing && 'scale-[1.01] border-primary/40',
-        isHappening && 'scale-[1.01] border-primary/40',
-        isUpcoming && 'ring-1 ring-primary/20',
-        isDragging || isResizing ? 'z-50' : 'z-20',
+        isHappening && !isDragging && 'scale-[1.01] border-primary/40',
+        isUpcoming && !isDragging && 'ring-1 ring-primary/20',
+        (isDragging || isResizing) && !isDragReady ? 'z-50' : isDragReady ? 'z-50' : 'z-20',
       )}
       style={{
         top: `${topPosition}px`,

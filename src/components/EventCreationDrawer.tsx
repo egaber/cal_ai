@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { FamilyMember } from "@/types/calendar";
 import { CalendarEvent } from "@/types/calendar";
-import { X, Clock, User, Tag, FileText } from "lucide-react";
+import { X, Clock, User, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface EventCreationDrawerProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ interface EventCreationDrawerProps {
   hour: number;
   minute: number;
   familyMembers: FamilyMember[];
-  onSave: (eventData: Omit<CalendarEvent, 'id'>) => void;
+  onSave: (eventData: Omit<CalendarEvent, "id">) => void;
 }
 
 export const EventCreationDrawer = ({
@@ -32,22 +33,95 @@ export const EventCreationDrawer = ({
   const [selectedMemberId, setSelectedMemberId] = useState(familyMembers[0]?.id || "");
   const [startHour, setStartHour] = useState(hour);
   const [startMinute, setStartMinute] = useState(minute);
-  const [endHour, setEndHour] = useState(hour + 1);
+  const [endHour, setEndHour] = useState(Math.min(hour + 1, 23));
   const [endMinute, setEndMinute] = useState(minute);
   const [notes, setNotes] = useState("");
 
+  useEffect(() => {
+    if (!familyMembers.length) {
+      setSelectedMemberId("");
+      return;
+    }
+
+    if (!familyMembers.some((member) => member.id === selectedMemberId)) {
+      setSelectedMemberId(familyMembers[0].id);
+    }
+  }, [familyMembers, selectedMemberId]);
+
   const formatTimeForInput = (h: number, m: number) => {
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
   };
 
+  const formatTimeForDisplay = (h: number, m: number) => {
+    const localDate = new Date(date);
+    localDate.setHours(h, m, 0, 0);
+    return localDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+
+  const formattedDateLabel = useMemo(
+    () =>
+      date.toLocaleDateString([], {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      }),
+    [date],
+  );
+
+  const startTimeLabel = useMemo(
+    () => formatTimeForDisplay(startHour, startMinute),
+    [date, startHour, startMinute],
+  );
+
+  const endTimeLabel = useMemo(
+    () => formatTimeForDisplay(endHour, endMinute),
+    [date, endHour, endMinute],
+  );
+
+  const timeRangeLabel = useMemo(() => {
+    if (isAllDay) {
+      return "All day";
+    }
+    return `${startTimeLabel} – ${endTimeLabel}`;
+  }, [endTimeLabel, isAllDay, startTimeLabel]);
+
+  const durationLabel = useMemo(() => {
+    if (isAllDay) {
+      return "All day coverage";
+    }
+    const startTotal = startHour * 60 + startMinute;
+    const endTotal = endHour * 60 + endMinute;
+    const diff = Math.max(endTotal - startTotal, 0);
+    if (diff === 0) {
+      return "0 minutes";
+    }
+    const hoursAmount = Math.floor(diff / 60);
+    const minutesAmount = diff % 60;
+    const parts: string[] = [];
+    if (hoursAmount > 0) {
+      parts.push(`${hoursAmount} hr${hoursAmount > 1 ? "s" : ""}`);
+    }
+    if (minutesAmount > 0) {
+      parts.push(`${minutesAmount} min`);
+    }
+    return parts.join(" ");
+  }, [endHour, endMinute, isAllDay, startHour, startMinute]);
+
+  const selectedMember = useMemo(
+    () => familyMembers.find((member) => member.id === selectedMemberId),
+    [familyMembers, selectedMemberId],
+  );
+
   const handleTimeChange = (timeString: string, isStart: boolean) => {
-    const [h, m] = timeString.split(':').map(Number);
+    const [h, m] = timeString.split(":").map(Number);
     if (isStart) {
       setStartHour(h);
       setStartMinute(m);
-      // Auto-adjust end time to be 1 hour later
       if (h + 1 < 24) {
         setEndHour(h + 1);
+        setEndMinute(m);
+      } else {
+        setEndHour(23);
         setEndMinute(m);
       }
     } else {
@@ -57,7 +131,9 @@ export const EventCreationDrawer = ({
   };
 
   const handleSave = async () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      return;
+    }
 
     const startDate = new Date(date);
     const endDate = new Date(date);
@@ -70,18 +146,17 @@ export const EventCreationDrawer = ({
       endDate.setHours(endHour, endMinute, 0, 0);
     }
 
-    // Generate metadata (emoji and category)
-    let metadata: { emoji: string; category: CalendarEvent['category'] };
-    
+    let metadata: { emoji: string; category: CalendarEvent["category"] };
+
     try {
-      const { llmService } = await import('@/services/llmService');
+      const { llmService } = await import("@/services/llmService");
       const aiMetadata = await llmService.generateEventMetadata(title, notes);
       metadata = {
         emoji: aiMetadata.emoji,
-        category: aiMetadata.category as CalendarEvent['category']
+        category: aiMetadata.category as CalendarEvent["category"],
       };
     } catch (error) {
-      const { generateEventMetadataLocal } = await import('@/utils/eventMetadataUtils');
+      const { generateEventMetadataLocal } = await import("@/utils/eventMetadataUtils");
       metadata = generateEventMetadataLocal(title, notes);
     }
 
@@ -90,143 +165,260 @@ export const EventCreationDrawer = ({
       startTime: startDate.toISOString(),
       endTime: endDate.toISOString(),
       category: metadata.category,
-      priority: 'medium',
-      memberId: selectedMemberId,
+      priority: "medium",
+      memberId: selectedMemberId || familyMembers[0]?.id || "",
       emoji: metadata.emoji,
       isAllDay,
       description: notes || undefined,
     });
 
-    // Reset form
     setTitle("");
     setNotes("");
     setIsAllDay(false);
+    setStartHour(hour);
+    setStartMinute(minute);
+    setEndHour(Math.min(hour + 1, 23));
+    setEndMinute(minute);
+    setSelectedMemberId(familyMembers[0]?.id || "");
     onClose();
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
-        <SheetHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-2xl font-bold">New Event</SheetTitle>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-        </SheetHeader>
-
-        <div className="space-y-6 pb-24">
-          {/* Title Input - Autofocus */}
-          <div className="space-y-2">
-            <Label htmlFor="title" className="text-base font-semibold">Event Title</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What's happening?"
-              className="text-lg h-12"
-              autoFocus
-            />
-          </div>
-
-          {/* All-Day Toggle */}
-          <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-800">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-primary" />
-              <Label htmlFor="all-day" className="text-base font-medium cursor-pointer">
-                All Day Event
-              </Label>
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        className="h-[88vh] max-w-[520px] rounded-t-[32px] border border-slate-200/70 bg-white p-0 text-slate-900 shadow-[0_-40px_120px_-40px_rgba(15,23,42,0.35)]"
+      >
+        <div className="flex h-full flex-col">
+          <SheetHeader className="px-6 pb-4 pt-6">
+            <div className="flex items-start justify-between">
+              <SheetTitle className="text-3xl font-semibold tracking-tight text-slate-900">
+                New Event
+              </SheetTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-9 w-9 rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                aria-label="Close event creation drawer"
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-            <Switch
-              id="all-day"
-              checked={isAllDay}
-              onCheckedChange={setIsAllDay}
-            />
-          </div>
+            <p className="mt-2 text-sm text-slate-500">
+              Plan your next moment with a clear overview before it lands on the calendar.
+            </p>
+          </SheetHeader>
 
-          {/* Time Selection */}
-          {!isAllDay && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Time</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start-time" className="text-sm text-gray-600">Start</Label>
-                  <Input
-                    id="start-time"
-                    type="time"
-                    value={formatTimeForInput(startHour, startMinute)}
-                    onChange={(e) => handleTimeChange(e.target.value, true)}
-                    className="h-11"
-                  />
+          <div className="flex-1 overflow-y-auto px-6 pb-36">
+            <section className="mb-7">
+              <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-[0_24px_48px_-32px_rgba(15,23,42,0.4)]">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/30">
+                    <Clock className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {formattedDateLabel}
+                    </p>
+                    <p className="text-2xl font-semibold leading-tight text-slate-900">{timeRangeLabel}</p>
+                    <p className="text-sm font-medium text-slate-600">{durationLabel}</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-time" className="text-sm text-gray-600">End</Label>
-                  <Input
-                    id="end-time"
-                    type="time"
-                    value={formatTimeForInput(endHour, endMinute)}
-                    onChange={(e) => handleTimeChange(e.target.value, false)}
-                    className="h-11"
-                  />
-                </div>
+                {selectedMember && (
+                  <div className="mt-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 flex-none items-center justify-center rounded-full font-semibold text-white shadow-inner shadow-black/10",
+                        selectedMember.color,
+                      )}
+                    >
+                      {selectedMember.name.charAt(0)}
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-semibold text-slate-900">{selectedMember.name}</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500">Organizer</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            </section>
 
-          {/* Member Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <Label className="text-base font-semibold">Assign To</Label>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {familyMembers.map((member) => (
-                <button
-                  key={member.id}
-                  onClick={() => setSelectedMemberId(member.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                    selectedMemberId === member.id
-                      ? 'bg-primary/10 border-2 border-primary'
-                      : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent'
-                  }`}
+            <section className="space-y-6">
+              <div className="space-y-3">
+                <Label
+                  htmlFor="title"
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-600"
                 >
-                  <div className={`w-10 h-10 rounded-full ${member.color} flex items-center justify-center text-white font-bold`}>
-                    {member.name[0]}
+                  Event Title
+                </Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Give this event a headline..."
+                  className="h-12 rounded-2xl border border-slate-200 bg-white text-base text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <Clock className="h-5 w-5" />
                   </div>
-                  <div className="flex-1 text-left">
-                    <div className="font-medium text-sm">{member.name}</div>
+                  <div>
+                    <p className="text-base font-semibold text-slate-900">All-day scheduling</p>
+                    <p className="text-xs text-slate-500">Toggle on to block the entire day.</p>
                   </div>
-                </button>
-              ))}
-            </div>
+                </div>
+                <Switch
+                  id="all-day"
+                  checked={isAllDay}
+                  onCheckedChange={(checked) => setIsAllDay(Boolean(checked))}
+                  aria-label="Toggle all day event"
+                />
+              </div>
+
+              {!isAllDay && (
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Time
+                    </Label>
+                    <span className="text-xs font-medium text-slate-500">Local timezone</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="start-time" className="text-sm font-semibold text-slate-700">
+                        Start
+                      </Label>
+                      <Input
+                        id="start-time"
+                        type="time"
+                        value={formatTimeForInput(startHour, startMinute)}
+                        onChange={(e) => handleTimeChange(e.target.value, true)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white text-sm text-slate-900 focus:border-primary focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end-time" className="text-sm font-semibold text-slate-700">
+                        End
+                      </Label>
+                      <Input
+                        id="end-time"
+                        type="time"
+                        value={formatTimeForInput(endHour, endMinute)}
+                        onChange={(e) => handleTimeChange(e.target.value, false)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white text-sm text-slate-900 focus:border-primary focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label className="text-base font-semibold text-slate-900">Assign To</Label>
+                    <p className="text-xs text-slate-500">
+                      Choose who will own this event.
+                    </p>
+                  </div>
+                </div>
+                {familyMembers.length ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {familyMembers.map((member) => {
+                      const isSelected = selectedMemberId === member.id;
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => setSelectedMemberId(member.id)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            "group flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                            isSelected
+                              ? "border-primary bg-primary/10 shadow-[0_18px_30px_-18px_rgba(59,130,246,0.45)]"
+                              : "border-slate-200 bg-white hover:border-primary/40 hover:bg-primary/5",
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "flex h-11 w-11 flex-none items-center justify-center rounded-full font-semibold text-white shadow-inner shadow-black/10",
+                              member.color,
+                            )}
+                          >
+                            {member.name.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-slate-900">{member.name}</div>
+                            {isSelected ? (
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                                Selected
+                              </div>
+                            ) : (
+                              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                                Tap to assign
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    Add family members in settings to assign events.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="notes" className="text-base font-semibold text-slate-900">
+                      Notes
+                    </Label>
+                    <p className="text-xs text-slate-500">Share details, agenda, or links for the event.</p>
+                  </div>
+                </div>
+                <textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add supporting details to keep everyone aligned..."
+                  className="w-full min-h-[120px] resize-none rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+            </section>
           </div>
 
-          {/* Notes/Description */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <Label htmlFor="notes" className="text-base font-semibold">Notes</Label>
-            </div>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any additional details..."
-              className="w-full min-h-[100px] p-3 rounded-xl border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-            />
+          <div className="absolute inset-x-0 bottom-0 bg-white px-6 pb-8 pt-5 shadow-[0_-28px_40px_-30px_rgba(15,23,42,0.25)]">
+            <Button
+              onClick={handleSave}
+              disabled={!title.trim()}
+              className="h-14 w-full rounded-2xl border border-primary/50 bg-primary text-lg font-semibold text-white shadow-[0_18px_36px_-16px_rgba(59,130,246,0.45)] transition-all hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-60"
+            >
+              Create Event
+            </Button>
+            <p className="mt-2 text-center text-xs text-slate-500">
+              AI metadata will be generated instantly to keep your calendar organized.
+            </p>
           </div>
-        </div>
-
-        {/* Fixed Bottom Button */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
-          <Button
-            onClick={handleSave}
-            disabled={!title.trim()}
-            className="w-full h-14 text-lg font-semibold rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            Create Event
-          </Button>
         </div>
       </SheetContent>
     </Sheet>
