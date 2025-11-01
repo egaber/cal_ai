@@ -27,39 +27,41 @@ export const DraggableEventPlaceholder = ({
   };
 
   const height = timeSlotHeight; // 1 hour
+  // Center the placeholder on the touch point by offsetting by half its height
+  const centeredTop = top - (height / 2);
 
   return (
     <div
-      className="absolute left-2 right-2 rounded-xl z-40 pointer-events-none select-none overflow-hidden"
+      className="absolute left-2 right-2 rounded-2xl z-40 pointer-events-none select-none"
       style={{
-        top: `${top}px`,
+        top: `${centeredTop}px`,
         height: `${height}px`,
         WebkitUserSelect: 'none',
         userSelect: 'none',
       }}
     >
-      {/* Glass effect container inspired by the attached images */}
-      <div className="h-full w-full rounded-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-2 border-primary/50 shadow-xl flex flex-col items-center justify-center gap-1.5 p-3 overflow-hidden">
-        {/* Large time display */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Clock className="h-5 w-5 text-primary animate-pulse flex-shrink-0" />
-          <div className="text-2xl font-bold text-primary whitespace-nowrap">
+      {/* Enhanced glass effect with better transparency */}
+      <div className="h-full w-full rounded-2xl bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 backdrop-blur-xl border-2 border-white/40 shadow-2xl flex flex-col items-center justify-center gap-2 p-4">
+        {/* Large time display with icon */}
+        <div className="flex items-center gap-2.5">
+          <Clock className="h-6 w-6 text-white/90 animate-pulse flex-shrink-0" />
+          <div className="text-3xl font-bold text-white drop-shadow-lg">
             {formatTime(hour, minute)}
           </div>
         </div>
 
         {/* "New Event" text */}
-        <div className="text-sm font-semibold text-primary/90 whitespace-nowrap flex-shrink-0">
+        <div className="text-base font-semibold text-white/95 drop-shadow">
           New Event
         </div>
 
-        {/* Duration */}
-        <div className="text-xs font-medium text-primary/70 whitespace-nowrap flex-shrink-0">
+        {/* Duration with better spacing */}
+        <div className="text-sm font-medium text-white/80 drop-shadow-sm">
           {formatTime(hour, minute)} - {formatEndTime(hour, minute)}
         </div>
 
         {/* Visual hint */}
-        <div className="text-[9px] text-primary/60 text-center whitespace-nowrap flex-shrink-0 mt-0.5 px-2 truncate max-w-full">
+        <div className="text-[10px] text-white/70 text-center mt-1 font-medium">
           Release to confirm
         </div>
       </div>

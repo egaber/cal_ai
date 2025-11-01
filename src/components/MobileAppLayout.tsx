@@ -112,7 +112,7 @@ const MobileAppLayout = () => {
   };
 
   return (
-    <div className={`h-full w-full flex flex-col ${isDarkMode ? 'dark' : ''} overflow-hidden`} style={{ height: '100vh', height: '100dvh' }}>
+    <div className={`h-full w-full flex flex-col ${isDarkMode ? 'dark' : ''} overflow-hidden`} style={{ height: '100dvh' }}>
       {/* Fixed Background */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 -z-10" />
       
