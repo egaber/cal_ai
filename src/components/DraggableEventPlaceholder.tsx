@@ -41,24 +41,24 @@ export const DraggableEventPlaceholder = ({
         userSelect: "none",
       }}
     >
-      <div className="relative flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/96 px-4 py-3 text-slate-900 shadow-[0_32px_60px_-24px_rgba(15,23,42,0.65)] backdrop-blur-xl ring-1 ring-white/35 before:absolute before:inset-0 before:-z-10 before:bg-white/35 before:backdrop-blur-2xl">
+      <div className="relative flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/96 dark:bg-slate-800/96 px-4 py-3 text-slate-900 dark:text-slate-100 shadow-[0_32px_60px_-24px_rgba(15,23,42,0.65)] dark:shadow-[0_32px_60px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl ring-1 ring-white/35 dark:ring-slate-700/35 before:absolute before:inset-0 before:-z-10 before:bg-white/35 dark:before:bg-slate-800/35 before:backdrop-blur-2xl">
         <div className="flex flex-col gap-3">
-          <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+          <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 dark:bg-primary/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary dark:text-primary-400">
             New Event
           </span>
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <span className="text-2xl font-semibold leading-tight text-slate-900 whitespace-nowrap">
+            <Clock className="h-5 w-5 text-primary dark:text-primary-400" />
+            <span className="text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100 whitespace-nowrap">
               {formatTime(hour, minute)}
             </span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/70 bg-slate-50/95 px-3 py-2 text-left">
-          <div className="text-sm font-semibold leading-tight text-slate-900">
+        <div className="rounded-xl border border-slate-200/70 dark:border-slate-600/70 bg-slate-50/95 dark:bg-slate-700/95 px-3 py-2 text-left">
+          <div className="text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
             Starts • {formatTime(hour, minute)}
           </div>
-          <div className="text-[13px] font-medium leading-tight text-slate-600">
+          <div className="text-[13px] font-medium leading-tight text-slate-600 dark:text-slate-400">
             Ends • {formatEndTime(hour, minute)}
           </div>
         </div>

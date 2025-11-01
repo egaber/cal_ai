@@ -86,6 +86,16 @@
     touch-action: pan-x pan-y; /* Allow touch but no overscroll */
   }
   
+  /* Safari standalone mode fixes */
+  @supports (-webkit-touch-callout: none) {
+    html,
+    body {
+      /* Use 100dvh for better viewport handling in iOS */
+      height: 100dvh;
+      min-height: -webkit-fill-available;
+    }
+  }
+  
   /* Ensure root div fills viewport */
   #root {
     height: 100%;
@@ -332,11 +342,22 @@
 
 /* iOS Bottom Navigation */
 .ios-bottom-nav {
-  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  /* Use calc to add bottom safe area to padding */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  /* Fallback for browsers that don't support env() */
+  padding-bottom: 8px;
+  /* Re-apply with env() for supporting browsers */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+  /* Ensure it sticks to the absolute bottom */
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
 }
 
 .dark .ios-bottom-nav {

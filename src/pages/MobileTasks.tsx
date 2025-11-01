@@ -574,25 +574,25 @@ Return the enhanced text with emoji and category marker.` }
     return String(value);
   };
 
-  // Get color for category tags (no background, just colored text)
+  // Get color for category tags (no background, just colored text with dark mode support)
   const getCategoryColor = (categoryName: string): { text: string; bg: string; border: string } => {
     const lowerCategory = categoryName.toLowerCase();
     
     if (lowerCategory === 'עבודה') {
-      return { text: 'text-blue-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-blue-600 dark:text-blue-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'משפחה') {
-      return { text: 'text-pink-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-pink-600 dark:text-pink-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'קניות') {
-      return { text: 'text-emerald-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'בריאות') {
-      return { text: 'text-rose-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-rose-600 dark:text-rose-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'לימודים') {
-      return { text: 'text-violet-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-violet-600 dark:text-violet-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else if (lowerCategory === 'תחבורה') {
-      return { text: 'text-cyan-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-transparent', border: 'border-transparent' };
     } else {
       // Default for 'כללי' and others
-      return { text: 'text-gray-600', bg: 'bg-transparent', border: 'border-transparent' };
+      return { text: 'text-gray-600 dark:text-gray-400', bg: 'bg-transparent', border: 'border-transparent' };
     }
   };
 
@@ -1041,9 +1041,9 @@ Return the enhanced text with emoji and category marker.` }
                     {task.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {task.tags.map((tag) => {
-                          let textColor = 'text-gray-700';
-                          let bgColor = 'bg-white';
-                          let borderColor = 'border-gray-200';
+                          let textColor = 'text-gray-700 dark:text-gray-300';
+                          let bgColor = 'bg-white dark:bg-gray-800';
+                          let borderColor = 'border-gray-200 dark:border-gray-700';
                           
                           // Check if this is a category tag (hashtag)
                           if (tag.type === 'tag') {
@@ -1052,14 +1052,14 @@ Return the enhanced text with emoji and category marker.` }
                             bgColor = 'bg-transparent';
                             borderColor = 'border-transparent';
                           } else {
-                            // Standard tag colors
-                            if (tag.type === 'involved') textColor = 'text-purple-600';
-                            else if (tag.type === 'location') textColor = 'text-amber-600';
-                            else if (tag.type === 'time') textColor = 'text-green-600';
-                            else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
-                            else if (tag.type === 'priority') textColor = 'text-red-600';
-                            else if (tag.type === 'owner') textColor = 'text-indigo-600';
-                            else if (tag.type === 'recurring') textColor = 'text-cyan-600';
+                            // Standard tag colors with dark mode support
+                            if (tag.type === 'involved') textColor = 'text-purple-600 dark:text-purple-400';
+                            else if (tag.type === 'location') textColor = 'text-amber-600 dark:text-amber-400';
+                            else if (tag.type === 'time') textColor = 'text-green-600 dark:text-green-400';
+                            else if (tag.type === 'timeBucket') textColor = 'text-blue-600 dark:text-blue-400';
+                            else if (tag.type === 'priority') textColor = 'text-red-600 dark:text-red-400';
+                            else if (tag.type === 'owner') textColor = 'text-indigo-600 dark:text-indigo-400';
+                            else if (tag.type === 'recurring') textColor = 'text-cyan-600 dark:text-cyan-400';
                           }
                           
                           return (
@@ -1177,9 +1177,9 @@ Return the enhanced text with emoji and category marker.` }
                   {parsedTask.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {parsedTask.tags.map((tag) => {
-                        let textColor = 'text-gray-700';
-                        let bgColor = 'bg-white';
-                        let borderColor = 'border-gray-200';
+                        let textColor = 'text-gray-700 dark:text-gray-300';
+                        let bgColor = 'bg-white dark:bg-gray-800';
+                        let borderColor = 'border-gray-200 dark:border-gray-700';
                         
                         // Check if this is a category tag (hashtag)
                         if (tag.type === 'tag') {
@@ -1188,13 +1188,13 @@ Return the enhanced text with emoji and category marker.` }
                           bgColor = 'bg-transparent';
                           borderColor = 'border-transparent';
                         } else {
-                          // Standard tag colors
-                          if (tag.type === 'involved') textColor = 'text-purple-600';
-                          else if (tag.type === 'location') textColor = 'text-amber-600';
-                          else if (tag.type === 'time') textColor = 'text-green-600';
-                          else if (tag.type === 'timeBucket') textColor = 'text-blue-600';
-                          else if (tag.type === 'priority') textColor = 'text-red-600';
-                          else if (tag.type === 'owner') textColor = 'text-indigo-600';
+                          // Standard tag colors with dark mode support
+                          if (tag.type === 'involved') textColor = 'text-purple-600 dark:text-purple-400';
+                          else if (tag.type === 'location') textColor = 'text-amber-600 dark:text-amber-400';
+                          else if (tag.type === 'time') textColor = 'text-green-600 dark:text-green-400';
+                          else if (tag.type === 'timeBucket') textColor = 'text-blue-600 dark:text-blue-400';
+                          else if (tag.type === 'priority') textColor = 'text-red-600 dark:text-red-400';
+                          else if (tag.type === 'owner') textColor = 'text-indigo-600 dark:text-indigo-400';
                         }
                         
                         return (
