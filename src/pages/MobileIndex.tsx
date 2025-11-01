@@ -474,7 +474,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
               onClick={() => handleNavigate('prev')} 
               className="h-7 w-7 p-0"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => handleNavigate('today')} className="h-7 px-2 text-xs">
               Today
@@ -485,7 +485,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
               onClick={() => handleNavigate('next')} 
               className="h-7 w-7 p-0"
             >
-              <ChevronRight className="h-4 w-4" />              
+              <ChevronLeft className="h-4 w-4" />              
             </Button>
             <div className="flex items-center gap-1">
               <button
