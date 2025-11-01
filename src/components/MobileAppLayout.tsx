@@ -175,16 +175,16 @@ const MobileAppLayout = () => {
           </button>
 
           <button
-            onClick={() => handleTabChange('planning')}
+            onClick={() => handleTabChange('ai')}
             className={`flex flex-col items-center gap-0.5 py-2 px-6 touch-target transition-all ${
-              activeTab === 'planning'
+              activeTab === 'ai'
                 ? 'text-primary'
                 : 'text-gray-500 dark:text-gray-400'
             }`}
           >
-            <Bot className={`h-6 w-6 ${activeTab === 'planning' ? 'scale-110' : ''}`} />
+            <MessageSquare className={`h-6 w-6 ${activeTab === 'ai' ? 'scale-110' : ''}`} />
             <span className="text-[10px] font-medium">
-              תכנון AI
+              💬 שיחה
             </span>
           </button>
 

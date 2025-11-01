@@ -460,6 +460,7 @@ ${todosContext}
 
 Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 Interpret relative times like "today at 6pm" using today's date (${currentDate.toLocaleDateString()}) and local time (18:00).
+Current Time: ${currentDate.toLocaleTimeString()}
 
 When user asks about tasks or to schedule their tasks, analyze the todo list above and create smart scheduling suggestions considering priorities, deadlines, and calendar availability.`;
 
@@ -492,6 +493,7 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
         let weeklyPlanData: MessageWithEvent['weeklyPlan'] | undefined;
         let subtasksData: MessageWithEvent['subtasks'] | undefined;
         let taskListData: TodoTask[] | undefined;
+        let displayMessage = response.content || '';
         
         for (const toolCall of response.toolCalls) {
           console.log('🔧 Processing tool:', toolCall.tool, 'with params:', toolCall.parameters);
@@ -521,6 +523,8 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
             if (toolCall.tool === 'create_meeting' && result.data) {
               createdEvent = result.data as CalendarEvent;
               createdEventMember = familyMembers.find(m => m.id === createdEvent?.memberId);
+              console.log('✅ STORED CREATED EVENT:', createdEvent);
+              console.log('✅ STORED EVENT MEMBER:', createdEventMember);
             }
             
             // If this was a schedule_task call, update the task with the event ID
@@ -602,10 +606,30 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
           }
         }
 
+        // If content is empty but we have successful tool executions, generate a helpful message
+        if (!displayMessage.trim() && toolResults.length > 0) {
+          const successfulActions = toolResults.filter(r => r.startsWith('✓'));
+          if (successfulActions.length > 0) {
+            if (createdEvent) {
+              displayMessage = `✅ Created event: "${createdEvent.title}"`;
+            } else if (taskAnalysisData) {
+              displayMessage = `✅ Analyzed ${taskAnalysisData.taskAnalysis.length} tasks`;
+            } else if (weeklyPlanData) {
+              displayMessage = `✅ Created weekly plan`;
+            } else if (subtasksData) {
+              displayMessage = `✅ Created ${subtasksData.subtasks.length} subtasks`;
+            } else if (taskListData) {
+              displayMessage = `✅ Task added successfully`;
+            } else {
+              displayMessage = successfulActions.join('\n');
+            }
+          }
+        }
+
         // Add assistant message with all data for rendering
         const assistantMessage: MessageWithEvent = {
           role: 'assistant',
-          content: response.content,
+          content: displayMessage,
           event: createdEvent,
           eventMember: createdEventMember,
           taskAnalysis: taskAnalysisData,
@@ -614,6 +638,10 @@ When user asks about tasks or to schedule their tasks, analyze the todo list abo
           taskList: taskListData,
           followupButtons: response.followupButtons,
         };
+
+        console.log('📨 FINAL ASSISTANT MESSAGE:', assistantMessage);
+        console.log('📨 Has event?', !!assistantMessage.event);
+        console.log('📨 Event details:', assistantMessage.event);
 
         setChatHistory(prev => [...prev, assistantMessage]);
       } else {
