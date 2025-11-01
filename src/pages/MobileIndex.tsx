@@ -35,7 +35,6 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
   const [eventPopoverPosition, setEventPopoverPosition] = useState({ x: 0, y: 0 });
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isNewEventDialogOpen, setIsNewEventDialogOpen] = useState(false);
-  const [inlineDraft, setInlineDraft] = useState<{ date: Date; hour: number; minute: number } | null>(null);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
   const [isEventCreationDrawerOpen, setIsEventCreationDrawerOpen] = useState(false);
   const [drawerEventData, setDrawerEventData] = useState<{ date: Date; hour: number; minute: number } | null>(null);
@@ -158,65 +157,10 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     );
   };
 
-  const handleTimeSlotClick = (date: Date, hour: number, minute: number, _clickX: number, _clickY: number) => {
-    setInlineDraft({ date, hour, minute });
-  };
-
   const handleLongPressComplete = (date: Date, hour: number, minute: number) => {
     // When long-press completes, open the drawer with the selected time
     setDrawerEventData({ date, hour, minute });
     setIsEventCreationDrawerOpen(true);
-  };
-
-  const handleInlineEventSave = async (title: string, isAllDay?: boolean) => {
-    setIsEventPopoverOpen(false);
-    setSelectedEvent(null);
-    
-    if (inlineDraft) {
-      const { date, hour, minute } = inlineDraft;
-      const startDate = new Date(date);
-      const endDate = new Date(date);
-      
-      if (isAllDay) {
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(23, 59, 59, 999);
-      } else {
-        startDate.setHours(hour, minute, 0, 0);
-        endDate.setHours(hour + 1, minute, 0, 0);
-      }
-
-      let metadata: { emoji: string; category: CalendarEvent['category'] };
-      
-      try {
-        const { llmService } = await import('@/services/llmService');
-        const aiMetadata = await llmService.generateEventMetadata(title, '');
-        metadata = {
-          emoji: aiMetadata.emoji,
-          category: aiMetadata.category as CalendarEvent['category']
-        };
-      } catch (error) {
-        const { generateEventMetadataLocal } = await import('@/utils/eventMetadataUtils');
-        metadata = generateEventMetadataLocal(title, '');
-      }
-
-      await createCloudEvent({
-        title,
-        startTime: startDate.toISOString(),
-        endTime: endDate.toISOString(),
-        category: metadata.category,
-        priority: 'medium',
-        memberId: selectedMembers[0] || '1',
-        emoji: metadata.emoji,
-        isAllDay: isAllDay || false,
-      });
-
-      setInlineDraft(null);
-      
-      toast({
-        title: "Event Created",
-        description: `"${title}" has been added`,
-      });
-    }
   };
 
   const handleCreateEvent = useCallback(async (eventData: Omit<CalendarEvent, 'id'>) => {
@@ -459,7 +403,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
         document.documentElement.style.overscrollBehavior = htmlOriginalOverscrollBehavior;
       };
     }
-  }, [isHeaderDragging.current]);
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -666,11 +610,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
           familyMembers={familyMembers}
           onEventClick={handleEventClick}
           onEventUpdate={handleEventUpdate}
-          onTimeSlotClick={handleTimeSlotClick}
           onDateChange={(date) => handleDateChange(date)}
-          inlineDraft={inlineDraft || undefined}
-          onInlineSave={handleInlineEventSave}
-          onInlineCancel={() => setInlineDraft(null)}
           highlightEventId={highlightEventId}
           onLongPressComplete={handleLongPressComplete}
         />

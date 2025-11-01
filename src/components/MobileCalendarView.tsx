@@ -2,7 +2,6 @@ import { useEffect, useRef, useMemo, useState } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 import { calculateEventLayouts, EventLayout } from "@/utils/eventLayoutUtils";
-import { InlineEventCreator } from "./InlineEventCreator";
 import { DraggableEventPlaceholder } from "./DraggableEventPlaceholder";
 
 interface MobileCalendarViewProps {
@@ -11,11 +10,7 @@ interface MobileCalendarViewProps {
   familyMembers: FamilyMember[];
   onEventClick: (event: CalendarEvent, clickX: number, clickY: number) => void;
   onEventUpdate: (eventId: string, newStartTime: string, newEndTime: string) => void;
-  onTimeSlotClick: (date: Date, hour: number, minute: number, clickX: number, clickY: number) => void;
   onDateChange: (date: Date) => void;
-  inlineDraft?: { date: Date; hour: number; minute: number };
-  onInlineSave?: (title: string, isAllDay?: boolean) => void;
-  onInlineCancel?: () => void;
   highlightEventId?: string | null;
   onLongPressComplete?: (date: Date, hour: number, minute: number) => void;
 }
@@ -29,10 +24,6 @@ export const MobileCalendarView = ({
   familyMembers,
   onEventClick,
   onEventUpdate,
-  onTimeSlotClick,
-  inlineDraft,
-  onInlineSave,
-  onInlineCancel,
   highlightEventId,
   onLongPressComplete,
 }: MobileCalendarViewProps) => {
@@ -120,18 +111,7 @@ export const MobileCalendarView = ({
     }
   }, [currentDate, isToday, currentTimePosition]);
 
-  const handleTimeSlotClick = (date: Date, hour: number, e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't handle click if long-press was active
-    if (isLongPressing.current) {
-      return;
-    }
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
-    const minuteFraction = clickY / TIME_SLOT_HEIGHT;
-    const minutes = Math.round(minuteFraction * 60);
-    onTimeSlotClick(date, hour, minutes, e.clientX, e.clientY);
-  };
+
 
   const calculateTimeFromY = (clientY: number): { hour: number; minute: number; top: number } => {
     if (!scrollContainerRef.current) {
@@ -158,11 +138,8 @@ export const MobileCalendarView = ({
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    // Don't start long-press if there's already inline draft or if touching an event
-    if (inlineDraft) return;
-    
     const target = e.target as HTMLElement;
-    if (target.closest('[data-event-card]') || target.closest('[data-inline-creator]')) {
+    if (target.closest('[data-event-card]')) {
       return;
     }
 
@@ -278,7 +255,6 @@ export const MobileCalendarView = ({
                         ? 'bg-gray-50 dark:bg-gray-800 active:bg-gray-100 dark:active:bg-gray-700'
                         : 'bg-white dark:bg-gray-900 active:bg-gray-50 dark:active:bg-gray-800'
                     }`}
-                    onClick={(e) => handleTimeSlotClick(date, hour, e)}
                     onTouchStart={handleTouchStart}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
@@ -335,29 +311,6 @@ export const MobileCalendarView = ({
                             </div>
                           );
                         })}
-
-                        {inlineDraft && inlineDraft.date.toDateString() === date.toDateString() && (
-                          <div
-                            className="absolute left-1 right-1 rounded-lg border-2 border-primary bg-white dark:bg-gray-800 shadow-lg z-30"
-                            style={{
-                              top: `${(inlineDraft.hour * 60 + inlineDraft.minute) * (TIME_SLOT_HEIGHT / 60)}px`,
-                              height: `${TIME_SLOT_HEIGHT * 2.5}px`,
-                              minHeight: '180px',
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            onTouchMove={(e) => e.stopPropagation()}
-                            onTouchEnd={(e) => e.stopPropagation()}
-                          >
-                            <InlineEventCreator
-                              date={inlineDraft.date}
-                              hour={inlineDraft.hour}
-                              minute={inlineDraft.minute}
-                              onSave={(title, isAllDay) => onInlineSave && onInlineSave(title, isAllDay)}
-                              onCancel={() => onInlineCancel && onInlineCancel()}
-                            />
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>

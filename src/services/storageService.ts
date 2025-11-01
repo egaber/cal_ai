@@ -3,6 +3,7 @@
 import { CalendarEvent, FamilyMember } from '@/types/calendar';
 import { MemoryData, UserMemory, FamilyMemory, Place, TravelInfo } from '@/types/memory';
 import { GoogleCalendarSettings } from '@/types/googleCalendar';
+import { OutlookCalendarSettings } from '@/types/outlookCalendar';
 
 const STORAGE_KEYS = {
   EVENTS: 'cal_ai_events',
@@ -10,6 +11,7 @@ const STORAGE_KEYS = {
   MEMORY_DATA: 'cal_ai_memory_data',
   SETTINGS: 'cal_ai_settings',
   GOOGLE_CALENDAR_SETTINGS: 'cal_ai_google_calendar_settings',
+  OUTLOOK_CALENDAR_SETTINGS: 'cal_ai_outlook_calendar_settings',
 };
 
 export interface AppSettings {
@@ -255,6 +257,25 @@ export class StorageService {
       return data ? JSON.parse(data) : null;
     } catch (error) {
       console.error('Failed to load Google Calendar settings:', error);
+      return null;
+    }
+  }
+
+  // Outlook Calendar Settings
+  static saveOutlookCalendarSettings(settings: OutlookCalendarSettings): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.OUTLOOK_CALENDAR_SETTINGS, JSON.stringify(settings));
+    } catch (error) {
+      console.error('Failed to save Outlook Calendar settings:', error);
+    }
+  }
+
+  static loadOutlookCalendarSettings(): OutlookCalendarSettings | null {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.OUTLOOK_CALENDAR_SETTINGS);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Failed to load Outlook Calendar settings:', error);
       return null;
     }
   }

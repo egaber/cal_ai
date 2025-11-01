@@ -22,7 +22,7 @@ export interface CalendarEvent {
   aiTip?: string; // AI-generated scheduling tip or suggestion
   recurrence?: RecurrenceRule;
   recurringEventId?: string; // links to parent recurring event
-  source?: 'local' | 'google'; // Where this event came from
+  source?: 'local' | 'google' | 'outlook'; // Where this event came from
   sourceCalendarId?: string; // Google Calendar ID if from Google
   sourceCalendarEmail?: string; // Email of the Google Calendar
   isAllDay?: boolean; // Whether this is a whole-day event

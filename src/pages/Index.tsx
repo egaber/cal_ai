@@ -17,6 +17,7 @@ import { FamilyMembersSidebar } from "@/components/FamilyMembersSidebar";
 import { FamilyManagement } from "@/components/FamilyManagement";
 import { EventSuggestionCard } from "@/components/EventSuggestionCard";
 import { GoogleCalendarSync } from "@/components/GoogleCalendarSync";
+import { OutlookCalendarSync } from "@/components/OutlookCalendarSync";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { MemoryData } from "@/types/memory";
 import { EventSuggestion } from "@/types/task";
@@ -689,12 +690,20 @@ What would you like to know or do with this event?`;
           </div>
           <div className="flex items-center gap-4">
             {family?.id && user?.uid && (
-              <GoogleCalendarSync
-                familyId={family.id}
-                userId={user.uid}
-                familyMembers={familyMembers}
-                onSyncComplete={refreshEvents}
-              />
+              <>
+                <GoogleCalendarSync
+                  familyId={family.id}
+                  userId={user.uid}
+                  familyMembers={familyMembers}
+                  onSyncComplete={refreshEvents}
+                />
+                <OutlookCalendarSync
+                  familyId={family.id}
+                  userId={user.uid}
+                  familyMembers={familyMembers}
+                  onSyncComplete={refreshEvents}
+                />
+              </>
             )}
             {eventSuggestions.length > 0 && (
               <Button
