@@ -309,8 +309,11 @@ export const DraggableEventCard = ({
   const [isResizing, setIsResizing] = useState<'top' | 'bottom' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [isDragReady, setIsDragReady] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const { isRTL } = useRTL();
+  const isMobile = 'ontouchstart' in window;
 
   const startDate = useMemo(() => new Date(event.startTime), [event.startTime]);
   const endDate = useMemo(() => new Date(event.endTime), [event.endTime]);

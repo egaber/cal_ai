@@ -51,7 +51,7 @@ export const InlineEventCreator = ({
   };
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex h-full flex-col gap-2 p-2">
       {/* Header Row (Date / Time + Cancel) */}
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -73,8 +73,18 @@ export const InlineEventCreator = ({
         </Button>
       </div>
 
+      {/* Title input */}
+      <Input
+        autoFocus
+        placeholder="Event title..."
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="text-sm font-medium"
+      />
+
       {/* All-day toggle */}
-      <div className="flex items-center space-x-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1">
+      <div className="flex items-center space-x-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2">
         <Checkbox
           id="inline-allday"
           checked={isAllDay}
@@ -84,29 +94,20 @@ export const InlineEventCreator = ({
           htmlFor="inline-allday"
           className="text-xs font-medium cursor-pointer"
         >
-          All-day
+          All-day event
         </Label>
       </div>
 
-      {/* Title input + Save */}
-      <div className="flex gap-2">
-        <Input
-          autoFocus
-          placeholder="Event title..."
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="flex-1 h-8 text-sm"
-        />
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={!title.trim()}
-          className="flex-shrink-0 h-8"
-        >
-          <Check className="h-4 w-4" />
-        </Button>
-      </div>
+      {/* Large Save Button */}
+      <Button
+        onClick={handleSave}
+        disabled={!title.trim()}
+        className="w-full h-10 text-sm font-semibold bg-primary hover:bg-primary/90"
+        size="lg"
+      >
+        <Check className="h-4 w-4 mr-2" />
+        Save Event
+      </Button>
     </div>
   );
 };

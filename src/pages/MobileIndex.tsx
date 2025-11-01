@@ -3,13 +3,14 @@ import { MobileCalendarView } from "@/components/MobileCalendarView";
 import { MobileEventDetails } from "@/components/MobileEventDetails";
 import { NewEventDialog } from "@/components/NewEventDialog";
 import { EventPopover } from "@/components/EventPopover";
+import { EventCreationDrawer } from "@/components/EventCreationDrawer";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/contexts/EventContext";
 import { useFamily } from "@/contexts/FamilyContext";
 import { StorageService } from "@/services/storageService";
 import { generateRecurringEvents } from "@/utils/recurrenceUtils";
-import { Plus, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,8 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
   const [isNewEventDialogOpen, setIsNewEventDialogOpen] = useState(false);
   const [inlineDraft, setInlineDraft] = useState<{ date: Date; hour: number; minute: number } | null>(null);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
+  const [isEventCreationDrawerOpen, setIsEventCreationDrawerOpen] = useState(false);
+  const [drawerEventData, setDrawerEventData] = useState<{ date: Date; hour: number; minute: number } | null>(null);
   const [isMonthViewExpanded, setIsMonthViewExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   
@@ -159,6 +162,12 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     setInlineDraft({ date, hour, minute });
   };
 
+  const handleLongPressComplete = (date: Date, hour: number, minute: number) => {
+    // When long-press completes, open the drawer with the selected time
+    setDrawerEventData({ date, hour, minute });
+    setIsEventCreationDrawerOpen(true);
+  };
+
   const handleInlineEventSave = async (title: string, isAllDay?: boolean) => {
     setIsEventPopoverOpen(false);
     setSelectedEvent(null);
@@ -261,29 +270,6 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     setIsEventDialogOpen(true);
   };
 
-  // Swipe gesture handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    const swipeThreshold = 50;
-    const diff = touchStartX.current - touchEndX.current;
-    
-    if (Math.abs(diff) > swipeThreshold) {
-      if (diff > 0) {
-        // Swiped left - go to previous
-        handleNavigate('prev');
-      } else {
-        // Swiped right - go to next
-        handleNavigate('next');
-      }
-    }
-  };
 
   const expandedEvents = useMemo(() => {
     const expanded: CalendarEvent[] = [];
@@ -327,7 +313,9 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
   // Get week dates for the date picker
   const weekDates = useMemo(() => {
     const start = new Date(currentDate);
-    start.setDate(currentDate.getDate() - currentDate.getDay()); // Sunday
+    const startDay = start.getDay(); // 0 = Sunday
+    start.setDate(start.getDate() - startDay); // Go to Sunday of current week
+    
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(start);
       date.setDate(start.getDate() + i);
@@ -392,7 +380,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
   const handleHeaderTouchMove = (e: React.TouchEvent) => {
     if (!isHeaderDragging.current) return;
     
-    // Prevent default scrolling behavior
+    // CRITICAL: Prevent scrolling AND pull-to-refresh while dragging header
     e.preventDefault();
     e.stopPropagation();
     
@@ -427,12 +415,38 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
     }
   };
 
+  // Lock body scroll when dragging the month calendar header
+  useEffect(() => {
+    if (isHeaderDragging.current) {
+      // Store original styles
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalTouchAction = document.body.style.touchAction;
+      const originalOverscrollBehavior = document.body.style.overscrollBehavior;
+      const htmlOriginalOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+      
+      // Lock scroll and prevent pull-to-refresh
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.touchAction = 'none';
+      document.body.style.width = '100%';
+      document.body.style.overscrollBehavior = 'none';
+      document.documentElement.style.overscrollBehavior = 'none';
+      
+      // Cleanup when dragging ends
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.touchAction = originalTouchAction;
+        document.body.style.width = '';
+        document.body.style.overscrollBehavior = originalOverscrollBehavior;
+        document.documentElement.style.overscrollBehavior = htmlOriginalOverscrollBehavior;
+      };
+    }
+  }, [isHeaderDragging.current]);
+
   return (
-    <div className="h-full flex flex-col"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="h-full flex flex-col">
       {/* Compact Header - Controls on Top, Week Dates Below */}
       <div className="flex-none ios-header bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200/30">
         {/* Controls Row */}
@@ -455,7 +469,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
               onClick={() => handleNavigate('next')} 
               className="h-7 w-7 p-0"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />              
             </Button>
             <div className="flex items-center gap-1">
               <button
@@ -608,9 +622,15 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
             )}
           </div>
 
-          {/* Notch indicator at bottom */}
-          <div className="flex justify-center pb-2 pt-1">
-            <div className="w-10 h-1 bg-gray-300 rounded-full" />
+          {/* Notch indicator at bottom with expand/collapse icon */}
+          <div className="flex justify-center items-center pb-2 pt-1 gap-2">
+            <div className="w-8 h-1 bg-gray-300 rounded-full" />
+            {isMonthViewExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            )}
+            <div className="w-8 h-1 bg-gray-300 rounded-full" />
           </div>
         </div>
       </div>
@@ -629,8 +649,25 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
           onInlineSave={handleInlineEventSave}
           onInlineCancel={() => setInlineDraft(null)}
           highlightEventId={highlightEventId}
+          onLongPressComplete={handleLongPressComplete}
         />
       </div>
+
+      {/* Event Creation Drawer - New long-press flow */}
+      {drawerEventData && (
+        <EventCreationDrawer
+          isOpen={isEventCreationDrawerOpen}
+          onClose={() => {
+            setIsEventCreationDrawerOpen(false);
+            setDrawerEventData(null);
+          }}
+          date={drawerEventData.date}
+          hour={drawerEventData.hour}
+          minute={drawerEventData.minute}
+          familyMembers={familyMembers}
+          onSave={handleCreateEvent}
+        />
+      )}
 
       <MobileEventDetails
         event={selectedEvent}

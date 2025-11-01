@@ -1,8 +1,9 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { CalendarEvent, FamilyMember } from "@/types/calendar";
 import { DraggableEventCard } from "./DraggableEventCard";
 import { calculateEventLayouts, EventLayout } from "@/utils/eventLayoutUtils";
 import { InlineEventCreator } from "./InlineEventCreator";
+import { DraggableEventPlaceholder } from "./DraggableEventPlaceholder";
 
 interface MobileCalendarViewProps {
   currentDate: Date;
@@ -16,6 +17,7 @@ interface MobileCalendarViewProps {
   onInlineSave?: (title: string, isAllDay?: boolean) => void;
   onInlineCancel?: () => void;
   highlightEventId?: string | null;
+  onLongPressComplete?: (date: Date, hour: number, minute: number) => void;
 }
 
 const TIME_SLOT_HEIGHT = 80;
@@ -32,8 +34,17 @@ export const MobileCalendarView = ({
   onInlineSave,
   onInlineCancel,
   highlightEventId,
+  onLongPressComplete,
 }: MobileCalendarViewProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Long-press state
+  const [longPressActive, setLongPressActive] = useState(false);
+  const [placeholderPosition, setPlaceholderPosition] = useState<{ top: number; hour: number; minute: number } | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressing = useRef(false);
+  const touchStartY = useRef<number>(0);
+  const initialScrollTop = useRef<number>(0);
 
   const now = new Date();
   const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
@@ -56,6 +67,36 @@ export const MobileCalendarView = ({
 
   const currentDayEvents = useMemo(() => getEventsForDate(currentDate), [currentDate, events]);
   const currentEventLayouts = useMemo(() => calculateEventLayouts(events, currentDate), [events, currentDate]);
+
+  // Lock body scroll and prevent pull-to-refresh when long-press is active
+  useEffect(() => {
+    if (longPressActive) {
+      // Store original styles
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      const originalTouchAction = document.body.style.touchAction;
+      const originalOverscrollBehavior = document.body.style.overscrollBehavior;
+      const htmlOriginalOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+      
+      // Lock scroll and prevent pull-to-refresh
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.touchAction = 'none';
+      document.body.style.width = '100%';
+      document.body.style.overscrollBehavior = 'none'; // Prevents pull-to-refresh
+      document.documentElement.style.overscrollBehavior = 'none'; // Also on html element
+      
+      // Cleanup on unmount or when long-press ends
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.touchAction = originalTouchAction;
+        document.body.style.width = '';
+        document.body.style.overscrollBehavior = originalOverscrollBehavior;
+        document.documentElement.style.overscrollBehavior = htmlOriginalOverscrollBehavior;
+      };
+    }
+  }, [longPressActive]);
 
   // Auto-scroll to current time on mount and when returning to today
   useEffect(() => {
@@ -81,11 +122,109 @@ export const MobileCalendarView = ({
   }, [currentDate, isToday, currentTimePosition]);
 
   const handleTimeSlotClick = (date: Date, hour: number, e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't handle click if long-press was active
+    if (isLongPressing.current) {
+      return;
+    }
+    
     const rect = e.currentTarget.getBoundingClientRect();
     const clickY = e.clientY - rect.top;
     const minuteFraction = clickY / TIME_SLOT_HEIGHT;
     const minutes = Math.round(minuteFraction * 60);
     onTimeSlotClick(date, hour, minutes, e.clientX, e.clientY);
+  };
+
+  const calculateTimeFromY = (clientY: number): { hour: number; minute: number; top: number } => {
+    if (!scrollContainerRef.current) {
+      return { hour: 0, minute: 0, top: 0 };
+    }
+
+    const container = scrollContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    const scrollTop = container.scrollTop;
+    const relativeY = clientY - rect.top + scrollTop;
+    
+    // Calculate total minutes from midnight
+    const totalMinutes = Math.max(0, (relativeY / TIME_SLOT_HEIGHT) * 60);
+    
+    // Snap to 15-minute intervals
+    const snappedMinutes = Math.round(totalMinutes / 15) * 15;
+    const hour = Math.min(23, Math.floor(snappedMinutes / 60));
+    const minute = snappedMinutes % 60;
+    
+    // Calculate top position (in pixels from midnight)
+    const top = (hour * 60 + minute) * (TIME_SLOT_HEIGHT / 60);
+    
+    return { hour, minute, top };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    // Don't start long-press if there's already inline draft or if touching an event
+    if (inlineDraft) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-event-card]') || target.closest('[data-inline-creator]')) {
+      return;
+    }
+
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    initialScrollTop.current = scrollContainerRef.current?.scrollTop || 0;
+    
+    // Start long-press timer
+    longPressTimer.current = setTimeout(() => {
+      isLongPressing.current = true;
+      setLongPressActive(true);
+      
+      const { hour, minute, top } = calculateTimeFromY(touch.clientY);
+      setPlaceholderPosition({ top, hour, minute });
+      
+      // Haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    const moveDistance = Math.abs(touch.clientY - touchStartY.current);
+    
+    if (isLongPressing.current) {
+      // CRITICAL: Prevent scrolling AND text selection while dragging placeholder
+      // Use both preventDefault and stopPropagation to block all scroll behavior
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const { hour, minute, top } = calculateTimeFromY(touch.clientY);
+      setPlaceholderPosition({ top, hour, minute });
+      
+      // Additional haptic feedback during drag
+      if (Math.abs(top - (placeholderPosition?.top || 0)) > 20 && navigator.vibrate) {
+        navigator.vibrate(10);
+      }
+    } else if (longPressTimer.current && moveDistance > 10) {
+      // Cancel long-press if user moves more than 10px before threshold
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    
+    if (isLongPressing.current && placeholderPosition && onLongPressComplete) {
+      // Complete the long-press - open drawer with selected time
+      onLongPressComplete(currentDate, placeholderPosition.hour, placeholderPosition.minute);
+    }
+    
+    // Reset state
+    isLongPressing.current = false;
+    setLongPressActive(false);
+    setPlaceholderPosition(null);
   };
 
   const renderDayColumn = (date: Date, dayEvents: CalendarEvent[], eventLayouts: Map<string, EventLayout>) => {
@@ -96,6 +235,10 @@ export const MobileCalendarView = ({
         <div
           ref={scrollContainerRef}
           className="h-full overflow-y-auto overflow-x-hidden ios-scroll hide-scrollbar"
+          style={longPressActive ? { 
+            overflow: 'hidden',
+            touchAction: 'none',
+          } : undefined}
         >
           <div className="relative">
             {/* Current time indicator */}
@@ -127,7 +270,7 @@ export const MobileCalendarView = ({
                   style={{ height: `${TIME_SLOT_HEIGHT}px` }}
                 >
                   <div 
-                    className={`relative flex-1 cursor-pointer transition-colors ${
+                    className={`relative flex-1 cursor-pointer transition-colors select-none ${
                       isTodayDate
                         ? isNightHour
                           ? 'bg-slate-50 active:bg-slate-100'
@@ -137,6 +280,10 @@ export const MobileCalendarView = ({
                         : 'bg-white active:bg-gray-50'
                     }`}
                     onClick={(e) => handleTimeSlotClick(date, hour, e)}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
                   >
                     {/* 15-minute grid lines */}
                     <div className="absolute inset-0 flex flex-col pointer-events-none">
@@ -145,6 +292,16 @@ export const MobileCalendarView = ({
                       <div className="flex-1 border-b border-gray-100" />
                       <div className="flex-1" />
                     </div>
+
+                    {/* Long-press placeholder */}
+                    {hour === 0 && longPressActive && placeholderPosition && (
+                      <DraggableEventPlaceholder
+                        top={placeholderPosition.top}
+                        hour={placeholderPosition.hour}
+                        minute={placeholderPosition.minute}
+                        timeSlotHeight={TIME_SLOT_HEIGHT}
+                      />
+                    )}
 
                     {/* Events */}
                     {hour === 0 && (
@@ -181,13 +338,16 @@ export const MobileCalendarView = ({
 
                         {inlineDraft && inlineDraft.date.toDateString() === date.toDateString() && (
                           <div
-                            className="absolute left-1 right-1 rounded-sm border border-dashed border-primary/50 bg-white/95 shadow-sm p-1 z-30"
+                            className="absolute left-1 right-1 rounded-lg border-2 border-primary bg-white shadow-lg z-30"
                             style={{
                               top: `${(inlineDraft.hour * 60 + inlineDraft.minute) * (TIME_SLOT_HEIGHT / 60)}px`,
-                              height: `${TIME_SLOT_HEIGHT}px`,
-                              minHeight: '30px',
+                              height: `${TIME_SLOT_HEIGHT * 2.5}px`,
+                              minHeight: '180px',
                             }}
                             onClick={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
+                            onTouchEnd={(e) => e.stopPropagation()}
                           >
                             <InlineEventCreator
                               date={inlineDraft.date}

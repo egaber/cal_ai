@@ -6,5 +6,5 @@ export const APP_NAME = 'Calendar AI';
 export const APP_TAGLINE = 'Your intelligent family calendar assistant';
 
 // Primary brand color - hot pink
-export const PRIMARY_COLOR = '#ff007e';
-export const PRIMARY_COLOR_HOVER = '#e6006f';
+export const PRIMARY_COLOR = '#000000ff';
+export const PRIMARY_COLOR_HOVER = '#000000ff';
