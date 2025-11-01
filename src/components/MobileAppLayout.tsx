@@ -4,11 +4,13 @@ import { useRTL } from '@/contexts/RTLContext';
 import { useTranslation } from '@/i18n/translations';
 import { useEvents } from '@/contexts/EventContext';
 import { useFamily } from '@/contexts/FamilyContext';
-import { Calendar, ListTodo, Sparkles, MessageSquare, Settings } from 'lucide-react';
+import { Calendar, ListTodo, Sparkles, MessageSquare, Settings, Bot } from 'lucide-react';
 import MobileIndex from '@/pages/MobileIndex';
 import MobileTasks from '@/pages/MobileTasks';
 import MobileSettings from '@/pages/MobileSettings';
 import MobileMemory from '@/pages/MobileMemory';
+import MobileDailySchedules from '@/pages/MobileDailySchedules';
+import MobilePlanningChat from '@/pages/MobilePlanningChat';
 import { AIAssistant } from '@/components/AIAssistant';
 import { CalendarService } from '@/services/calendarService';
 import { CalendarEvent } from '@/types/calendar';
@@ -26,6 +28,8 @@ const MobileAppLayout = () => {
     if (location.pathname.includes('/tasks')) return 'tasks';
     if (location.pathname.includes('/settings')) return 'settings';
     if (location.pathname.includes('/memory')) return 'memory';
+    if (location.pathname.includes('/schedules')) return 'schedules';
+    if (location.pathname.includes('/planning')) return 'planning';
     return 'calendar';
   };
 
@@ -95,6 +99,10 @@ const MobileAppLayout = () => {
     setActiveTab(tab);
     if (tab === 'tasks') {
       navigate('/tasks');
+    } else if (tab === 'schedules') {
+      navigate('/schedules');
+    } else if (tab === 'planning') {
+      navigate('/planning');
     } else if (tab === 'calendar') {
       navigate('/');
     } else if (tab === 'settings') {
@@ -119,6 +127,8 @@ const MobileAppLayout = () => {
           />
         )}
         {activeTab === 'tasks' && <MobileTasks />}
+        {activeTab === 'schedules' && <MobileDailySchedules />}
+        {activeTab === 'planning' && <MobilePlanningChat />}
         {activeTab === 'settings' && <MobileSettings />}
         {activeTab === 'memory' && <MobileMemory />}
         {activeTab === 'ai' && (
@@ -165,16 +175,16 @@ const MobileAppLayout = () => {
           </button>
 
           <button
-            onClick={() => handleTabChange('ai')}
+            onClick={() => handleTabChange('planning')}
             className={`flex flex-col items-center gap-0.5 py-2 px-6 touch-target transition-all ${
-              activeTab === 'ai'
+              activeTab === 'planning'
                 ? 'text-primary'
                 : 'text-gray-500 dark:text-gray-400'
             }`}
           >
-            <MessageSquare className={`h-6 w-6 ${activeTab === 'ai' ? 'scale-110' : ''}`} />
+            <Bot className={`h-6 w-6 ${activeTab === 'planning' ? 'scale-110' : ''}`} />
             <span className="text-[10px] font-medium">
-              AI
+              תכנון AI
             </span>
           </button>
 
