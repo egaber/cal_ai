@@ -114,7 +114,7 @@ const MobileAppLayout = () => {
   return (
     <div className={`h-full w-full flex flex-col ${isDarkMode ? 'dark' : ''} overflow-hidden`} style={{ height: '100dvh' }}>
       {/* Fixed Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 -z-10" />
+      <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 -z-10" />
       
       {/* Main Content Area - Takes remaining space between header and tabs */}
       <main className="flex-1 min-h-0 overflow-hidden" style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
@@ -184,7 +184,7 @@ const MobileAppLayout = () => {
           >
             <MessageSquare className={`h-6 w-6 ${activeTab === 'ai' ? 'scale-110' : ''}`} />
             <span className="text-[10px] font-medium">
-              💬 שיחה
+              AI שיחה
             </span>
           </button>
 

@@ -477,7 +477,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
               <ChevronRight className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => handleNavigate('today')} className="h-7 px-2 text-xs">
-              Today
+              היום
             </Button>
             <Button 
               variant="ghost" 
@@ -607,6 +607,8 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
                 {weekDates.map((date) => {
                   const isSelected = date.toDateString() === currentDate.toDateString();
                   const isToday = date.toDateString() === new Date().toDateString();
+                  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                  const hebrewDays = ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו\'', 'ש\''];
                   
                   return (
                     <button
@@ -621,7 +623,7 @@ const MobileIndex = ({ targetEventId, onEventTargeted, initialDate, onDateChange
                       }`}
                     >
                       <span className="text-[10px] font-medium uppercase">
-                        {date.toLocaleDateString('en-US', { weekday: 'short' })[0]}
+                        {hebrewDays[dayOfWeek]}
                       </span>
                       <span className={`text-base font-bold ${isSelected ? 'text-white' : ''}`}>
                         {date.getDate()}

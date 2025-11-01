@@ -53,9 +53,7 @@ export const MobileCalendarView = ({
   const isToday = currentDate.toDateString() === now.toDateString();
 
   const formatTime = (hour: number) => {
-    if (hour === 0) return '12 AM';
-    if (hour === 12) return '12 PM';
-    return hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+    return hour.toString().padStart(2, '0') + ':00';
   };
 
   const getEventsForDate = (date: Date) => {
@@ -267,18 +265,18 @@ export const MobileCalendarView = ({
               return (
                 <div
                   key={hour}
-                  className="flex border-b border-gray-200"
+                  className="flex border-b border-gray-200 dark:border-gray-700"
                   style={{ height: `${TIME_SLOT_HEIGHT}px` }}
                 >
                   <div 
                     className={`relative flex-1 cursor-pointer transition-colors select-none ${
                       isTodayDate
                         ? isNightHour
-                          ? 'bg-slate-50 active:bg-slate-100'
-                          : 'bg-blue-50/30 active:bg-blue-50/50'
+                          ? 'bg-slate-50 dark:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-700'
+                          : 'bg-blue-50/30 dark:bg-blue-900/20 active:bg-blue-50/50 dark:active:bg-blue-900/30'
                         : isNightHour
-                        ? 'bg-gray-50 active:bg-gray-100'
-                        : 'bg-white active:bg-gray-50'
+                        ? 'bg-gray-50 dark:bg-gray-800 active:bg-gray-100 dark:active:bg-gray-700'
+                        : 'bg-white dark:bg-gray-900 active:bg-gray-50 dark:active:bg-gray-800'
                     }`}
                     onClick={(e) => handleTimeSlotClick(date, hour, e)}
                     onTouchStart={handleTouchStart}
@@ -288,9 +286,9 @@ export const MobileCalendarView = ({
                   >
                     {/* 15-minute grid lines */}
                     <div className="absolute inset-0 flex flex-col pointer-events-none">
-                      <div className="flex-1 border-b border-gray-100" />
-                      <div className="flex-1 border-b border-gray-100" />
-                      <div className="flex-1 border-b border-gray-100" />
+                      <div className="flex-1 border-b border-gray-100 dark:border-gray-800" />
+                      <div className="flex-1 border-b border-gray-100 dark:border-gray-800" />
+                      <div className="flex-1 border-b border-gray-100 dark:border-gray-800" />
                       <div className="flex-1" />
                     </div>
 
@@ -340,7 +338,7 @@ export const MobileCalendarView = ({
 
                         {inlineDraft && inlineDraft.date.toDateString() === date.toDateString() && (
                           <div
-                            className="absolute left-1 right-1 rounded-lg border-2 border-primary bg-white shadow-lg z-30"
+                            className="absolute left-1 right-1 rounded-lg border-2 border-primary bg-white dark:bg-gray-800 shadow-lg z-30"
                             style={{
                               top: `${(inlineDraft.hour * 60 + inlineDraft.minute) * (TIME_SLOT_HEIGHT / 60)}px`,
                               height: `${TIME_SLOT_HEIGHT * 2.5}px`,
@@ -380,7 +378,7 @@ export const MobileCalendarView = ({
       </div>
 
       {/* Scrollable time labels on the right */}
-      <div className="absolute top-0 right-0 bottom-0 w-20 bg-white/95 backdrop-blur border-l border-gray-200 pointer-events-none overflow-hidden">
+      <div className="absolute top-0 right-0 bottom-0 w-20 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-l border-gray-200 dark:border-gray-700 pointer-events-none overflow-hidden">
         <div
           className="h-full overflow-y-scroll hide-scrollbar"
           ref={useRef((el: HTMLDivElement | null) => {
@@ -400,7 +398,7 @@ export const MobileCalendarView = ({
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="flex items-start justify-end px-2 py-2 border-b border-gray-200"
+              className="flex items-start justify-end px-2 py-2 border-b border-gray-200 dark:border-gray-700"
               style={{ height: `${TIME_SLOT_HEIGHT}px` }}
             >
               <div className="text-right">

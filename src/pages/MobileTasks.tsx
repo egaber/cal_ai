@@ -900,11 +900,11 @@ Return the enhanced text with emoji and category marker.` }
   };
 
   return (
-    <div className="min-h-screen bg-white" dir="rtl">
+    <div className="min-h-screen bg-white dark:bg-gray-900" dir="rtl">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">המשימות שלי</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">המשימות שלי</h1>
           
           {/* Cloud Sync Indicator */}
           <div className="flex items-center gap-2">
@@ -931,7 +931,7 @@ Return the enhanced text with emoji and category marker.` }
       {/* Task List - with scrolling */}
       <div className="pb-24 overflow-y-auto max-h-[calc(100vh-120px)]">
       {tasks.length === 0 && !isLoading ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <p className="text-lg">אין משימות עדיין</p>
             <p className="text-sm mt-2">לחץ על + כדי להוסיף משימה</p>
           </div>
@@ -1006,7 +1006,7 @@ Return the enhanced text with emoji and category marker.` }
                     
                     {/* Task text with highlighting - clickable */}
                     <div 
-                      className={`text-base leading-relaxed cursor-pointer hover:bg-gray-50 rounded p-1 -m-1 transition-colors ${task.completed ? 'line-through opacity-60' : ''}`}
+                      className={`text-base leading-relaxed cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded p-1 -m-1 transition-colors ${task.completed ? 'line-through opacity-60' : ''}`}
                       onClick={() => handleTaskClick(index)}
                     >
                       {task.segments.map((segment, i) => {
@@ -1014,13 +1014,13 @@ Return the enhanced text with emoji and category marker.` }
                           return <span key={i}>{segment.text}</span>;
                         }
                         
-                        let bgColor = 'bg-gray-100';
-                        if (segment.type === 'involved') bgColor = 'bg-purple-100';
-                        else if (segment.type === 'location') bgColor = 'bg-amber-100';
-                        else if (segment.type === 'time') bgColor = 'bg-green-100';
-                        else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100';
-                        else if (segment.type === 'priority') bgColor = 'bg-red-100';
-                        else if (segment.type === 'recurring') bgColor = 'bg-cyan-100';
+                        let bgColor = 'bg-gray-100 dark:bg-gray-700';
+                        if (segment.type === 'involved') bgColor = 'bg-purple-100 dark:bg-purple-900/40';
+                        else if (segment.type === 'location') bgColor = 'bg-amber-100 dark:bg-amber-900/40';
+                        else if (segment.type === 'time') bgColor = 'bg-green-100 dark:bg-green-900/40';
+                        else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100 dark:bg-blue-900/40';
+                        else if (segment.type === 'priority') bgColor = 'bg-red-100 dark:bg-red-900/40';
+                        else if (segment.type === 'recurring') bgColor = 'bg-cyan-100 dark:bg-cyan-900/40';
                         
                         return (
                           <span 
@@ -1095,7 +1095,7 @@ Return the enhanced text with emoji and category marker.` }
               
               {/* Divider between tasks */}
               {index < tasks.length - 1 && (
-                <div className="mx-6 border-b border-gray-200"></div>
+                <div className="mx-6 border-b border-gray-200 dark:border-gray-700"></div>
               )}
             </div>
           ))
@@ -1119,7 +1119,7 @@ Return the enhanced text with emoji and category marker.` }
       {isAddingTask && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20" onClick={() => setIsAddingTask(false)}>
           <div
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl max-h-[80vh] flex flex-col"
+            className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle bar */}
@@ -1128,8 +1128,8 @@ Return the enhanced text with emoji and category marker.` }
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2 border-b">
-              <h2 className="text-lg font-semibold">{editingTaskIndex !== null ? 'ערוך משימה' : 'משימה חדשה'}</h2>
+            <div className="flex items-center justify-between px-4 py-2 border-b dark:border-gray-700">
+              <h2 className="text-lg font-semibold dark:text-gray-100">{editingTaskIndex !== null ? 'ערוך משימה' : 'משימה חדשה'}</h2>
               <button onClick={() => {
                 setIsAddingTask(false);
                 setEditingTaskIndex(null);
@@ -1144,7 +1144,7 @@ Return the enhanced text with emoji and category marker.` }
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="תאר את המשימה..."
-                className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+                className="w-full h-32 p-4 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
                 dir="rtl"
               />
 
@@ -1152,18 +1152,18 @@ Return the enhanced text with emoji and category marker.` }
               {parsedTask && inputText && (
                 <div className="mt-4 space-y-3">
                   {/* Highlighted text */}
-                  <div className="p-4 bg-gray-50 rounded-lg text-base leading-relaxed">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-base leading-relaxed">
                     {parsedTask.segments.map((segment, i) => {
                       if (segment.type === 'text') {
                         return <span key={i}>{segment.text}</span>;
                       }
                       
-                      let bgColor = 'bg-gray-100';
-                      if (segment.type === 'involved') bgColor = 'bg-purple-100';
-                      else if (segment.type === 'location') bgColor = 'bg-amber-100';
-                      else if (segment.type === 'time') bgColor = 'bg-green-100';
-                      else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100';
-                      else if (segment.type === 'priority') bgColor = 'bg-red-100';
+                      let bgColor = 'bg-gray-100 dark:bg-gray-700';
+                      if (segment.type === 'involved') bgColor = 'bg-purple-100 dark:bg-purple-900/40';
+                      else if (segment.type === 'location') bgColor = 'bg-amber-100 dark:bg-amber-900/40';
+                      else if (segment.type === 'time') bgColor = 'bg-green-100 dark:bg-green-900/40';
+                      else if (segment.type === 'timeBucket') bgColor = 'bg-blue-100 dark:bg-blue-900/40';
+                      else if (segment.type === 'priority') bgColor = 'bg-red-100 dark:bg-red-900/40';
                       
                       return (
                         <span key={i} className={`${bgColor} px-1 rounded`}>
@@ -1218,7 +1218,7 @@ Return the enhanced text with emoji and category marker.` }
             </div>
 
             {/* Bottom actions */}
-            <div className="p-4 border-t bg-white space-y-3">
+            <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-900 space-y-3">
               {/* AI and Voice buttons row - 3 buttons */}
               <div className="grid grid-cols-3 gap-2">
                 {/* AI Smart Parser button (NEW) */}
@@ -1369,15 +1369,23 @@ Return the enhanced text with emoji and category marker.` }
                 console.log('🔄 Memory updated, tasks should refresh automatically via Firestore subscription');
               }}
               initialMessage={aiInitialMessage}
-              onNavigateToCalendar={(eventId) => {
-                // Find the event to get its date
-                const targetEvent = events.find(e => e.id === eventId);
+              onNavigateToCalendar={(eventIdOrDate) => {
+                // Handle both event ID and ISO date string
+                const targetEvent = events.find(e => e.id === eventIdOrDate);
                 if (targetEvent) {
+                  // It's an event ID
                   const eventDate = new Date(targetEvent.startTime);
                   navigate('/', {
                     state: {
                       initialDate: eventDate.toISOString(),
-                      highlightEventId: eventId
+                      highlightEventId: eventIdOrDate
+                    }
+                  });
+                } else {
+                  // It's a date ISO string - navigate to that date
+                  navigate('/', {
+                    state: {
+                      initialDate: eventIdOrDate
                     }
                   });
                 }

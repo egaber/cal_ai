@@ -68,8 +68,8 @@ export function EventSuggestionCard({
   return (
     <Card
       className={cn(
-        'border-2 border-dashed border-blue-400 bg-blue-50/90 backdrop-blur transition-all',
-        'hover:shadow-lg hover:border-blue-500 cursor-pointer',
+        'border-2 border-dashed border-blue-400 dark:border-blue-600 bg-blue-50/90 dark:bg-blue-900/30 backdrop-blur transition-all',
+        'hover:shadow-lg hover:border-blue-500 dark:hover:border-blue-400 cursor-pointer',
         isHovered && 'scale-105',
         className
       )}
@@ -86,10 +86,10 @@ export function EventSuggestionCard({
                 <span className="text-xl flex-shrink-0">{suggestion.taskEmoji}</span>
               )}
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-sm text-gray-900 truncate" dir="rtl">
+                <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate" dir="rtl">
                   {suggestion.taskTitle}
                 </h4>
-                <div className="flex items-center gap-2 text-xs text-gray-600 mt-0.5">
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                   <Calendar className="h-3 w-3" />
                   <span>{formatDate(suggestion.suggestedStartTime)}</span>
                   <span>•</span>
@@ -110,17 +110,17 @@ export function EventSuggestionCard({
           </div>
 
           {/* Duration */}
-          <div className="flex items-center gap-2 text-xs text-gray-600">
+          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
             <Clock className="h-3 w-3" />
             <span>משך: {getDuration()}</span>
           </div>
 
           {/* AI Reasoning */}
           {suggestion.reasoning && (
-            <div className="bg-white/80 rounded-lg p-2 border border-blue-200">
+            <div className="bg-white/80 dark:bg-gray-800/80 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
               <div className="flex items-start gap-2">
-                <Brain className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-gray-700" dir="rtl">
+                <Brain className="h-3 w-3 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-gray-700 dark:text-gray-300" dir="rtl">
                   {suggestion.reasoning}
                 </p>
               </div>
@@ -150,7 +150,7 @@ export function EventSuggestionCard({
 
           {/* Suggestion Badge */}
           <div className="flex items-center justify-center">
-            <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+            <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
               💡 הצעת AI
             </Badge>
           </div>

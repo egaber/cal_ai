@@ -193,7 +193,7 @@ export const MobileEventDetails = ({
         <div 
           className="pt-[40px] pb-3 px-4 border-b"
           style={{ 
-            background: `linear-gradient(135deg, ${PRIMARY_COLOR} 0%, #e91e63 100%)`
+            background: `linear-gradient(135deg, ${PRIMARY_COLOR} 0%, ${PRIMARY_COLOR} 100%)`
           }}
         >
           <div className="flex items-center justify-between">

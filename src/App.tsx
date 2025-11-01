@@ -8,6 +8,7 @@ import { RTLProvider } from "@/contexts/RTLContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FamilyProvider } from "@/contexts/FamilyContext";
 import { EventProvider } from "@/contexts/EventContext";
+import { SkinProvider } from "@/skins/SkinContext";
 import ResponsiveLayout from "./components/ResponsiveLayout";
 import Welcome from "./pages/Welcome";
 import { FamilySetupDialog } from "./components/FamilySetupDialog";
@@ -87,8 +88,9 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RTLProvider>
-        <AuthProvider user={user}>
+      <SkinProvider>
+        <RTLProvider>
+          <AuthProvider user={user}>
           <FamilyProvider>
             <EventProvider>
               <TooltipProvider>
@@ -111,6 +113,7 @@ const App = () => {
           </FamilyProvider>
         </AuthProvider>
       </RTLProvider>
+      </SkinProvider>
     </QueryClientProvider>
   );
 };
