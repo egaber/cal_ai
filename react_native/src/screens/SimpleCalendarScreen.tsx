@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../theme/colors';
+import { MonthSlider } from '../components/MonthSlider';
 
 interface SimpleCalendarScreenProps {
   theme: typeof colors.dark | typeof colors.light;
@@ -8,6 +9,7 @@ interface SimpleCalendarScreenProps {
 }
 
 const SimpleCalendarScreen = ({ theme, isDark }: SimpleCalendarScreenProps) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   // Mock events for demo
   const events = [
@@ -17,22 +19,33 @@ const SimpleCalendarScreen = ({ theme, isDark }: SimpleCalendarScreenProps) => {
     { id: 4, time: '16:00', title: 'Code Review', color: colors.systemOrange },
   ];
 
+  const handleDateChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Today</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>
+          {currentDate.toDateString() === new Date().toDateString() ? 'Today' : currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+        </Text>
         <Text style={[styles.headerDate, { color: theme.secondaryText }]}>
-          {new Date().toLocaleDateString('en-US', { 
+          {currentDate.toLocaleDateString('en-US', { 
             weekday: 'long', 
             month: 'long', 
-            day: 'numeric' 
+            day: 'numeric',
+            year: 'numeric'
           })}
         </Text>
       </View>
 
       {/* Events List */}
-      <ScrollView style={styles.eventsList} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.eventsList} 
+        contentContainerStyle={styles.eventsListContent}
+        showsVerticalScrollIndicator={false}
+      >
         {events.map((event) => (
           <View
             key={event.id}
@@ -59,6 +72,14 @@ const SimpleCalendarScreen = ({ theme, isDark }: SimpleCalendarScreenProps) => {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Month Slider - Drag to open/close */}
+      <MonthSlider
+        theme={theme}
+        isDark={isDark}
+        currentDate={currentDate}
+        onDateChange={handleDateChange}
+      />
     </View>
   );
 };
@@ -82,6 +103,9 @@ const styles = StyleSheet.create({
   eventsList: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  eventsListContent: {
+    paddingBottom: 160, // Space for month slider and tab bar at bottom
   },
   eventCard: {
     borderRadius: 12,

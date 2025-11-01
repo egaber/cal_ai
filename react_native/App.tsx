@@ -77,7 +77,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <StatusBar
           barStyle={isDark ? 'light-content' : 'dark-content'}
           backgroundColor={theme.background}
@@ -88,12 +88,16 @@ export default function App() {
           <Screen />
         </View>
 
-        {/* Glass morphism tab bar */}
+        {/* Glass morphism tab bar - positioned at absolute bottom */}
         <BlurView
           intensity={isDark ? 80 : 95}
           tint={isDark ? 'dark' : 'light'}
           style={[styles.tabBar, {
             borderTopColor: theme.separator,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
           }]}
         >
           <TouchableOpacity
@@ -129,7 +133,7 @@ export default function App() {
             </Animated.Text>
           </TouchableOpacity>
         </BlurView>
-      </SafeAreaView>
+      </View>
     </SafeAreaProvider>
   );
 }

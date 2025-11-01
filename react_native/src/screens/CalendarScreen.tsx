@@ -217,7 +217,10 @@ const CalendarScreen = () => {
       </BlurView>
 
       {/* Calendar Grid */}
-      <ScrollView style={styles.calendarContainer}>
+      <ScrollView 
+        style={styles.calendarContainer}
+        contentContainerStyle={styles.calendarContent}
+      >
         <View style={styles.timeColumn}>
           {hours.map((hour) => (
             <View key={hour} style={[styles.hourRow, { height: HOUR_HEIGHT }]}>
@@ -263,6 +266,12 @@ const CalendarScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  calendarContainer: {
+    flex: 1,
+  },
+  calendarContent: {
+    paddingBottom: 100, // Space for tab bar at bottom
   },
   header: {
     paddingHorizontal: 20,
@@ -344,9 +353,6 @@ const styles = StyleSheet.create({
   },
   dateNumberActive: {
     color: 'white',
-  },
-  calendarContainer: {
-    flex: 1,
   },
   timeColumn: {
     paddingLeft: 16,
