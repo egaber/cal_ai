@@ -115,16 +115,19 @@ const MobileAppLayout = () => {
     <div 
       className={`h-full w-full flex flex-col ${isDarkMode ? 'dark' : ''} overflow-hidden`} 
       style={{ 
-        height: '100dvh',
-        minHeight: '-webkit-fill-available',
-        paddingBottom: 'env(safe-area-inset-bottom)'
+        height: '100vh',
+        height: '100svh',
+        minHeight: '100vh',
+        minHeight: '100svh',
+        display: 'flex',
+        flexDirection: 'column'
       }}
     >
       {/* Fixed Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 -z-10" />
+      <div className="fixed inset-0 bg-white dark:bg-gray-950 -z-10" />
       
       {/* Main Content Area - Takes remaining space between header and tabs */}
-      <main className="flex-1 min-h-0 overflow-hidden" style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%', paddingBottom: 0 }}>
+      <main className="flex-1 min-h-0 overflow-hidden" style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%', marginBottom: 0 }}>
         {activeTab === 'calendar' && (
           <MobileIndex 
             targetEventId={targetEventId}
@@ -165,8 +168,15 @@ const MobileAppLayout = () => {
       </main>
 
       {/* iOS-style Bottom Navigation - Fixed to bottom */}
-      <nav className="flex-none ios-bottom-nav" style={{ flexShrink: 0, marginBottom: 0 }}>
-        <div className="flex items-center justify-around px-4" style={{ paddingTop: '8px', paddingBottom: '8px' }}>
+      <nav 
+        className="flex-none ios-bottom-nav" 
+        style={{ 
+          flexShrink: 0,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          marginBottom: 0
+        }}
+      >
+        <div className="flex items-center justify-around px-4" style={{ paddingTop: '4px', paddingBottom: '0px' }}>
           <button
             onClick={() => handleTabChange('calendar')}
             className={`flex flex-col items-center gap-0.5 py-2 px-6 touch-target transition-all ${
